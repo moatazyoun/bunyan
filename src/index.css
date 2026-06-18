@@ -1,0 +1,129 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Cairo", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Inter", ui-monospace, monospace;
+}
+
+body, input, select, textarea, button, p, span, div, h1, h2, h3, h4, h5, h6, table, th, td {
+  font-family: var(--font-sans);
+}
+
+body {
+  background-color: #f8fafc;
+  direction: rtl; /* Build with elegant RTL support natively as the construction sheet is in Arabic */
+}
+
+/* Customize smooth scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* HIGH FIDELITY PRINT LAYOUT OVERRIDES */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 0.5cm;
+  }
+
+  aside,
+  #mobile-menu-btn,
+  button,
+  select,
+  input,
+  textarea,
+  .no-print,
+  #add-tx-btn,
+  svg.lucide-plus,
+  .print-hidden {
+    display: none !important;
+  }
+
+  body {
+    background-color: white !important;
+    color: black !important;
+    font-size: 11px !important;
+  }
+
+  /* Force 100% width on the page container and remove margins */
+  #bunyan-app-root {
+    background-color: white !important;
+    display: block !important;
+  }
+
+  .flex-1 {
+    margin-right: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  header {
+    border-bottom: 2px solid #000 !important;
+    padding-bottom: 12px !important;
+    margin-bottom: 20px !important;
+  }
+
+  header div span {
+    color: black !important;
+  }
+
+  /* Display elements correctly inside the active sub-tab */
+  .bg-white {
+    background-color: white !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  th, td {
+    border: 1px solid #444 !important;
+    color: black !important;
+    padding: 6px !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+  }
+
+  .non-printable {
+    display: none !important;
+  }
+
+  .printable-report {
+    display: block !important;
+    position: relative !important;
+    width: 27.7cm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+    overflow: visible !important;
+  }
+
+  /* Reset layout constraints for print */
+  .grid {
+    display: block !important;
+  }
+
+  .lg\:col-span-3 {
+    width: 100% !important;
+  }
+}

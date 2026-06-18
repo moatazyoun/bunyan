@@ -1,0 +1,8 @@
+{
+  "name": "Remix: بنيان ",
+  "description": "بيئة عمل متكاملة ومترابطة للموبايل والكمبيوتر تدمج ميزانيات اللجان، تصفية العهد الموقعية، ومستخلصات مقاولي الباطن بدقة هندسية شاملة.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
