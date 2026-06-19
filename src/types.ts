@@ -55,9 +55,24 @@ export interface ContractorCertificate {
   remainingBalance: number; // المتبقي له طرف المشروع
 }
 
-// ==========================================
-// NEW ENTERPRISE ERP DATA STRUCTURES
-// ==========================================
+export interface UserModulePermissions {
+  projects: boolean;
+  supplies: boolean;
+  equipment: boolean;
+  contractors: boolean;
+  finance: boolean;
+  usersManagement: boolean;
+}
+
+export interface UserItem {
+  username: string;
+  nameAr: string;
+  role: 'admin' | 'projects_manager' | 'site_manager' | 'tech_office' | 'site_engineer' | 'accountant' | 'supervisor' | 'dc' | 'viewer';
+  email?: string;
+  phone?: string;
+  permissions: UserModulePermissions;
+  assignedProjects?: string[]; // List of project IDs the user can access
+}
 
 export type EquipmentStatus = 'active' | 'under_maintenance' | 'idle' | 'out_of_service';
 export type EquipmentType = 'لودر' | 'جريدر' | 'هراس' | 'بلدوزر' | 'حفار' | 'فنشر' | 'قشاطة' | 'تانك نيات' | 'نقل ثقيل';

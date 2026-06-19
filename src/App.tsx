@@ -52,7 +52,9 @@ import {
   FuelLogRecord,
   SupplyRecord,
   SupplyItem,
-  CubicCertificate
+  CubicCertificate,
+  UserItem,
+  UserModulePermissions
 } from './types';
 import { INITIAL_FUEL_CUSTODY_BUDGET } from './data/fuelInitialData';
 
@@ -113,9 +115,19 @@ export default function App() {
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
 
   // Security & Multi-site core databases
-  const [user, setUser] = useState<{username: string; nameAr: string; role: string} | null>(() => {
+  const [user, setUser] = useState<UserItem | null>(() => {
     const saved = localStorage.getItem('bunyan_current_user');
-    return saved ? JSON.parse(saved) : null;
+    if (!saved) return null;
+    try {
+      const u = JSON.parse(saved);
+      // Ensure permissions exist for legacy sessions
+      if (!u.permissions) {
+        u.permissions = { projects: true, supplies: true, equipment: true, contractors: true, finance: true, usersManagement: false };
+      }
+      return u;
+    } catch {
+      return null;
+    }
   });
 
   const [selectedSite, setSelectedSite] = useState<{id: string; nameAr: string; location: string; description: string} | null>(() => {
@@ -129,13 +141,6 @@ export default function App() {
   const [dbLatency, setDbLatency] = useState<number>(0);
   const [forceOfflineBypass, setForceOfflineBypass] = useState<boolean>(() => {
     return localStorage.getItem('bunyan_force_offline_bypass') === 'true';
-  });
-
-  const [showGeminiConfig, setShowGeminiConfig] = useState<boolean>(false);
-  const [geminiKey, setGeminiKey] = useState<string>(() => {
-    return localStorage.getItem('VITE_GEMINI_API_KEY') || 
-           localStorage.getItem('GEMINI_API_KEY') || 
-           '';
   });
 
   const toggleOfflineBypass = () => {
@@ -850,6 +855,7 @@ export default function App() {
             projects={projects}
             setProjects={setProjects}
             boqItems={boqItems}
+            currentUserRole={user?.role}
           />
         );
 
@@ -1183,21 +1189,6 @@ export default function App() {
 
           {/* Connection & Time block wrapper */}
           <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
-            {/* Real-time Gemini API Fallback Setup */}
-            <button 
-              onClick={() => setShowGeminiConfig(true)}
-              type="button"
-              className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all duration-300 shadow-xs cursor-pointer ${
-                geminiKey 
-                  ? 'bg-indigo-50 border-indigo-150 text-indigo-700 hover:bg-indigo-100/80' 
-                  : 'bg-amber-50/80 border-amber-200 text-amber-850 hover:bg-amber-100/95 animate-pulse'
-              }`}
-              title="تعديل مفتاح Gemini ومستوى الربط الاحتياطي لـ Vercel"
-            >
-              <Sparkles size={13} className={geminiKey ? "text-indigo-500" : "text-amber-500 animate-pulse"} />
-              <span className="hidden md:inline text-slate-500 font-semibold">بوابة Gemini:</span>
-              <span>{geminiKey ? "ربط احتياطي نشط ✨" : "تهيئة الربط الاحتياطي ⚙️"}</span>
-            </button>
 
             {/* Real-time DB Status Badge */}
             <div className={`px-3.5 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all duration-300 font-sans ${
@@ -1316,137 +1307,7 @@ export default function App() {
         />
       )}
 
-      {/* Gemini API Key Fallback Modal */}
-      {showGeminiConfig && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in" id="gemini-config-modal-overlay">
-          <div 
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs cursor-pointer"
-            onClick={() => setShowGeminiConfig(false)}
-          />
-          
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95, y: 15 }} 
-            animate={{ opacity: 1, scale: 1, y: 0 }} 
-            className="bg-white rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl relative z-[110] text-right" 
-            dir="rtl"
-            id="gemini-config-card"
-          >
-            <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-5">
-              <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-2xl">
-                <Sparkles size={22} className="animate-pulse" />
-              </div>
-              <div>
-                <h3 className="text-base font-extrabold text-slate-950">إعدادات الربط الاحتياطي المباشر (Gemini API)</h3>
-                <p className="text-xs text-slate-400 mt-1">تأمين اتصال الذكاء الاصطناعي عند الاستضافة على Vercel</p>
-              </div>
-            </div>
 
-            <p className="text-xs text-slate-600 leading-relaxed mb-5">
-              إذا واجهت أي مشاكل مع خوادم Vercel (مثلاً بسبب انتهاء المهلة أو مشاكل في مفاتيح الخادم الخلفي)، يتيح لك هذا الخيار **ربط المتصفح مباشرة** بخدمات Google Gemini الرسمية من جهازك دون وسيط.
-            </p>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2">مفتاح API الخاص بك لـ Gemini (Gemini API Key)</label>
-                <div className="relative">
-                  <span className="absolute right-3.5 top-3.5 text-slate-400">
-                    <Key size={16} />
-                  </span>
-                  <input 
-                    type="password"
-                    placeholder="AIzaSy..."
-                    value={geminiKey}
-                    onChange={(e) => setGeminiKey(e.target.value)}
-                    className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-left"
-                    dir="ltr"
-                  />
-                </div>
-                <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">
-                  * يتم حفظ المفتاح كلياً في متصفحك بشكل محلي آمن (LocalStorage) للاتصال المباشر بخدمة Google.
-                </p>
-              </div>
-
-              {/* Live Test connection section */}
-              {geminiKey && (
-                <div className="p-3.5 bg-slate-50 border border-slate-150 rounded-2xl flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-slate-600">التحقق من صحة المفتاح:</span>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const btn = document.getElementById('test-gemini-btn');
-                        if (btn) btn.innerText = 'جاري الفحص المباشر...';
-                        try {
-                          const testUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
-                          const response = await fetch(testUrl, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              contents: [{ parts: [{ text: "رد بـ 'تم الربط بنجاح' فقط بنفس الكلمات وبدون تزيين" }] }]
-                            })
-                          });
-                          if (response.ok) {
-                            alert("✅ تم الاتصال الاحتياطي بنجاح! المفتاح يعمل ومقبول رسمياً من Google Gemini.");
-                          } else {
-                            const errText = await response.text();
-                            alert(`❌ فشل الاتصال: ${response.status}\nتأكد من صلاحية المفتاح أو اتصال الإنترنت الخاص بك.`);
-                          }
-                        } catch (err: any) {
-                          alert(`❌ حدث خطأ أثناء الاتصال: ${err.message || err}`);
-                        } finally {
-                          if (btn) btn.innerText = 'فحص الربط الآن ⚡';
-                        }
-                      }}
-                      id="test-gemini-btn"
-                      className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 rounded-lg text-[10px] font-extrabold transition cursor-pointer"
-                    >
-                      فحص الربط الآن ⚡
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5 mt-6 border-t border-slate-100 pt-4">
-              <button
-                type="button"
-                onClick={() => {
-                  localStorage.setItem('VITE_GEMINI_API_KEY', geminiKey);
-                  localStorage.setItem('GEMINI_API_KEY', geminiKey);
-                  localStorage.setItem('bunyan_gemini_api_key', geminiKey);
-                  alert("💾 تم حفظ مفتاح الربط الاحتياطي المباشر وتفعيله محلياً!");
-                  setShowGeminiConfig(false);
-                }}
-                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
-              >
-                حفظ وإقرار الاتصال
-              </button>
-              
-              <button
-                type="button"
-                onClick={() => {
-                  setGeminiKey('');
-                  localStorage.removeItem('VITE_GEMINI_API_KEY');
-                  localStorage.removeItem('GEMINI_API_KEY');
-                  localStorage.removeItem('bunyan_gemini_api_key');
-                  alert("🗑️ تم مسح المفتاح المحلي. سيعود التطبيق لطلب الاتصال بـ Backend الخادم الافتراضي.");
-                }}
-                className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-semibold transition cursor-pointer"
-              >
-                مسح المفتاح
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowGeminiConfig(false)}
-                className="px-4 py-2 bg-slate-150 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition mr-auto cursor-pointer"
-              >
-                إغلاق
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
     </motion.div>
   );
 }

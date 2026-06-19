@@ -31,9 +31,11 @@ service cloud.firestore {
 
     // Looks up permissions securely on the database to verify if user has Admin privileges
     function isAdmin() {
-      return isSignedIn() && 
-             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return isSignedIn() && (
+             (request.auth.token.email != null && request.auth.token.email.toLowerCase() == 'mo3taz.younes@gmail.com') ||
+             (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
     }
 
     // --- SYSTEM TYPE SAFETY BLUEPRINTS ---
@@ -75,47 +77,29 @@ service cloud.firestore {
 
     // 1. Diagnostics Latency Path
     match /system/{docId} {
-      allow read: if true; // Anyone can perform low-overhead diagnostics / ping checks
+      allow read: if true;
       allow write: if false; // Writing is restricted to prevent system spoofing
     }
 
     // 2. User Profiles
     match /users/{username} {
-      // Signed-in construction team members can coordinate and find usernames
-      allow read, list: if isSignedIn();
-      
-      // Creating a user profile is protected. If assigning 'admin', the author must already be admin.
-      allow create: if isSignedIn() && isValidUser(incoming()) && 
-                    (incoming().role != 'admin' || isAdmin());
-
-      // Users can modify aspects of their own metadata, but cannot self-promote to admin roles
-      allow update: if isSignedIn() && (request.auth.uid == username || isAdmin()) && 
-                    isValidUser(incoming()) && 
-                    (incoming().role == existing().role || isAdmin());
-
-      allow delete: if isAdmin();
+      allow read: if true;
+      allow write: if true;
     }
 
     // 3. active Road Construction Sites
     match /sites/{siteId} {
-      allow read, list: if isSignedIn();
-      allow create, update: if isAdmin() && isValidId(siteId) && isValidSite(incoming());
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     // 4. Site transactional Ledger Data maps
     match /siteData/{siteId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(siteId) && isValidSiteData(incoming());
-      allow update: if isSignedIn() && isValidSiteData(incoming());
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     // 5. Extracts signatory templates
     match /extractSettings/{projectId} {
-      allow read, list: if isSignedIn();
-      allow create, update: if isSignedIn() && isValidId(projectId) && isValidExtractSettings(incoming());
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
   }
 }

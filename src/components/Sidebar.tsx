@@ -24,12 +24,14 @@ import {
 } from 'lucide-react';
 import BunyanLogo from './BunyanLogo';
 
+import { UserItem } from '../types';
+
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
-  user: { username: string; nameAr: string; role: string } | null;
+  user: UserItem | null;
   selectedSite: { id: string; nameAr: string; location: string } | null;
   onLogout: () => void;
   onChangeSite: () => void;
@@ -46,23 +48,26 @@ export default function Sidebar({
   onChangeSite
 }: SidebarProps) {
   const menuItems = [
-    { id: 'dashboard', label: 'الصفحة الرئيسية', subtitle: 'Dashboard', icon: Home },
-    { id: 'projects', label: 'المشروعات والإسناد', subtitle: 'Projects', icon: Briefcase },
-    { id: 'transactions', label: 'دفتر الحركات المالي', subtitle: 'Ledger', icon: Receipt },
-    { id: 'extracts', label: 'المستخلصات الفنية', subtitle: 'Extracts', icon: FileSpreadsheet },
-    { id: 'deliveries', label: 'التسليمات وفحص الأعمال', subtitle: 'Deliveries & Inspection', icon: FileCheck },
-    { id: 'boq', label: 'المقايسة التثمنية', subtitle: 'Bill of Quantities', icon: FileText },
-    { id: 'supplies', label: 'إدارة التوريدات', subtitle: 'Supplies', icon: Truck },
-    { id: 'subcontractors', label: 'مقاولين باطن', subtitle: 'Subcontractors', icon: Users },
-    { id: 'weekly-report', label: 'المنصرف الأسبوعي', subtitle: 'Weekly Report', icon: FileText },
-    { id: 'site-workers', label: 'العاملين بالموقع', subtitle: 'Site Workers', icon: Users },
-    { id: 'fuel-dashboard', label: 'حساب المحروقات', subtitle: 'Fuel Log', icon: Fuel },
-    { id: 'equipment-dashboard', label: 'بيان المعدات والآلات', subtitle: 'Equipment Log', icon: LayoutDashboard },
+    { id: 'dashboard', label: 'الصفحة الرئيسية', subtitle: 'Dashboard', icon: Home, perm: true },
+    { id: 'projects', label: 'المشروعات والإسناد', subtitle: 'Projects', icon: Briefcase, perm: user?.permissions?.projects },
+    { id: 'transactions', label: 'دفتر الحركات المالي', subtitle: 'Ledger', icon: Receipt, perm: true },
+    { id: 'extracts', label: 'المستخلصات الفنية', subtitle: 'Extracts', icon: FileSpreadsheet, perm: true },
+    { id: 'deliveries', label: 'التسليمات وفحص الأعمال', subtitle: 'Deliveries & Inspection', icon: FileCheck, perm: true },
+    { id: 'boq', label: 'المقايسة التثمنية', subtitle: 'Bill of Quantities', icon: FileText, perm: user?.permissions?.projects },
+    { id: 'supplies', label: 'إدارة التوريدات', subtitle: 'Supplies', icon: Truck, perm: user?.permissions?.supplies },
+    { id: 'subcontractors', label: 'مقاولين باطن', subtitle: 'Subcontractors', icon: Users, perm: user?.permissions?.contractors },
+    { id: 'weekly-report', label: 'المنصرف الأسبوعي', subtitle: 'Weekly Report', icon: FileText, perm: true },
+    { id: 'site-workers', label: 'العاملين بالموقع', subtitle: 'Site Workers', icon: Users, perm: user?.permissions?.contractors },
+    { id: 'fuel-dashboard', label: 'حساب المحروقات', subtitle: 'Fuel Log', icon: Fuel, perm: user?.permissions?.equipment },
+    { id: 'equipment-dashboard', label: 'بيان المعدات والآلات', subtitle: 'Equipment Log', icon: LayoutDashboard, perm: user?.permissions?.equipment },
   ];
 
-  // If user is Admin, add user management tab
-  if (user?.role === 'admin') {
-    menuItems.push({ id: 'admin-users', label: 'حسابات المستخدمين والصلاحيات', subtitle: 'User Roles', icon: Users });
+  // Filter menu items by permissions
+  const visibleMenuItems = menuItems.filter(item => item.perm === true);
+
+  // If user is Admin or has usersManagement permission, add user management tab
+  if (user?.role === 'admin' || user?.role === 'projects_manager' || user?.permissions?.usersManagement) {
+    visibleMenuItems.push({ id: 'admin-users', label: 'حسابات المستخدمين والصلاحيات', subtitle: 'User Roles', icon: Users, perm: true });
   }
 
   return (
@@ -130,7 +135,7 @@ export default function Sidebar({
             hover:[&::-webkit-scrollbar-thumb]:bg-slate-400
             transition-colors duration-200
           ">
-            {menuItems.map((item) => {
+            {visibleMenuItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
               return (
@@ -175,9 +180,14 @@ export default function Sidebar({
               <div className="overflow-hidden text-right">
                 <p className="text-xs font-extrabold text-slate-800 truncate leading-none">{user?.nameAr || 'مستخدم عام'}</p>
                 <span className="inline-block mt-1 text-[8.5px] font-extrabold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded-md border border-indigo-100/40">
-                  {user?.role === 'admin' && 'مدير النظام (أدمن)'}
-                  {user?.role === 'manager' && 'مدير مشروع'}
-                  {user?.role === 'engineer' && 'مهندس موقع'}
+                  {user?.role === 'admin' && 'مدير نظام'}
+                  {user?.role === 'projects_manager' && 'مدير مشروعات'}
+                  {user?.role === 'site_manager' && 'مدير موقع'}
+                  {user?.role === 'site_engineer' && 'مهندس موقع'}
+                  {user?.role === 'tech_office' && 'مهندس مكتب فني'}
+                  {user?.role === 'accountant' && 'محاسب مالي'}
+                  {user?.role === 'supervisor' && 'مشرف'}
+                  {user?.role === 'dc' && 'DC'}
                   {user?.role === 'viewer' && 'مراقب مشاهدة'}
                 </span>
               </div>

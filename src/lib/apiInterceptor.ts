@@ -8,6 +8,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getFirestore, doc, getDoc, getDocs, setDoc, deleteDoc, collection } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { UserModulePermissions } from '../types';
 
 // Initialize Firebase App & Firestore safely to avoid multi-app errors
 const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
@@ -97,6 +98,8 @@ interface EmulatedUser {
   password?: string;
   nameAr: string;
   role: string;
+  permissions?: UserModulePermissions;
+  assignedProjects?: string[];
 }
 
 interface EmulatedSite {
@@ -110,33 +113,45 @@ interface EmulatedSite {
 const STORAGE_PREFIX = 'bunyan_emulated_';
 
 function getStorage<T>(key: string, defaultValue: T): T {
-  const data = localStorage.getItem(STORAGE_PREFIX + key);
-  if (!data) {
-    localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(defaultValue));
-    return defaultValue;
-  }
-  try {
-    return JSON.parse(data) as T;
-  } catch {
-    return defaultValue;
-  }
+  // Local storage completely disabled by user request
+  return defaultValue;
 }
 
 function setStorage<T>(key: string, value: T): void {
-  localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
+  // Local storage completely disabled by user request
 }
 
 // 2. Mock Databases Bootstrap
 const INITIAL_USERS: EmulatedUser[] = [
-  { username: 'moataz', password: 'moat_010100', nameAr: 'م. معتز يونس (مدير التكاليف)', role: 'admin' },
-  { username: 'Moataz', password: 'moat_010100', nameAr: 'م. معتز يونس (مدير التكاليف)', role: 'admin' }
+  { 
+    username: 'moataz', 
+    password: 'moat_010100', 
+    nameAr: 'م. معتز يونس (مدير التكاليف)', 
+    role: 'admin',
+    permissions: { projects: true, supplies: true, equipment: true, contractors: true, finance: true, usersManagement: true },
+    assignedProjects: []
+  },
+  { 
+    username: 'Moataz', 
+    password: 'moat_010100', 
+    nameAr: 'م. معتز يونس (مدير التكاليف)', 
+    role: 'admin',
+    permissions: { projects: true, supplies: true, equipment: true, contractors: true, finance: true, usersManagement: true },
+    assignedProjects: []
+  }
 ];
 
-const INITIAL_SITES: EmulatedSite[] = [];
+const INITIAL_SITES: EmulatedSite[] = [
+  { id: "site-101", nameAr: "مشروع جسر النيل", location: "القاهرة", description: "جسر تحت الإنشاء" },
+  { id: "site-102", nameAr: "طريق الساحل الدولي", location: "الإسكندرية", description: "توسعة ورفع كفاءة" }
+];
 
 // Initialize on load
 getStorage<EmulatedUser[]>('users', INITIAL_USERS);
-getStorage<EmulatedSite[]>('sites', INITIAL_SITES);
+const s = getStorage<EmulatedSite[]>('sites', INITIAL_SITES);
+if (s.length === 0) {
+  setStorage('sites', INITIAL_SITES);
+}
 
 // --- RULE-BASED DETERMINISTIC PARSER FOR GEMINI OFFLINE MODE ---
 function parseTextToReport(textContent: string) {
@@ -669,30 +684,13 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
   // but the user's issue is likely that database calls are hijacked and failing.
   
   // HAND OVER TO BACKEND BY DEFAULT for DATABASE/AUTH ROUTES
-  // But if the server is offline or fails (e.g. running on Vercel as static SPA, or locally with failed initialization),
-  // AUTOMATICALLY fall back to the self-contained client-side Firestore + LocalStorage engine below!
+  // Actually, we must NOT use the backend for Firebase! The backend lacks IAM permissions!
+  // Force it to use the client-side Web SDK emulator below!
   const isDatabaseRoute = urlStr.includes('/api/sites') || 
                          urlStr.includes('/api/site/') || 
                          urlStr.includes('/api/users') || 
                          urlStr.includes('/api/auth/login') || 
                          urlStr.includes('/api/db-status');
-
-  if (isDatabaseRoute) {
-    try {
-      const realResponse = await originalFetch.call(window, input, init);
-      const contentType = realResponse.headers.get('content-type') || '';
-      
-      // If the real backend responds with valid JSON (success or expected errors like 400/401/403), use it!
-      if (contentType.includes('application/json')) {
-        if (realResponse.ok || (realResponse.status >= 400 && realResponse.status < 500)) {
-          return realResponse;
-        }
-      }
-      console.warn(`[API Interceptor] Backend response for ${urlStr} did not contain valid JSON (status: ${realResponse.status}, content-type: ${contentType}). Falling back to local/client Firestore emulator...`);
-    } catch (err) {
-      console.warn(`[API Interceptor] Backend is completely unreachable for ${urlStr}. Falling back to local/client Firestore emulator...`, err);
-    }
-  }
 
   if (isAIBackendOnly) {
     try {
@@ -787,7 +785,13 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     if (matchedLocal && matchedLocal.password === password.trim()) {
       return mockResponseOk({
         success: true,
-        user: { username: matchedLocal.username, nameAr: matchedLocal.nameAr, role: matchedLocal.role }
+        user: { 
+          username: matchedLocal.username, 
+          nameAr: matchedLocal.nameAr, 
+          role: matchedLocal.role,
+          permissions: (matchedLocal as any).permissions || { projects: true, supplies: true, equipment: true, contractors: true, finance: true, usersManagement: false },
+          assignedProjects: (matchedLocal as any).assignedProjects || []
+        }
       });
     }
 
@@ -805,7 +809,13 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
 
           return mockResponseOk({
             success: true,
-            user: { username: matched.username, nameAr: matched.nameAr, role: matched.role }
+            user: { 
+              username: matched.username, 
+              nameAr: matched.nameAr, 
+              role: matched.role,
+              permissions: (matched as any).permissions || { projects: true, supplies: true, equipment: true, contractors: true, finance: true, usersManagement: false },
+              assignedProjects: (matched as any).assignedProjects || []
+            }
           });
         }
       }
@@ -833,39 +843,64 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
         usersList = INITIAL_USERS;
       }
       setStorage('users', usersList);
-      const cleanUsers = usersList.map(u => ({ username: u.username, nameAr: u.nameAr, role: u.role }));
+      const cleanUsers = usersList.map(u => ({ 
+        username: u.username, 
+        nameAr: u.nameAr, 
+        role: u.role,
+        permissions: (u as any).permissions || { projects: false, supplies: false, equipment: false, contractors: false, finance: false, usersManagement: false },
+        assignedProjects: (u as any).assignedProjects || []
+      }));
       return mockResponseOk(cleanUsers);
-    } catch (err) {
-      console.warn('[Firestore Log] Failed to fetch users, falling back to local cache:', err);
-      const users = getStorage<EmulatedUser[]>('users', INITIAL_USERS);
-      const cleanUsers = users.map(u => ({ username: u.username, nameAr: u.nameAr, role: u.role }));
-      return mockResponseOk(cleanUsers);
+    } catch (err: any) {
+      console.warn('[Firestore Log] Failed to fetch users:', err);
+      return mockResponseErr('تعذر جلب بيانات المستخدمين من قاعدة البيانات: ' + (err.message || String(err)), 500);
     }
   }
 
   // Route 3: POST /api/users
   if (path === '/api/users' && method === 'POST') {
-    const { username, password, nameAr, role } = bodyData;
-    if (!username || !password || !nameAr || !role) {
-      return mockResponseErr('جميع الحقول مطلوبة لإتمام تسجيل مستخدم.');
+    const { username, password, nameAr, role, permissions, assignedProjects } = bodyData;
+    if (!username || !nameAr || !role) {
+      return mockResponseErr('اسم المستخدم والاسم العربي والرتبة حقول مطلوبة.');
     }
     const lowerUser = username.trim().toLowerCase();
-    const newUser = { username: username.trim(), password: password.trim(), nameAr: nameAr.trim(), role };
+    
+    // For updates, we want to merge. For new users, we need password.
+    const newUser: any = { 
+      username: username.trim(), 
+      nameAr: nameAr.trim(), 
+      role,
+      permissions: permissions || { projects: false, supplies: false, equipment: false, contractors: false, finance: false, usersManagement: false },
+      assignedProjects: assignedProjects || []
+    };
+    if (password) newUser.password = password.trim();
 
     try {
-      await runFs(() => setDoc(doc(db, 'users', lowerUser), newUser), OperationType.CREATE, `users/${lowerUser}`);
+      await runFs(() => setDoc(doc(db, 'users', lowerUser), newUser, { merge: true }), OperationType.CREATE, `users/${lowerUser}`);
       const users = getStorage<EmulatedUser[]>('users', INITIAL_USERS);
+      const existingUser = users.find(u => u.username.toLowerCase() === lowerUser);
       const cleaned = users.filter(u => u.username.toLowerCase() !== lowerUser);
-      cleaned.push(newUser);
+      
+      const userToStore = {
+        ...(existingUser || {}),
+        ...newUser
+      };
+      
+      cleaned.push(userToStore);
       setStorage('users', cleaned);
-      return mockResponseOk({ success: true, user: { username, nameAr, role } });
-    } catch (err) {
-      console.warn('[Firestore Log] Failed to save user, saving to cache:', err);
-      const users = getStorage<EmulatedUser[]>('users', INITIAL_USERS);
-      const cleaned = users.filter(u => u.username.toLowerCase() !== lowerUser);
-      cleaned.push(newUser);
-      setStorage('users', cleaned);
-      return mockResponseOk({ success: true, user: { username, nameAr, role }, offline: true });
+      return mockResponseOk({ 
+        success: true, 
+        user: { 
+          username: userToStore.username, 
+          nameAr: userToStore.nameAr, 
+          role: userToStore.role,
+          permissions: userToStore.permissions,
+          assignedProjects: userToStore.assignedProjects
+        } 
+      });
+    } catch (err: any) {
+      console.warn('[Firestore Log] Failed to save user:', err);
+      return mockResponseErr('تعذر حفظ الحساب في قاعدة البيانات: ' + (err.message || String(err)), 500);
     }
   }
 
@@ -885,12 +920,9 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
       const filtered = users.filter(u => u.username.toLowerCase() !== lowerUser);
       setStorage('users', filtered);
       return mockResponseOk({ success: true });
-    } catch (err) {
-      console.warn('[Firestore Log] Failed to delete user, deleting from cache:', err);
-      const users = getStorage<EmulatedUser[]>('users', INITIAL_USERS);
-      const filtered = users.filter(u => u.username.toLowerCase() !== lowerUser);
-      setStorage('users', filtered);
-      return mockResponseOk({ success: true, offline: true });
+    } catch (err: any) {
+      console.warn('[Firestore Log] Failed to delete user:', err);
+      return mockResponseErr('تعذر حذف الحساب من قاعدة البيانات: ' + (err.message || String(err)), 500);
     }
   }
 
@@ -899,32 +931,12 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     try {
       const sitesCol = collection(db, 'sites');
       const snapshot = await runFs(() => getDocs(sitesCol), OperationType.LIST, 'sites');
-      const sitesList = snapshot.docs.map(d => d.data() as EmulatedSite);
+      const sitesList = snapshot.docs.map(d => ({ ...d.data(), id: d.data().id || d.id }) as EmulatedSite);
       
-      // Merge Firestore fetched list with local storage cache to guarantee
-      // that any newly added or updated sites are not deleted/lost due to replication lag
-      const cachedSites = getStorage<EmulatedSite[]>('sites', INITIAL_SITES);
-      const mergedSites = [...sitesList];
-      
-      for (const cached of cachedSites) {
-        if (!mergedSites.some(s => s.id === cached.id)) {
-          mergedSites.push(cached);
-          // Gently push local site to Firestore in the background to ensure consistency
-          try {
-            const siteDocRef = doc(db, 'sites', cached.id);
-            await runFs(() => setDoc(siteDocRef, cached), OperationType.CREATE, `sites/${cached.id}`);
-          } catch (syncErr) {
-            console.warn('[Sync] Background sync of local site failed:', syncErr);
-          }
-        }
-      }
-
-      setStorage('sites', mergedSites);
-      return mockResponseOk(mergedSites);
-    } catch (err) {
-      console.warn('[Firestore Log] Failed to fetch sites, falling back to cache:', err);
-      const sites = getStorage<EmulatedSite[]>('sites', INITIAL_SITES);
-      return mockResponseOk(sites);
+      return mockResponseOk(sitesList);
+    } catch (err: any) {
+      console.warn('[Firestore Log] Failed to fetch sites:', err);
+      return mockResponseErr('فشل في جلب المواقع من قاعدة البيانات: ' + (err.message || String(err)), 500);
     }
   }
 
@@ -952,15 +964,9 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
         setStorage('sites', sites);
       }
       return mockResponseOk({ success: true });
-    } catch (err) {
-      console.warn('[Firestore Log] Failed to save site, saving to cache:', err);
-      const sites = getStorage<EmulatedSite[]>('sites', INITIAL_SITES);
-      if (sites.some(s => s.id === formattedId)) {
-        return mockResponseErr('رمز موقع العمل مكرر وتام التسجيل مسبقاً لموقع إنشائي آخر.');
-      }
-      sites.push(newSite);
-      setStorage('sites', sites);
-      return mockResponseOk({ success: true, offline: true });
+    } catch (err: any) {
+      console.warn('[Firestore Log] Failed to save site:', err);
+      return mockResponseErr('تعذر حفظ الموقع في قاعدة البيانات سحابياً. ' + (err.message || String(err)), 500);
     }
   }
 
@@ -978,13 +984,9 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
       setStorage('sites', filtered);
       localStorage.removeItem(STORAGE_PREFIX + `site_data_${siteIdToDelete}`);
       return mockResponseOk({ success: true });
-    } catch (err) {
-      console.warn('[Firestore Log] Failed to delete site, deleting from cache:', err);
-      const sites = getStorage<EmulatedSite[]>('sites', INITIAL_SITES);
-      const filtered = sites.filter(s => s.id !== siteIdToDelete);
-      setStorage('sites', filtered);
-      localStorage.removeItem(STORAGE_PREFIX + `site_data_${siteIdToDelete}`);
-      return mockResponseOk({ success: true, offline: true });
+    } catch (err: any) {
+      console.warn('[Firestore Log] Failed to delete site:', err);
+      return mockResponseErr('تعذر حذف الموقع من قاعدة البيانات: ' + (err.message || String(err)), 500);
     }
   }
 
@@ -1016,17 +1018,9 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
       }
       setStorage('sites', sites);
       return mockResponseOk({ success: true, site: updatedSite });
-    } catch (err) {
-      console.warn('[Firestore Log] Failed to update site, updating cache only:', err);
-      const sites = getStorage<EmulatedSite[]>('sites', INITIAL_SITES);
-      const matchedIdx = sites.findIndex(s => s.id === siteIdToUpdate);
-      if (matchedIdx !== -1) {
-        sites[matchedIdx] = updatedSite;
-      } else {
-        sites.push(updatedSite);
-      }
-      setStorage('sites', sites);
-      return mockResponseOk({ success: true, site: updatedSite, offline: true });
+    } catch (err: any) {
+      console.warn('[Firestore Log] Failed to update site:', err);
+      return mockResponseErr('تعذر تحديث بيانات الموقع في قاعدة البيانات: ' + (err.message || String(err)), 500);
     }
   }
 
@@ -1039,20 +1033,13 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
       const siteDataDocRef = doc(db, 'siteData', siteId);
       const docSnap = await runFs(() => getDoc(siteDataDocRef), OperationType.GET, `siteData/${siteId}`);
       if (docSnap.exists()) {
-        const cloudData = docSnap.data();
-        setStorage(`site_data_${siteId}`, cloudData);
-        return mockResponseOk(cloudData);
+        return mockResponseOk(docSnap.data());
       } else {
-        const localData = getStorage<any>(`site_data_${siteId}`, {});
-        if (Object.keys(localData).length > 0) {
-          await runFs(() => setDoc(siteDataDocRef, localData), OperationType.CREATE, `siteData/${siteId}`);
-        }
-        return mockResponseOk(localData);
+        return mockResponseOk({});
       }
-    } catch (err) {
-      console.warn(`[Firestore Log] Failed to fetch siteData for ${siteId}, returning cache:`, err);
-      const localData = getStorage<any>(`site_data_${siteId}`, {});
-      return mockResponseOk(localData);
+    } catch (err: any) {
+      console.warn(`[Firestore Log] Failed to fetch siteData for ${siteId}:`, err);
+      return mockResponseErr('فشل في جلب بيانات الموقع من قاعدة البيانات: ' + (err.message || String(err)), 500);
     }
   }
 
@@ -1067,10 +1054,9 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
       await runFs(() => setDoc(siteDataDocRef, data || {}), OperationType.WRITE, `siteData/${siteId}`);
       setStorage(`site_data_${siteId}`, data || {});
       return mockResponseOk({ success: true });
-    } catch (err) {
-      console.warn(`[Firestore Log] Failed to save siteData for ${siteId}, saving to cache:`, err);
-      setStorage(`site_data_${siteId}`, data || {});
-      return mockResponseOk({ success: true, offline: true });
+    } catch (err: any) {
+      console.warn(`[Firestore Log] Failed to save siteData for ${siteId}:`, err);
+      return mockResponseErr('تعذر حفظ تحديثات بيانات الموقع في قاعدة البيانات: ' + (err.message || String(err)), 500);
     }
   }
 

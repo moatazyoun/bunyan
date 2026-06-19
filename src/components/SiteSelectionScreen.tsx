@@ -11,7 +11,7 @@ interface Site {
 }
 
 interface SiteSelectionScreenProps {
-  user: { username: string; nameAr: string; role: string } | null;
+  user: { username: string; nameAr: string; role: string; assignedProjects?: string[] } | null;
   onSiteSelected: (site: Site) => void;
   onLogout: () => void;
   dbConnected?: boolean | null;
@@ -125,10 +125,6 @@ export default function SiteSelectionScreen({
   };
 
   const handleDeleteClick = async (site: Site) => {
-    if (dbConnected === false) {
-      alert('عذراً، تم تعطيل حذف السجلات مؤقتاً لعدم وجود اتصال نشط بقاعدة البيانات السحابية.');
-      return;
-    }
     const confirmed = window.confirm(`هل أنت متأكد من حذف موقع العمل "${site.nameAr}" نهائياً؟ سيتم مسح كافة سجلاته بالكامل وبشكل غير قابل للاسترجاع.`);
     if (!confirmed) return;
 
@@ -142,9 +138,23 @@ export default function SiteSelectionScreen({
       }
       await fetchSites();
     } catch (err: any) {
+      console.error('Delete error', err);
       alert(err.message || 'حدث خطأ أثناء الاتصال بالخادم لحذف الموقع.');
     }
   };
+
+  const filteredSites = sites.filter(site => {
+    // Admin and Projects Manager see everything
+    if (user?.role === 'admin' || user?.role === 'projects_manager') return true;
+    
+    // If user has assigned projects, only show those
+    if (user?.assignedProjects && user.assignedProjects.length > 0) {
+      return user.assignedProjects.includes(site.id);
+    }
+    
+    // Otherwise show all (default legacy behavior, or if no restrictions set)
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-slate-50 text-right text-slate-820 flex flex-col p-6 md:p-12 relative overflow-hidden font-sans" dir="rtl">
@@ -292,7 +302,7 @@ export default function SiteSelectionScreen({
               onClick={() => {
                 setIsEditMode(false);
                 setEditingSiteId('');
-                setNewSiteId('');
+                setNewSiteId('site-default');
                 setNewSiteName('');
                 setNewSiteLoc('');
                 setNewSiteDesc('');
@@ -314,7 +324,7 @@ export default function SiteSelectionScreen({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 relative z-10">
-            {sites.map((site) => (
+            {filteredSites.map((site) => (
               <motion.div
                 key={site.id}
                 whileHover={{ scale: 1.025, y: -4 }}
@@ -368,11 +378,11 @@ export default function SiteSelectionScreen({
               </motion.div>
             ))}
 
-            {sites.length === 0 && (
+            {filteredSites.length === 0 && (
               <div className="col-span-full border border-dashed border-slate-200 bg-white/50 backdrop-blur-md rounded-3xl p-12 text-center text-slate-400 animate-pulse">
                 <Compass size={40} className="mx-auto mb-4 text-slate-400" />
                 <p className="font-bold text-sm text-slate-800">لم يتم العثور على أي مواقع عمل مسجلة</p>
-                <p className="text-xs text-slate-500 mt-1">تأسس موقعك الأول لتنشيط الاتصال وقراءة السجلات الإنشائية.</p>
+                <p className="text-xs text-slate-500 mt-1">تأكد من صلاحيات الوصول أو تأسيس موقعك الأول.</p>
               </div>
             )}
           </div>
@@ -404,14 +414,16 @@ export default function SiteSelectionScreen({
 
               <form onSubmit={handleSaveSite} className="space-y-4">
                 <div className="space-y-1 text-right">
-                  <label className="text-xs font-bold text-slate-700">رمز / كود المشروع (غير قابل للتغيير بعد الإنشاء):</label>
+                  <label className="text-xs font-bold text-slate-700">رمز / كود المشروع (يجب أن يكون بالإنجليزية فقط، مثال: site-01):</label>
                   <input
                     type="text"
                     required
                     disabled={isEditMode}
                     placeholder="مثال: site-cairo-bypass"
                     value={newSiteId}
-                    onChange={(e) => setNewSiteId(e.target.value)}
+                    onChange={(e) => setNewSiteId(e.target.value.replace(/[^a-zA-Z0-9-]/g, ''))}
+                    pattern="[a-zA-Z0-9-]+"
+                    title="يرجى استخدام الحروف الإنجليزية والأرقام والشرطات فقط."
                     className={`w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono placeholder-slate-400 focus:outline-none focus:bg-white focus:border-indigo-500 text-left ${
                       isEditMode ? 'opacity-50 cursor-not-allowed text-slate-400' : 'text-slate-800'
                     }`}

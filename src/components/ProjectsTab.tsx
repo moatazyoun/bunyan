@@ -15,20 +15,30 @@ import {
   TrendingUp,
   X,
   Search,
-  Calculator
+  Calculator,
+  Users,
+  ShieldCheck,
+  CheckCircle2
 } from 'lucide-react';
-import { Project, BOQItem } from '../types';
+import { Project, BOQItem, UserItem } from '../types';
 
 interface ProjectsTabProps {
   projects: Project[];
   setProjects: (projects: Project[]) => void;
   boqItems: BOQItem[];
+  currentUserRole?: string;
 }
 
-export default function ProjectsTab({ projects, setProjects, boqItems }: ProjectsTabProps) {
+export default function ProjectsTab({ projects, setProjects, boqItems, currentUserRole }: ProjectsTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // User Assignment Modal State
+  const [projectForUsers, setProjectForUsers] = useState<Project | null>(null);
+  const [allUsers, setAllUsers] = useState<UserItem[]>([]);
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [isUsersLoading, setIsUsersLoading] = useState(false);
 
   const [formData, setFormData] = useState<Partial<Project>>({
     name: '',
@@ -38,6 +48,68 @@ export default function ProjectsTab({ projects, setProjects, boqItems }: Project
     durationMonths: 12,
     status: 'Active'
   });
+
+  const fetchUsers = async () => {
+    setIsUsersLoading(true);
+    try {
+      const response = await fetch('/api/users');
+      if (response.ok) {
+        const data = await response.json();
+        setAllUsers(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch users', err);
+    } finally {
+      setIsUsersLoading(false);
+    }
+  };
+
+  const handleOpenUserAssignment = (project: Project) => {
+    setProjectForUsers(project);
+    fetchUsers();
+  };
+
+  const handleToggleUserAccess = (username: string) => {
+    setAllUsers(prev => prev.map(u => {
+      if (u.username === username) {
+        const assigned = u.assignedProjects || [];
+        const isAssigned = assigned.includes(projectForUsers!.id);
+        return {
+          ...u,
+          assignedProjects: isAssigned 
+            ? assigned.filter(id => id !== projectForUsers!.id)
+            : [...assigned, projectForUsers!.id]
+        };
+      }
+      return u;
+    }));
+  };
+
+  const handleSaveUserAssignment = async () => {
+    if (!projectForUsers) return;
+    setIsAssigning(true);
+    try {
+      const assignedUsernames = allUsers
+        .filter(u => (u.assignedProjects || []).includes(projectForUsers.id))
+        .map(u => u.username);
+
+      const response = await fetch(`/api/projects/${projectForUsers.id}/assign-users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usernames: assignedUsernames })
+      });
+
+      if (response.ok) {
+        setProjectForUsers(null);
+      } else {
+        alert('فشل حفظ التعديلات.');
+      }
+    } catch (err) {
+      alert('حدث خطأ أثناء الحفظ.');
+    } finally {
+      setIsAssigning(false);
+    }
+  };
 
   const calculateEndDate = (startDate: string, months: number) => {
     if (!startDate) return '';
@@ -221,21 +293,31 @@ export default function ProjectsTab({ projects, setProjects, boqItems }: Project
                     </p>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => { setEditingId(project.id); setFormData(project); setShowForm(true); }}
-                    className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-                  <button 
-                    onClick={() => handleDelete(project.id)}
-                    className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex gap-2">
+                    {(currentUserRole === 'admin' || currentUserRole === 'projects_manager') && (
+                      <button 
+                        onClick={() => handleOpenUserAssignment(project)}
+                        className="p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition flex items-center gap-2 text-[10px] font-black"
+                        title="تحديد المصرح لهم بالدخول"
+                      >
+                        <Users className="w-4 h-4" />
+                        <span>الصلاحيات</span>
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => { setEditingId(project.id); setFormData(project); setShowForm(true); }}
+                      className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(project.id)}
+                      className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-slate-50 p-4 rounded-2xl">
@@ -279,6 +361,92 @@ export default function ProjectsTab({ projects, setProjects, boqItems }: Project
           );
         })}
       </div>
+
+      {/* User Assignment Modal */}
+      {projectForUsers && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[32px] w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border border-slate-100">
+            <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                  تحديد المخول لهم بالدخول
+                </h3>
+                <p className="text-[10px] text-slate-500 font-bold mt-0.5">مشروع: {projectForUsers.name}</p>
+              </div>
+              <button onClick={() => setProjectForUsers(null)} className="p-2 hover:bg-white rounded-full text-slate-400 transition"><X className="w-5 h-5" /></button>
+            </div>
+            
+            <div className="p-6 max-h-[400px] overflow-y-auto">
+              {isUsersLoading ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-2">
+                  <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                  <p className="text-xs font-bold text-slate-400">جاري تحميل سجل الكادر...</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {allUsers.length === 0 ? (
+                    <p className="text-center py-8 text-xs text-slate-400 italic">لا يوجد مستخدمين مسجلين حالياً.</p>
+                  ) : (
+                    allUsers.map(u => {
+                      const isAssigned = (u.assignedProjects || []).includes(projectForUsers.id);
+                      const isAdmin = u.role === 'admin' || u.role === 'projects_manager';
+                      
+                      return (
+                        <button
+                          key={u.username}
+                          disabled={isAdmin}
+                          onClick={() => handleToggleUserAccess(u.username)}
+                          className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                            isAssigned 
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
+                              : 'bg-white border-slate-100 text-slate-600 hover:border-slate-200'
+                          } ${isAdmin ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                              isAssigned ? 'bg-white' : 'bg-slate-50'
+                            }`}>
+                              <Users className="w-5 h-5" />
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs font-black">{u.nameAr}</p>
+                              <p className="text-[9px] font-bold opacity-70">
+                                {u.role === 'admin' ? 'مدير نظام' : 
+                                 u.role === 'projects_manager' ? 'مدير مشروعات' :
+                                 u.role === 'site_manager' ? 'مدير موقع' :
+                                 u.role === 'site_engineer' ? 'مهندس موقع' : u.role}
+                              </p>
+                            </div>
+                          </div>
+                          {isAdmin ? (
+                            <span className="text-[8px] px-2 py-0.5 bg-slate-200 text-slate-600 rounded-md font-black">مدير (وصول كامل)</span>
+                          ) : isAssigned ? (
+                            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full border-2 border-slate-100" />
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
+              <button 
+                disabled={isAssigning}
+                onClick={handleSaveUserAssignment} 
+                className="flex-1 bg-indigo-600 text-white rounded-2xl py-3.5 font-black shadow-lg hover:bg-indigo-700 transition disabled:opacity-50"
+              >
+                {isAssigning ? 'جاري الحفظ...' : 'حفظ التعديلات'}
+              </button>
+              <button onClick={() => setProjectForUsers(null)} className="px-8 bg-white border border-slate-200 text-slate-600 rounded-2xl py-3.5 font-black hover:bg-slate-50 transition">إلغاء</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
