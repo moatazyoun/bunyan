@@ -113,7 +113,9 @@ service cloud.firestore {
 
     // 5. Extracts signatory templates
     match /extractSettings/{projectId} {
-      allow read, write: if true;
+      allow read, list: if isSignedIn();
+      allow create, update: if isSignedIn() && isValidId(projectId) && isValidExtractSettings(incoming());
+      allow delete: if isAdmin();
     }
   }
 }

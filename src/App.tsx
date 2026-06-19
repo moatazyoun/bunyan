@@ -181,71 +181,28 @@ export default function App() {
   };
 
   // 1. Core Financial Transactions & Ledger
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    const saved = localStorage.getItem('bunyan_transactions');
-    const items = saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
-    return sanitizeLoadedData<Transaction>(items, 'tx');
-  });
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
-  const [custodies, setCustodies] = useState<CustodyRecord[]>(() => {
-    const saved = localStorage.getItem('bunyan_custodies');
-    const items = saved ? JSON.parse(saved) : INITIAL_CUSTODIES;
-    return sanitizeLoadedData<CustodyRecord>(items, 'cust');
-  });
+  const [custodies, setCustodies] = useState<CustodyRecord[]>([]);
 
-  const [contractors, setContractors] = useState<ContractorCertificate[]>(() => {
-    const saved = localStorage.getItem('bunyan_contractors');
-    const items = saved ? JSON.parse(saved) : INITIAL_CONTRACTORS;
-    return sanitizeLoadedData<ContractorCertificate>(items, 'sub');
-  });
+  const [contractors, setContractors] = useState<ContractorCertificate[]>([]);
 
   // 2. Enterprise ERP Modules States
-  const [equipment, setEquipment] = useState<EquipmentRecord[]>(() => {
-    const saved = localStorage.getItem('bunyan_equipment');
-    const items = saved ? JSON.parse(saved) : INITIAL_EQUIPMENT;
-    return sanitizeLoadedData<EquipmentRecord>(items, 'eq');
-  });
+  const [equipment, setEquipment] = useState<EquipmentRecord[]>([]);
 
-  const [maintenanceOrders, setMaintenanceOrders] = useState<MaintenanceOrder[]>(() => {
-    const saved = localStorage.getItem('bunyan_maint_orders');
-    const items = saved ? JSON.parse(saved) : INITIAL_MAINTENANCE_ORDERS;
-    return sanitizeLoadedData<MaintenanceOrder>(items, 'maint');
-  });
+  const [maintenanceOrders, setMaintenanceOrders] = useState<MaintenanceOrder[]>([]);
 
-  const [labTests, setLabTests] = useState<LabTestRecord[]>(() => {
-    const saved = localStorage.getItem('bunyan_lab_tests');
-    const items = saved ? JSON.parse(saved) : INITIAL_LAB_TESTS;
-    return sanitizeLoadedData<LabTestRecord>(items, 'test');
-  });
+  const [labTests, setLabTests] = useState<LabTestRecord[]>([]);
 
-  const [hseIncidents, setHseIncidents] = useState<HseIncidentRecord[]>(() => {
-    const saved = localStorage.getItem('bunyan_hse_incidents');
-    const items = saved ? JSON.parse(saved) : INITIAL_HSE_INCIDENTS;
-    return sanitizeLoadedData<HseIncidentRecord>(items, 'hse');
-  });
+  const [hseIncidents, setHseIncidents] = useState<HseIncidentRecord[]>([]);
 
-  const [wbsTasks, setWbsTasks] = useState<WbsTaskRecord[]>(() => {
-    const saved = localStorage.getItem('bunyan_wbs_tasks');
-    const items = saved ? JSON.parse(saved) : INITIAL_WBS_TASKS;
-    return sanitizeLoadedData<WbsTaskRecord>(items, 'task');
-  });
+  const [wbsTasks, setWbsTasks] = useState<WbsTaskRecord[]>([]);
 
-  const [warehouseItems, setWarehouseItems] = useState<WarehouseItemRecord[]>(() => {
-    const saved = localStorage.getItem('bunyan_warehouse');
-    const items = saved ? JSON.parse(saved) : INITIAL_WAREHOUSE;
-    return sanitizeLoadedData<WarehouseItemRecord>(items, 'wh');
-  });
+  const [warehouseItems, setWarehouseItems] = useState<WarehouseItemRecord[]>([]);
 
-  const [auditLogs, setAuditLogs] = useState<AuditTrailRecord[]>(() => {
-    const saved = localStorage.getItem('bunyan_audit_logs');
-    const items = saved ? JSON.parse(saved) : INITIAL_AUDIT_TRAIL;
-    return sanitizeLoadedData<AuditTrailRecord>(items, 'audit');
-  });
+  const [auditLogs, setAuditLogs] = useState<AuditTrailRecord[]>([]);
 
-  const [workers, setWorkers] = useState<SiteWorker[]>(() => {
-    const saved = localStorage.getItem('bunyan_site_workers');
-    return saved ? JSON.parse(saved) : INITIAL_WORKERS;
-  });
+  const [workers, setWorkers] = useState<SiteWorker[]>([]);
 
   const [attendanceLogs, setAttendanceLogs] = useState<WorkerAttendance[]>(() => {
     const saved = localStorage.getItem('bunyan_site_workers_attendance');
@@ -324,17 +281,19 @@ export default function App() {
         try {
           // Deep clean payload of undefined values which Firestore doesn't accept
           const cleanPayload = JSON.parse(JSON.stringify(siteDataPayload));
-          // Save to local storage as fallback cache
-          localStorage.setItem('bunyan_sitedata_' + selectedSite.id, JSON.stringify(cleanPayload));
           
           // Use reliable server API instead of direct client-side Firestore SDK
-          await fetch(`/api/site/${selectedSite.id}/save`, {
+          const response = await fetch(`/api/site/${selectedSite.id}/save`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ data: cleanPayload })
           });
+          if (!response.ok) {
+            throw new Error('Failed to save data to database.');
+          }
         } catch (err) {
           console.warn("Error saving site data via API:", err);
+          setDbConnected(false);
         }
       }, 500);
       return () => clearTimeout(timer);
@@ -362,16 +321,10 @@ export default function App() {
               if (data && Object.keys(data).length > 0) {
                 hasDoc = true;
                 // Cache in local storage for subsequent offline loads
-                localStorage.setItem('bunyan_sitedata_' + selectedSite.id, JSON.stringify(data));
               }
             }
           } catch (fireErr) {
-            console.warn("API fetch failed, using local fallback cache...", fireErr);
-            const cachedStr = localStorage.getItem('bunyan_sitedata_' + selectedSite.id);
-            if (cachedStr) {
-              hasDoc = true;
-              data = JSON.parse(cachedStr);
-            }
+            console.warn("API fetch failed, check connection...", fireErr);
           }
           
           if (hasDoc && data) {
