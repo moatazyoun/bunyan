@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Truck, 
   Coins, 
@@ -52,65 +52,199 @@ export default function SuppliesDashboard({
   // 3. Suppliers derived from contractorsReport (needs mapping in App.tsx or derived here)
   const suppliers = contractorsReport;
 
+  // Central reconciliation function for all supply tickets depending on dynamic periods of cubic certificates
+  const reconcileAllSupplyRecords = useMemo(() => (
+    records: SupplyRecord[],
+    certs: CubicCertificate[]
+  ): SupplyRecord[] => {
+    try {
+      return records.map(rec => {
+        // 1. Check if the ticket uses truck delivery method or is related to cubic capacity
+        if (rec.supplyMethod !== 'truck' && rec.supplyMethod !== 'cubic') {
+          return rec;
+        }
+
+        // 2. Find the supplier for this receipt
+        const supplierObj = contractorsReport.find(s => s.name === rec.supplierName);
+        if (!supplierObj || !supplierObj.deliveryMethods) return rec;
+
+        // 3. Match the dumper/truck by plate number
+        const dumper = supplierObj.deliveryMethods.find((dm: any) => 
+          dm.dumperNumber === rec.truckPlate || 
+          dm.truckNumber === rec.truckPlate
+        );
+        if (!dumper) return rec;
+
+        // 4. Find the valid cubic certificate for this dumper on the ticket's date
+        const dumperCerts = certs.filter(c => c.dumperId === dumper.id);
+        
+        const matchingCert = dumperCerts.find(c => {
+          const start = c.startDate || '1970-01-01';
+          const end = c.endDate || '9999-12-31';
+          return rec.date >= start && rec.date <= end;
+        });
+
+        if (matchingCert) {
+          const qualityD = rec.qualityDiscount || 0;
+          const loadD = rec.loadDiscount || 0;
+          const certCapacity = matchingCert.netCubic ?? matchingCert.totalCubic ?? dumper.cubicCapacity;
+          const rawQuantity = typeof certCapacity === 'number' ? certCapacity : (parseFloat(certCapacity) || rec.rawQuantity);
+          const netQuantity = Math.max(0, rawQuantity - qualityD - loadD);
+          const totalCost = netQuantity * rec.unitPrice;
+
+          return {
+            ...rec,
+            cubicCertificateId: matchingCert ? matchingCert.id : undefined,
+            rawQuantity,
+            netQuantity,
+            totalCost
+          };
+        } else {
+          // Fallback to default vehicle capacity if no certificate covers this date
+          const qualityD = rec.qualityDiscount || 0;
+          const loadD = rec.loadDiscount || 0;
+          const capacity = dumper.cubicCapacity;
+          const rawQuantity = typeof capacity === 'number' ? capacity : (parseFloat(capacity) || rec.rawQuantity);
+          const netQuantity = Math.max(0, rawQuantity - qualityD - loadD);
+          const totalCost = netQuantity * rec.unitPrice;
+
+          return {
+            ...rec,
+            cubicCertificateId: undefined,
+            rawQuantity,
+            netQuantity,
+            totalCost
+          };
+        }
+      });
+    } catch (err) {
+      console.error("Reconciliation error:", err);
+      return records;
+    }
+  }, [contractorsReport]);
+
+  // Run automatically when certificates or contractors report updates to reconcile historical data
+  useEffect(() => {
+    if (supplyRecords.length > 0 && cubicCertificates.length > 0) {
+      const reconciled = reconcileAllSupplyRecords(supplyRecords, cubicCertificates);
+      const hasDiff = reconciled.some((rec, index) => {
+        const orig = supplyRecords[index];
+        return !orig || 
+               orig.netQuantity !== rec.netQuantity || 
+               orig.cubicCertificateId !== rec.cubicCertificateId || 
+               orig.rawQuantity !== rec.rawQuantity;
+      });
+      if (hasDiff) {
+        setSupplyRecords(reconciled);
+      }
+    }
+  }, [cubicCertificates, contractorsReport, reconcileAllSupplyRecords, supplyRecords, setSupplyRecords]);
+
   // Operations handlers
   const handleAddRecord = (rec: SupplyRecord) => {
-    setSupplyRecords([rec, ...supplyRecords]);
+    const updated = [rec, ...supplyRecords];
+    const reconciled = reconcileAllSupplyRecords(updated, cubicCertificates);
+    setSupplyRecords(reconciled);
   };
 
   const handleUpdateRecord = (id: string, updates: Partial<SupplyRecord>) => {
-    setSupplyRecords(supplyRecords.map(r => r.id === id ? { ...r, ...updates } : r));
+    const updated = supplyRecords.map(r => r.id === id ? { ...r, ...updates } : r);
+    const reconciled = reconcileAllSupplyRecords(updated, cubicCertificates);
+    setSupplyRecords(reconciled);
   };
 
   const handleDeleteRecord = (id: string) => {
-    setSupplyRecords(supplyRecords.filter(r => r.id !== id));
+    const updated = supplyRecords.filter(r => r.id !== id);
+    const reconciled = reconcileAllSupplyRecords(updated, cubicCertificates);
+    setSupplyRecords(reconciled);
   };
 
   // Create certificate AND link its tickets
   const handleAddCertificate = (cert: CubicCertificate, attachedTicketIds: string[]) => {
-    setCubicCertificates([cert, ...cubicCertificates]);
-    setSupplyRecords(supplyRecords.map(rec => {
-      if (attachedTicketIds.includes(rec.id)) {
-        return {
-          ...rec,
-          cubicCertificateId: cert.id
-        };
+    let updatedCerts = [...cubicCertificates];
+
+    // Check if we need to terminate an old certificate
+    if (cert.oldCertIdToTerminate && cert.oldCertTerminationDate) {
+      updatedCerts = updatedCerts.map(c => {
+        if (c.id === cert.oldCertIdToTerminate) {
+          return {
+            ...c,
+            endDate: cert.oldCertTerminationDate
+          };
+        }
+        return c;
+      });
+
+      // Compute start date of the new certificate as day after termination date
+      const termDate = new Date(cert.oldCertTerminationDate);
+      termDate.setDate(termDate.getDate() + 1);
+      cert.startDate = termDate.toISOString().split('T')[0];
+    } else {
+      // If there are other certificates for the same vehicle, we can default the start date to cert.date
+      const existingOfDumper = cubicCertificates.filter(c => c.dumperId === cert.dumperId);
+      if (existingOfDumper.length > 0) {
+        cert.startDate = cert.date;
+      } else {
+        cert.startDate = '1970-01-01'; // Default start of time for the first cert
       }
-      return rec;
-    }));
+    }
+
+    updatedCerts = [cert, ...updatedCerts];
+    setCubicCertificates(updatedCerts);
+
+    // Reconcile all supply tickets based on the updated certificate set
+    const reconciled = reconcileAllSupplyRecords(supplyRecords, updatedCerts);
+    setSupplyRecords(reconciled);
   };
 
   const handleUpdateCertificate = (id: string, cert: CubicCertificate, attachedTicketIds: string[]) => {
-    setCubicCertificates(cubicCertificates.map(c => c.id === id ? cert : c));
-    
-    // First, clear all records currently linked to this certificate
-    const clearedRecords = supplyRecords.map(rec => {
-      if (rec.cubicCertificateId === id) {
-        return { ...rec, cubicCertificateId: undefined };
-      }
-      return rec;
-    });
+    let updatedCerts = cubicCertificates.map(c => c.id === id ? cert : c);
 
-    // Then, link the new set of tickets
-    setSupplyRecords(clearedRecords.map(rec => {
-      if (attachedTicketIds.includes(rec.id)) {
-        return { ...rec, cubicCertificateId: cert.id };
-      }
-      return rec;
-    }));
+    // Check if we need to terminate an old certificate during update
+    if (cert.oldCertIdToTerminate && cert.oldCertTerminationDate) {
+      updatedCerts = updatedCerts.map(c => {
+        if (c.id === cert.oldCertIdToTerminate) {
+          return {
+            ...c,
+            endDate: cert.oldCertTerminationDate
+          };
+        }
+        return c;
+      });
+
+      const termDate = new Date(cert.oldCertTerminationDate);
+      termDate.setDate(termDate.getDate() + 1);
+      cert.startDate = termDate.toISOString().split('T')[0];
+    }
+
+    setCubicCertificates(updatedCerts);
+
+    const reconciled = reconcileAllSupplyRecords(supplyRecords, updatedCerts);
+    setSupplyRecords(reconciled);
   };
 
   // Delete certificate AND un-link tickets
   const handleDeleteCertificate = (id: string) => {
-    setCubicCertificates(cubicCertificates.filter(c => c.id !== id));
-    setSupplyRecords(supplyRecords.map(rec => {
-      if (rec.cubicCertificateId === id) {
-        return {
-          ...rec,
-          cubicCertificateId: undefined
-        };
-      }
-      return rec;
-    }));
+    const certToDelete = cubicCertificates.find(c => c.id === id);
+    let updatedCerts = cubicCertificates.filter(c => c.id !== id);
+
+    // If we deleted a certificate, and it had terminated another certificate, we should restore that old certificate's activity (clear its endDate)
+    if (certToDelete && certToDelete.oldCertIdToTerminate) {
+      updatedCerts = updatedCerts.map(c => {
+        if (c.id === certToDelete.oldCertIdToTerminate) {
+          return {
+            ...c,
+            endDate: undefined // restore back to infinite
+          };
+        }
+        return c;
+      });
+    }
+
+    setCubicCertificates(updatedCerts);
+
+    const reconciled = reconcileAllSupplyRecords(supplyRecords, updatedCerts);
+    setSupplyRecords(reconciled);
   };
 
   return (

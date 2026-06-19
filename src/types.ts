@@ -360,6 +360,11 @@ export interface CubicCertificate {
   personPerformingMeasurement?: string; // القائم بالتكعيب (من العاملين بالموقع)
   approverOfMeasurement?: string;       // معتمد التكعيب (من العاملين بالموقع)
 
+  startDate?: string;       // تاريخ بدء سريان المحضر (من بداية العمل)
+  endDate?: string;         // تاريخ نهاية سريان المحضر (للفترات المتعاقبة)
+  oldCertIdToTerminate?: string; // معرف المحضر القديم الذي سيتم إنهاء العمل به (اختياري للربط)
+  oldCertTerminationDate?: string; // تاريخ نهاية العمل بالمحضر القديم (اختياري)
+
   calculatedVolume: number; // إجمالي الحجم المحسوب (legacy or sum)
   approvedVolume: number;   // الحجم التكعيبي المعتمد هندسياً (maps to netCubic usually)
   engineerName: string;     // المهندس الاستشاري / المشرف المعتمد

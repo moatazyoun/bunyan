@@ -26,15 +26,28 @@ import { BOQItem, Project } from '../types';
 interface BOQTabProps {
   projectId: string; // Site ID
   projects: Project[];
+  setProjects?: (projects: Project[]) => void;
   boqItems: BOQItem[];
   setBoqItems: (items: BOQItem[]) => void;
 }
 
-export default function BOQTab({ projectId, projects, boqItems, setBoqItems }: BOQTabProps) {
+export default function BOQTab({ projectId, projects, setProjects, boqItems, setBoqItems }: BOQTabProps) {
   const [selectedProjectId, setSelectedProjectId] = useState<string>(projects[0]?.id || '');
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+
+  // Sync selectedProjectId whenever the list of projects updates/loads
+  React.useEffect(() => {
+    if (projects.length > 0) {
+      const exists = projects.some(p => p.id === selectedProjectId);
+      if (!selectedProjectId || !exists) {
+        setSelectedProjectId(projects[0].id);
+      }
+    } else {
+      setSelectedProjectId('');
+    }
+  }, [projects, selectedProjectId]);
   
   // AI-powered BOQ upload states
   const [showAiUploader, setShowAiUploader] = useState(false);
@@ -59,12 +72,40 @@ export default function BOQTab({ projectId, projects, boqItems, setBoqItems }: B
     item.code.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const ensureDefaultProject = (): string => {
+    if (projects.length > 0) {
+      return selectedProjectId || projects[0].id;
+    }
+    
+    // Ensure default project if projects list is empty
+    const defaultProjId = `proj-default`;
+    if (setProjects) {
+      const defaultProject: Project = {
+        id: defaultProjId,
+        name: 'العملية الافتراضية للموقع',
+        assignmentNumber: 'إسناد داخلي مباشر / 01',
+        assignmentDate: new Date().toISOString().split('T')[0],
+        handoverDate: new Date().toISOString().split('T')[0],
+        durationMonths: 12,
+        status: 'Active'
+      };
+      setProjects([defaultProject]);
+      setSelectedProjectId(defaultProjId);
+    }
+    return defaultProjId;
+  };
+
   const handleAddItem = () => {
-    if (!newItem.description || !newItem.code || !selectedProjectId) return;
+    if (!newItem.description || !newItem.code) return;
+    
+    let targetProjectId = selectedProjectId;
+    if (!targetProjectId) {
+      targetProjectId = ensureDefaultProject();
+    }
     
     const itemToAdd: BOQItem = {
       id: `boq-${Date.now()}`,
-      projectId: selectedProjectId,
+      projectId: targetProjectId,
       code: newItem.code || '',
       description: newItem.description || '',
       unit: newItem.unit || 'م٣',
@@ -146,11 +187,15 @@ export default function BOQTab({ projectId, projects, boqItems, setBoqItems }: B
   };
 
   const handleSaveExtractedItems = () => {
-    if (!selectedProjectId || extractedItems.length === 0) return;
+    let targetProjectId = selectedProjectId || (projects[0] && projects[0].id);
+    if (!targetProjectId) {
+      targetProjectId = ensureDefaultProject();
+    }
+    if (extractedItems.length === 0) return;
 
     const itemsToAdd: BOQItem[] = extractedItems.map(it => ({
       id: `boq-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      projectId: selectedProjectId,
+      projectId: targetProjectId,
       code: it.code,
       description: it.description,
       unit: it.unit,
@@ -175,15 +220,31 @@ export default function BOQTab({ projectId, projects, boqItems, setBoqItems }: B
           </div>
           <div className="flex-1">
             <label className="text-[10px] font-black text-slate-400 mb-1 block uppercase tracking-wider">Active BOQ / Project Operation</label>
-            <select 
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-black outline-none focus:border-indigo-400 transition-all cursor-pointer"
-            >
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.name} - ({p.assignmentNumber})</option>
-              ))}
-            </select>
+            {projects.length === 0 ? (
+              <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-slate-800">
+                <span className="text-xs font-bold">
+                  ⚠️ لا توجد مشاريع مسجلة بعد.
+                </span>
+                {setProjects && (
+                  <button 
+                    onClick={ensureDefaultProject}
+                    className="bg-amber-600 font-sans text-white font-black text-[10px] rounded-lg px-2.5 py-1.5 hover:bg-amber-700 transition"
+                  >
+                    تفويض عملية افتراضية
+                  </button>
+                )}
+              </div>
+            ) : (
+              <select 
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-black outline-none focus:border-indigo-400 transition-all cursor-pointer"
+              >
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name} - ({p.assignmentNumber})</option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
         <div className="h-12 w-[1px] bg-slate-100 hidden md:block" />
@@ -347,9 +408,9 @@ export default function BOQTab({ projectId, projects, boqItems, setBoqItems }: B
                     <div className="flex gap-2 shrink-0">
                       <button 
                         onClick={handleSaveExtractedItems}
-                        className="bg-purple-650 hover:bg-purple-750 text-white rounded-lg px-4 py-1.5 font-black flex items-center gap-1 text-[11px] shadow-md shadow-purple-200 transition-all cursor-pointer"
+                        className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white rounded-xl px-6 py-2.5 font-black flex items-center gap-2 text-xs shadow-lg shadow-emerald-500/20 transition-all cursor-pointer whitespace-nowrap border border-emerald-500/10"
                       >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <CheckCircle2 className="w-4 h-4" />
                         اعتماد البنود وإدخالها للمقايسة
                       </button>
                       <button 

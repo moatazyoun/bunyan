@@ -925,7 +925,7 @@ export default function SubcontractorsDashboard({
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5 flex justify-between">
                     <span>تسويات ورقية مقتطعة (إدخال يدوي)</span>
-                    <span className="text-[10px] text-purple-650 bg-purple-50 px-2 py-0.5 rounded-full">الوحيد القابل للتعديل اليدوي</span>
+                    <span className="text-[10px] text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">الوحيد القابل للتعديل اليدوي</span>
                   </label>
                   <input
                     type="number"

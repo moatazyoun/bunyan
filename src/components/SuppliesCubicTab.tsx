@@ -60,7 +60,11 @@ export default function SuppliesCubicTab({
     personPerformingMeasurement: '',
     approverOfMeasurement: '',
     engineerName: '',
-    notes: ''
+    notes: '',
+    startDate: '',
+    endDate: '',
+    oldCertIdToTerminate: '',
+    oldCertTerminationDate: ''
   });
 
   // Keep track of checked ticket IDs in the custom creation view
@@ -164,7 +168,11 @@ export default function SuppliesCubicTab({
       personPerformingMeasurement: workers[0]?.name || '',
       approverOfMeasurement: workers[1]?.name || workers[0]?.name || '',
       engineerName: '',
-      notes: ''
+      notes: '',
+      startDate: '',
+      endDate: '',
+      oldCertIdToTerminate: '',
+      oldCertTerminationDate: ''
     });
     setSelectedTicketIds([]);
     setShowAddModal(true);
@@ -184,7 +192,11 @@ export default function SuppliesCubicTab({
       personPerformingMeasurement: cert.personPerformingMeasurement || '',
       approverOfMeasurement: cert.approverOfMeasurement || '',
       engineerName: cert.engineerName || '',
-      notes: cert.notes || ''
+      notes: cert.notes || '',
+      startDate: cert.startDate || '',
+      endDate: cert.endDate || '',
+      oldCertIdToTerminate: cert.oldCertIdToTerminate || '',
+      oldCertTerminationDate: cert.oldCertTerminationDate || ''
     });
     setSelectedTicketIds(cert.attachedTicketIds);
     setShowAddModal(true);
@@ -203,6 +215,13 @@ export default function SuppliesCubicTab({
       setSelectedTicketIds(availableTickets.map(t => t.id));
     }
   };
+
+  const activePreviousCert = useMemo(() => {
+    if (!newCert.dumperId) return null;
+    const filtered = certificates.filter(c => c.dumperId === newCert.dumperId && c.id !== editingId);
+    if (filtered.length === 0) return null;
+    return filtered.find(c => !c.endDate) || filtered.sort((a, b) => b.date.localeCompare(a.date))[0];
+  }, [newCert.dumperId, certificates, editingId]);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -223,12 +242,10 @@ export default function SuppliesCubicTab({
       return;
     }
 
-    if (!editingId || (editingId && certificates.find(c => c.id === editingId)?.dumperId !== newCert.dumperId)) {
-      const exists = certificates.find(c => c.dumperId === newCert.dumperId);
-      if (exists) {
-        alert("تنبيه: لقد تم تسجيل محضر تكعيب لهذا القلاب مسبقاً (محضر رقم " + exists.id + "). لا يمكن إضافة أكثر من محضر لنفس القلاب.");
-        return;
-      }
+    if (activePreviousCert && !newCert.oldCertIdToTerminate) {
+      // If there's an active previous certificate, we must ensure oldCertTerminationDate and oldCertIdToTerminate are linked
+      alert("يرجى تحديد تاريخ نهاية العمل بالمحضر القديم لتسجيل هذا المحضر الجديد بنظام فترات.");
+      return;
     }
 
     try {
@@ -249,6 +266,11 @@ export default function SuppliesCubicTab({
         netCubic: calculations.net,
         personPerformingMeasurement: newCert.personPerformingMeasurement,
         approverOfMeasurement: newCert.approverOfMeasurement,
+
+        startDate: newCert.startDate || undefined,
+        endDate: newCert.endDate || undefined,
+        oldCertIdToTerminate: newCert.oldCertIdToTerminate || undefined,
+        oldCertTerminationDate: newCert.oldCertTerminationDate || undefined,
 
         engineerName: newCert.engineerName,
         notes: newCert.notes || `تم تسوية بونات التوريد عدد (${selectedTicketIds.length}) بنجاح.`
@@ -349,119 +371,177 @@ export default function SuppliesCubicTab({
             return (
               <div 
                 key={c.id} 
-                className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col justify-between hover:border-indigo-500/25 transition-all shadow-sm hover:shadow-md"
+                className="bg-white rounded-3xl border border-slate-200 p-6 flex flex-col justify-between hover:border-indigo-500/30 hover:shadow-xl hover:shadow-slate-100/40 transition-all duration-300 relative overflow-hidden"
               >
-                <div className="space-y-4">
-                  <div className="flex justify-between items-start">
-                    <span className="bg-indigo-50 text-indigo-600 text-[9px] font-black font-mono px-2 py-0.5 rounded border border-indigo-100">
+                {/* Visual top highlight bar to indicate status */}
+                <div className={`absolute top-0 right-0 left-0 h-1.5 ${hasDeficit ? 'bg-red-500' : 'bg-emerald-500'}`} />
+
+                <div className="space-y-5">
+                  {/* Card Header Info */}
+                  <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                    <span className="bg-indigo-50/60 hover:bg-indigo-50 text-indigo-700 text-[10px] font-black font-mono px-3 py-1.5 rounded-xl border border-indigo-150 transition-colors flex items-center gap-1.5 shadow-sm">
+                      <Hash className="h-3 w-3 text-indigo-500" />
                       محضر #{c.id}
                     </span>
-                    <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
+                    <span className="text-[11px] text-slate-500 font-bold font-sans flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-slate-400" />
                       {c.date}
                     </span>
                   </div>
 
+                  {/* Validity Period Badge */}
+                  <div className="flex items-center gap-2 text-[10.5px] bg-indigo-50/30 text-indigo-950 px-3 py-1.5 rounded-2xl w-fit font-black border border-indigo-100">
+                    <Calendar className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                    <span>فترة السريان:</span>
+                    <span className="font-sans text-[10px] text-indigo-600 font-black">
+                      من {c.startDate || 'بداية العمل'} إلى {c.endDate || 'الآن (نشط مستمر)'}
+                    </span>
+                  </div>
+
+                  {/* Main Subject Information */}
                   <div>
-                    <h4 className="text-sm font-black text-slate-800 leading-relaxed mb-1">
+                    <h4 className="text-base font-black text-slate-900 leading-snug tracking-tight mb-2.5 flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-indigo-600 animate-pulse shrink-0" />
                       {dumper 
                         ? `محضر تكعيب قلاب رقم ${dumper.dumperNumber} ${dumper.truckNumber && dumper.truckNumber !== 'بدون' ? `/ ${dumper.truckNumber}` : ''}`
                         : c.title}
                     </h4>
-                    <div className="flex flex-col gap-1 mt-2">
-                        <p className="text-[11px] text-slate-600 font-bold flex items-center gap-1">
-                          <Users className="h-3 w-3" />
-                          المقاول: {suppliers.find(s => s.deliveryMethods?.some((dm: any) => dm.id === c.dumperId))?.name || 'غير محدد'}
-                        </p>
-                        {dumper?.driverName && (
-                           <p className="text-[11px] text-slate-600 font-bold flex items-center gap-1">
-                             <User className="h-3 w-3" />
-                             السائق: {dumper.driverName}
-                           </p>
-                        )}
-                    </div>
-                  </div>
-
-                  {/* Volume breakdown */}
-                  <div className="grid grid-cols-3 gap-2 bg-slate-50 border border-slate-100 p-2 rounded-xl">
-                    <div className="text-center">
-                        <p className="text-[8px] font-bold text-slate-400">قلاب</p>
-                        <p className="text-[10px] font-mono font-black text-slate-600">{c.dumperCubic?.toFixed(2) || '0.00'}</p>
-                    </div>
-                    <div className="text-center border-x border-slate-200">
-                        <p className="text-[8px] font-bold text-slate-400">مقطورة</p>
-                        <p className="text-[10px] font-mono font-black text-slate-600">{c.trailerCubic?.toFixed(2) || '0.00'}</p>
-                    </div>
-                    <div className="text-center">
-                        <p className="text-[8px] font-bold text-slate-400">الخصم</p>
-                        <p className="text-[10px] font-mono font-black text-red-500">-{c.discounts?.toFixed(2) || '0.00'}</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 bg-white border border-slate-200 p-3 rounded-xl shadow-sm">
-                    <div className="text-center border-l border-slate-100 last:border-0 pr-1">
-                      <p className="text-[9px] text-slate-400 font-bold mb-0.5">إجمالي البونات</p>
-                      <p className="text-xs font-black text-slate-900 font-mono">{c.calculatedVolume.toFixed(2)} م٣</p>
-                    </div>
-                    <div className="text-center text-left">
-                      <p className="text-[9px] text-slate-400 font-bold mb-0.5">التكعيب المعتمد</p>
-                      <p className="text-xs font-black text-emerald-600 font-mono">{(c.netCubic ?? c.approvedVolume).toFixed(2)} م٣</p>
-                    </div>
-                  </div>
-
-                   <div className="flex justify-between items-center px-1">
-                      <div className="flex flex-col">
-                         <span className="text-[8px] text-slate-400">القائم بالتكعيب</span>
-                         <span className="text-[9px] font-bold text-slate-600">{c.personPerformingMeasurement || 'غير محدد'}</span>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 bg-slate-50/70 rounded-xl p-3 border border-slate-100">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="p-1.5 bg-slate-200/50 rounded-lg shrink-0">
+                          <Users className="h-3.5 w-3.5 text-slate-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[9px] text-slate-400 font-bold block uppercase">المقاول المورد</p>
+                          <p className="text-xs text-slate-700 font-black truncate">
+                            {suppliers.find(s => s.deliveryMethods?.some((dm: any) => dm.id === c.dumperId))?.name || 'غير محدد'}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex flex-col text-left items-end">
-                         <span className="text-[8px] text-slate-400">معتمد التكعيب</span>
-                         <span className="text-[9px] font-bold text-slate-600">{c.approverOfMeasurement || 'غير محدد'}</span>
-                      </div>
-                   </div>
+                      
+                      {dumper?.driverName && (
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="p-1.5 bg-slate-200/50 rounded-lg shrink-0">
+                            <User className="h-3.5 w-3.5 text-slate-600" />
+                          </div>
+                          <div>
+                            <p className="text-[9px] text-slate-400 font-bold block uppercase">سائق الشاحنة</p>
+                            <p className="text-xs text-slate-700 font-black truncate">{dumper.driverName}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-                  {/* Difference badge */}
-                  <div className={`p-2 rounded-lg text-[10px] font-bold flex items-center justify-between font-mono ${
-                    hasDeficit ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                  {/* Physical Vehicle Dimensions Breakdown */}
+                  <div className="grid grid-cols-3 gap-2.5 bg-slate-50 border border-slate-100 p-2.5 rounded-2xl shadow-inner-sm">
+                    <div className="text-center bg-white p-2 rounded-xl border border-slate-100 shadow-sm">
+                      <p className="text-[9px] font-black text-slate-400 mb-1">حمولة القلاب</p>
+                      <p className="text-xs font-mono font-black text-slate-800 tracking-wide">
+                        {c.dumperCubic?.toFixed(2) || '0.00'}<span className="text-[9px] font-sans text-slate-400 mr-0.5">م٣</span>
+                      </p>
+                    </div>
+                    <div className="text-center bg-white p-2 rounded-xl border border-slate-100 shadow-sm">
+                      <p className="text-[9px] font-black text-slate-400 mb-1">المقطورة</p>
+                      <p className="text-xs font-mono font-black text-slate-800 tracking-wide">
+                        {c.trailerCubic?.toFixed(2) || '0.00'}<span className="text-[9px] font-sans text-slate-400 mr-0.5">م٣</span>
+                      </p>
+                    </div>
+                    <div className="text-center bg-white p-2 rounded-xl border border-slate-100 shadow-sm">
+                      <p className="text-[9px] font-black text-red-400 mb-1">الخصم المعتمد</p>
+                      <p className="text-xs font-mono font-black text-red-600 tracking-wide">
+                        -{c.discounts?.toFixed(2) || '0.00'}<span className="text-[9px] font-sans text-red-400 mr-0.5">م٣</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Volumetric Reconciliation Audit Section */}
+                  <div className="grid grid-cols-2 gap-3.5">
+                    <div className="bg-slate-50/40 border border-slate-200/80 p-3.5 rounded-2xl text-center flex flex-col justify-center">
+                      <p className="text-[10px] text-slate-400 font-black mb-1">إجمالي التكعيب بالبونات</p>
+                      <p className="text-base font-black text-slate-800 font-mono tracking-tight">
+                        {c.calculatedVolume.toFixed(2)} <span className="text-xs font-sans text-slate-500">م٣</span>
+                      </p>
+                    </div>
+                    
+                    <div className="bg-emerald-50/40 border border-emerald-200/60 p-3.5 rounded-2xl text-center flex flex-col justify-center ring-2 ring-emerald-500/5">
+                      <p className="text-[10px] text-emerald-700/80 font-black mb-1">التكعيب الفعلي المعتمد</p>
+                      <p className="text-base font-black text-emerald-600 font-mono tracking-tight">
+                        {(c.netCubic ?? c.approvedVolume).toFixed(2)} <span className="text-xs font-sans text-emerald-500">م٣</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Sign-off Stamps */}
+                  <div className="grid grid-cols-2 gap-4 px-1.5 py-1.5 border-y border-dashed border-slate-200/80 my-1">
+                    <div className="flex flex-col">
+                      <span className="text-[9px] text-slate-400 font-bold">القائم بالتكعيب والقياس</span>
+                      <span className="text-xs font-black text-slate-700 mt-1 italic font-serif tracking-wide">{c.personPerformingMeasurement || 'مشرف الموقع المعتمد'}</span>
+                    </div>
+                    <div className="flex flex-col text-left items-end">
+                      <span className="text-[9px] text-slate-400 font-bold">المراجعة والاعتمادات</span>
+                      <span className="text-xs font-black text-slate-700 mt-1 italic font-serif tracking-wide">{c.approverOfMeasurement || 'مدير عام المشروع'}</span>
+                    </div>
+                  </div>
+
+                  {/* Modern Difference Evaluation Badge */}
+                  <div className={`p-3 rounded-2xl text-xs font-bold flex items-center justify-between font-mono ${
+                    hasDeficit 
+                      ? 'bg-rose-50 text-rose-700 border border-rose-100/80 hover:bg-rose-100/30 transition-colors' 
+                      : 'bg-emerald-50 text-emerald-700 border border-emerald-100/80 hover:bg-emerald-100/30 transition-colors'
                   }`}>
-                    <span className="flex items-center gap-1">
-                       {hasDeficit ? <TrendingDown size={12} /> : <Award size={12} />}
-                       فرق القياس:
+                    <span className="flex items-center gap-2 font-sans font-black text-[11px]">
+                      {hasDeficit ? (
+                        <div className="p-1 bg-rose-100 text-rose-700 rounded-lg">
+                          <TrendingDown size={14} className="stroke-[2.5]" />
+                        </div>
+                      ) : (
+                        <div className="p-1 bg-emerald-100 text-emerald-700 rounded-lg">
+                          <Award size={14} className="stroke-[2.5]" />
+                        </div>
+                      )}
+                      {hasDeficit ? 'عجز قياس (فروقات عجز للمورد):' : 'تطابق أو زيادة قياس هندسي:'}
                     </span>
-                    <span>
+                    <span className="font-mono text-xs font-black">
                       {hasDeficit ? '' : '+'}{difference.toFixed(2)} م٣ 
+                      <span className="text-[10px] text-slate-400 mx-1.5">|</span>
                       ({diffPercent.toFixed(2)}%)
                     </span>
                   </div>
 
+                  {/* Custom Note Indicator if available */}
                   {c.notes && (
-                    <p className="text-[11px] text-slate-400 border-t border-slate-50 pt-2 italic leading-normal truncate">
-                      {c.notes}
-                    </p>
+                    <div className="bg-amber-50/40 border border-amber-100/70 rounded-2xl p-3 text-[11px] text-amber-800 font-medium leading-relaxed flex gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                      <p className="italic">{c.notes}</p>
+                    </div>
                   )}
                 </div>
 
-                <div className="flex justify-between items-center mt-4 pt-3 border-t border-slate-100">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-bold text-indigo-500">
-                      تم تسوية {c.attachedTicketIds.length} بون توريد
+                {/* Card Action footer and statistics */}
+                <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 mt-5 pt-4 border-t border-slate-100">
+                  <div className="flex items-center gap-2 bg-indigo-50/50 rounded-xl px-3 py-1.5 border border-indigo-100/40 w-fit">
+                    <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-ping" />
+                    <span className="text-[11px] font-bold text-indigo-700">
+                      تم تسوية {c.attachedTicketIds.length} بون توريد بنجاح
                     </span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 justify-end">
                     <button
                       onClick={() => handleOpenEdit(c)}
-                      className="p-1 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                      className="flex-1 sm:flex-initial p-2 px-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
                       title="تعديل المحضر"
                     >
-                      <Calculator className="h-3.5 w-3.5" />
+                      <Calculator className="h-4 w-4 text-slate-500" />
                       تعديل
                     </button>
                     <button
                       onClick={() => handleDelete(c.id)}
-                      className="p-1 px-2.5 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                      className="p-2 px-3 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
                       title="إلغاء وفك المحضر"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-4 w-4" />
                       إلغاء
                     </button>
                   </div>
@@ -572,6 +652,74 @@ export default function SuppliesCubicTab({
                   </select>
                 </div>
               </div>
+
+              {/* Start and End Validity Period Inputs */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Validity Start Date */}
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-600 mr-1 flex items-center gap-1">
+                    <Calendar className="h-3 w-3 text-emerald-500" />
+                    تاريخ بدء سريان المحضر
+                  </label>
+                  <input
+                    type="date"
+                    value={newCert.startDate}
+                    onChange={(e) => setNewCert({...newCert, startDate: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-right text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500 shadow-sm"
+                  />
+                  <p className="text-[10px] text-slate-400 mr-2 font-medium">مهم لربط بونات التوريد التي تبدأ من هذا التاريخ (تلقائي إن تُرك فارغاً)</p>
+                </div>
+
+                {/* Validity End Date */}
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-600 mr-1 flex items-center gap-1">
+                    <Calendar className="h-3 w-3 text-rose-500" />
+                    تاريخ نهاية سريان المحضر (اختياري)
+                  </label>
+                  <input
+                    type="date"
+                    value={newCert.endDate}
+                    onChange={(e) => setNewCert({...newCert, endDate: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-right text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500 shadow-sm"
+                  />
+                  <p className="text-[10px] text-slate-400 mr-2 font-medium">اتركه فارغاً للسريان الدائم المستمر والمفتوح بدون حد أقصى</p>
+                </div>
+              </div>
+
+              {/* Overlapping Cert Periods Helper */}
+              {activePreviousCert && (
+                <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 space-y-3 shadow-sm animate-fadeIn">
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <h4 className="text-xs font-black text-amber-950">تنبيه: محضر تكعيب نشط سابقاً ({activePreviousCert.id})</h4>
+                      <p className="text-[10px] font-bold text-amber-800 leading-relaxed">
+                        لاحظنا وجود محضر تكعيب هندسي قائم مسبقاً لهذا القلاب بتكعيب معتمد قدره <span className="font-mono font-black">{activePreviousCert.netCubic} م٣</span>. لتسجيل المحضر الجديد بفترة سريانية تالية، يرجى تحديد تاريخ إنهاء العمل بالمحضر القديم أدناه.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2.5 border-t border-amber-200/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <label className="block text-xs font-bold text-amber-900">
+                      تاريخ نهاية العمل بالمحضر القديم ({activePreviousCert.id}) *
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={newCert.oldCertTerminationDate}
+                      onChange={(e) => {
+                        const endingDate = e.target.value;
+                        setNewCert({
+                          ...newCert,
+                          oldCertIdToTerminate: activePreviousCert.id,
+                          oldCertTerminationDate: endingDate
+                        });
+                      }}
+                      className="bg-white border border-amber-300 text-amber-950 text-xs font-bold font-mono rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-amber-500/20"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Box for Cubic Calculations */}
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-5 shadow-inner">

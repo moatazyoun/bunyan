@@ -263,7 +263,7 @@ export default function SuppliesAccountTab({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 md:gap-8 text-center font-mono w-full px-2">
+                  <div className="grid grid-cols-4 gap-2 md:gap-4 text-center font-mono w-full px-2">
                     <div className="w-24 mx-auto border-l border-slate-200">
                       <div className="text-[10px] font-bold text-slate-500 text-center">كمية إجمالية</div>
                       <div className="text-xs font-black text-slate-900 mt-0.5">{s.totalQuantity.toLocaleString()} م٣</div>
@@ -271,6 +271,10 @@ export default function SuppliesAccountTab({
                     <div className="w-24 mx-auto border-l border-slate-200">
                       <div className="text-[10px] font-bold text-slate-500 text-center">القيمة الكلية</div>
                       <div className="text-xs font-black text-slate-900 mt-0.5">{s.totalCost.toLocaleString()} ج.م</div>
+                    </div>
+                    <div className="w-24 mx-auto border-l border-slate-200">
+                      <div className="text-[10px] font-bold text-slate-500 text-center">المنصرف</div>
+                      <div className="text-xs font-black text-emerald-600 mt-0.5">{(s.totalPaid || 0).toLocaleString()} ج.م</div>
                     </div>
                     <div className="w-24 mx-auto">
                       <div className="text-[10px] font-bold text-slate-500 text-center">رصيد مستحق</div>
@@ -286,36 +290,38 @@ export default function SuppliesAccountTab({
                 {/* Expanded Account Panels */}
                 {isExpanded && (
                   <div className="border-t border-slate-100 bg-slate-50 p-5 space-y-6">
-                    {/* Materials loop */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                       {s.materials.map((m: any) => (
-                         <div key={m.materialCode} className="bg-white p-4 rounded-xl border border-slate-200">
-                            <h5 className="font-bold text-xs text-indigo-700 mb-3">{supplyItems.find(i => i.code === m.materialCode)?.name}</h5>
-                            {/* Materials records loop */}
-                            <div className="space-y-2 max-h-[150px] overflow-y-auto">
-                              {m.records.map((r: any) => (
-                                 <div key={r.id} className="text-[10px] flex justify-between">
-                                    <span>بون: {r.ticketNo}</span>
-                                    <span>{r.netQuantity}</span>
-                                 </div>
-                              ))}
-                            </div>
-                         </div>
-                       ))}
+                    {/* Materials */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200">
+                      <h5 className="font-bold text-xs text-indigo-700 mb-3 border-b pb-2">تفاصيل الكميات الموردة</h5>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {s.materials.map((m: any) => (
+                          <div key={m.materialCode} className="text-xs">
+                             <div className="font-bold text-slate-700">{supplyItems.find(i => i.code === m.materialCode)?.name}</div>
+                             <div className="flex justify-between mt-1 text-slate-500">
+                                <span>بون:</span>
+                                <span className="font-mono font-bold text-slate-900">{m.records.length}</span>
+                             </div>
+                             <div className="flex justify-between text-slate-500">
+                                <span>كمية:</span>
+                                <span className="font-mono font-bold text-slate-900">{m.totalQuantity.toLocaleString()}</span>
+                             </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                     
                     {/* Payments */}
-                    <div>
-                      <h5 className="font-bold text-xs text-emerald-700 mb-2">الدفعات</h5>
-                      <div className="text-xs font-bold text-slate-500">
-                        المدفوعات: <span className="text-emerald-700 font-mono">{s.payments.length} دفعة</span>
-                        <span className="ml-2">المسدد لليوم: <span className="text-emerald-700 font-mono">{s.totalPaid.toLocaleString()} ج.م</span></span>
+                    <div className="bg-white p-4 rounded-xl border border-slate-200">
+                      <h5 className="font-bold text-xs text-emerald-600 mb-3 border-b pb-2">سجل الدفعات والمسدد</h5>
+                      <div className="text-xs font-bold text-slate-500 mb-3 flex gap-4">
+                        <span>إجمالي عدد الدفعات: <span className="text-slate-900 font-mono">{s.payments.length}</span></span>
+                        <span>إجمالي المسدد: <span className="text-emerald-700 font-mono">{s.totalPaid.toLocaleString()} ج.م</span></span>
                       </div>
-                      <div className="max-h-[150px] overflow-y-auto mt-2 border border-slate-200 bg-white rounded-xl divide-y divide-slate-100 p-2">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                         {s.payments.map((p: any) => (
-                          <div key={p.id} className="flex justify-between items-center text-xs gap-2 py-1">
-                            <div className="font-black text-slate-900">{p.amount.toLocaleString()} ج.م</div>
-                            <div className="text-[10px] text-slate-500">تاريخ: {p.date}</div>
+                          <div key={p.id} className="flex justify-between items-center text-[10px] bg-slate-50 rounded-lg p-2 border border-slate-100">
+                            <span className="font-black text-slate-900 font-mono">{p.amount.toLocaleString()} ج.م</span>
+                            <span className="text-slate-500">{p.date}</span>
                           </div>
                         ))}
                       </div>
