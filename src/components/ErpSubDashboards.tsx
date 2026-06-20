@@ -56,6 +56,7 @@ interface ErpSubDashboardsProps {
   setFuelLogs: React.Dispatch<React.SetStateAction<FuelLogRecord[]>>;
   custodyBudget: number;
   setCustodyBudget: React.Dispatch<React.SetStateAction<number>>;
+  userRole?: string;
 }
 
 export default function ErpSubDashboards({
@@ -73,15 +74,21 @@ export default function ErpSubDashboards({
   fuelLogs,
   setFuelLogs,
   custodyBudget,
-  setCustodyBudget
+  setCustodyBudget,
+  userRole
 }: ErpSubDashboardsProps) {
 
   const [activePersona, setActivePersona] = useState<string>('executive');
+  const [selectedLogUser, setSelectedLogUser] = useState<string>('all');
 
   // Format currency helpers
   const formatCurrency = (amt: number) => {
     return new Intl.NumberFormat('ar-EG', { style: 'currency', currency: 'EGP', maximumFractionDigits: 0 }).format(amt);
   };
+
+  const uniqueLogUsers = Array.from(new Set(auditLogs.map(log => log.user)));
+  const filteredLogs = (selectedLogUser === 'all' ? auditLogs : auditLogs.filter(log => log.user === selectedLogUser))
+    .filter(log => !log.action.includes('استعراض'));
 
   // Switcher UI
   const personas = [
@@ -214,13 +221,29 @@ export default function ErpSubDashboards({
             <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
               <h4 className="font-bold text-slate-900 text-sm">سجل العمليات الأمني المحدث (Audit Trail)</h4>
               <p className="text-xs text-slate-500">مراقبة الـ ERP الحية للعمليات الحساسة التي يجريها موظفو الإدارات والشركات.</p>
+
+              <select
+                value={selectedLogUser}
+                onChange={(e) => setSelectedLogUser(e.target.value)}
+                className="w-full text-[10px] bg-slate-50 border border-slate-200 rounded p-1.5 text-slate-700"
+              >
+                <option value="all">كل المستخدمين</option>
+                {uniqueLogUsers.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
               
-              <div className="space-y-3 max-h-[220px] overflow-y-auto">
-                {auditLogs.map(log => (
+              <div className="space-y-3 max-h-[190px] overflow-y-auto">
+                {filteredLogs.map(log => (
                   <div key={log.id} className="p-2.5 border-r-2 border-indigo-600 bg-slate-50 rounded-l-md text-[10.5px] leading-relaxed">
                     <div className="flex justify-between items-center mb-1">
-                      <span className="text-[9px] text-slate-400 font-mono">{log.timestamp}</span>
                       <span className="font-bold text-slate-700">{log.user.split(' ')[0]}</span>
+                      <div className="flex gap-1 items-center">
+                        {log.details.match(/REF-[\w-]+/) && (
+                          <span className="px-2 py-0.5 rounded-full bg-slate-200 text-[9px] text-slate-700 font-mono">
+                            {log.details.match(/REF-[\w-]+/)?.[0]}
+                          </span>
+                        )}
+                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-[9px] text-slate-500 font-mono">{log.timestamp}</span>
+                      </div>
                     </div>
                     <span className="block text-slate-800 font-bold">{log.action} • <span className="text-slate-500 font-medium">{log.module}</span></span>
                     <p className="text-slate-500 mt-0.5 text-[10px]">{log.details}</p>
@@ -458,6 +481,7 @@ export default function ErpSubDashboards({
           setFuelLogs={setFuelLogs}
           custodyBudget={custodyBudget}
           setCustodyBudget={setCustodyBudget}
+          userRole={userRole}
         />
       )}
 

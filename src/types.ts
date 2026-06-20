@@ -19,7 +19,7 @@ export interface CategoryMetric {
   color: string;
 }
 
-export type TransactionType = 'spent' | 'executed_work'; 
+export type TransactionType = 'spent' | 'executed_work' | 'income'; 
 
 export interface Transaction {
   id: string;
@@ -55,13 +55,21 @@ export interface ContractorCertificate {
   remainingBalance: number; // المتبقي له طرف المشروع
 }
 
+export type ModulePermissionType = 'none' | 'view' | 'edit';
+
 export interface UserModulePermissions {
-  projects: boolean;
-  supplies: boolean;
-  equipment: boolean;
-  contractors: boolean;
-  finance: boolean;
-  usersManagement: boolean;
+  projects: ModulePermissionType;
+  transactions: ModulePermissionType;
+  extracts: ModulePermissionType;
+  deliveries: ModulePermissionType;
+  boq: ModulePermissionType;
+  supplies: ModulePermissionType;
+  subcontractors: ModulePermissionType;
+  weeklyReport: ModulePermissionType;
+  siteWorkers: ModulePermissionType;
+  fuelDashboard: ModulePermissionType;
+  equipmentDashboard: ModulePermissionType;
+  usersManagement: ModulePermissionType;
 }
 
 export interface UserItem {
@@ -72,6 +80,8 @@ export interface UserItem {
   phone?: string;
   permissions: UserModulePermissions;
   assignedProjects?: string[]; // List of project IDs the user can access
+  isTrial?: boolean;
+  trialStartedAt?: string; // ISO string when the 1-hour trial began
 }
 
 export type EquipmentStatus = 'active' | 'under_maintenance' | 'idle' | 'out_of_service';
@@ -210,6 +220,7 @@ export interface AuditTrailRecord {
 
 export interface FuelLogRecord {
   id: string;
+  referenceNo?: string;
   date: string;
   day: string;
   equipmentName: string;
@@ -219,6 +230,7 @@ export interface FuelLogRecord {
 }
 
 export interface OperationalLog {
+  id?: string;
   day: string;
   date: string;
   fromTime: string;
@@ -299,6 +311,8 @@ export interface SubcontractorWorkItem {
   totalValue: number; // القيمة الإجمالية للبند = حجم الأعمال * سعر الوحدة
   discounts: SubcontractorDiscount[]; // الخصومات المتعددة للبند الواحد
   notes?: string; // ملاحظات البند
+  referenceNo?: string; // رقم مرجعي للبند
+  createdAt?: string; // تاريخ الإدراج
 }
 
 export interface Subcontractor {
@@ -353,14 +367,42 @@ export interface CustomExtract {
 // ==========================================
 
 export interface SupplyItem {
+  id?: string;        // ID for persistence
+  referenceNo?: string; // رقم مرجعي للبند
   code: string;       // كود البند (مثلا: "سن-1", "رمل-أ", "خرسانة- جاهزة")
   name: string;       // اسم البند (مثال: سن طبقة 1، سن طبقة 2، خرسانة، رمل)
   unit: string;       // الوحدة (م٣، طن، عدد، إلخ)
   defaultPrice: number; // السعر الافتراضي للوحدة للطن أو المتر المكعب
 }
 
+export interface DeliveryMethod {
+  id: string;
+  referenceNo?: string;
+  type: string; // قلاب، عربية، قطعة، طن، متر
+  truckNumber?: string;
+  dumperNumber?: string;
+  driverName?: string;
+  driverPhone?: string;
+  cubicCapacity?: string;
+  cubicRecordId?: string;
+  personInCharge?: string;
+  personPhone?: string;
+}
+
+export interface Supplier {
+  id: string;
+  referenceNo?: string;
+  name: string;
+  materialCode: string;
+  phone?: string;
+  contractNumber?: string;
+  notes?: string;
+  deliveryMethods?: DeliveryMethod[];
+}
+
 export interface CubicCertificate {
   id: string;             // رقم محضر التكعيب / تكويد المحضر
+  referenceNo?: string;   // رقم مرجعي
   title: string;          // موضوع المحضر
   date: string;           // تاريخ اعتماد المحضر
   attachedTicketIds: string[]; // أرقام البونات (legacy)
@@ -388,6 +430,7 @@ export interface CubicCertificate {
 
 export interface SupplyRecord {
   id: string;            // معرف فريد للسجل
+  referenceNo?: string;  // رقم مرجعي للبون
   date: string;          // تاريخ البون
   ticketNo: string;      // رقم البون / الإيصال الورقي
   truckPlate: string;    // رقم القلاب

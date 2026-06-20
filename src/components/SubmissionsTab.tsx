@@ -641,8 +641,13 @@ export default function SubmissionsTab({
           </div>
 
           <button 
-            onClick={handleAddNewClick}
-            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs md:text-sm rounded-xl shadow-md shadow-indigo-600/10 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-250 self-start md:self-auto"
+            onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية إضافة طلبات فحص جديدة') : handleAddNewClick}
+            disabled={userRole === 'viewer'}
+            className={`flex items-center gap-1.5 px-4 py-2 text-white font-extrabold text-xs md:text-sm rounded-xl shadow-md transition-all duration-250 self-start md:self-auto ${
+              userRole === 'viewer' 
+                ? 'bg-slate-400 cursor-not-allowed opacity-70' 
+                : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/10 hover:-translate-y-0.5 active:translate-y-0'
+            }`}
           >
             <Plus size={16} />
             <span>تسجيل طلب فحص / تسليم جديد</span>
@@ -714,8 +719,12 @@ export default function SubmissionsTab({
                       <td className="pl-4 py-2">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
-                            onClick={() => handleEditClick(sub)}
-                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                            onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية تعديل الطلبات') : () => handleEditClick(sub)}
+                            className={`p-1.5 rounded-lg transition ${
+                              userRole === 'viewer' 
+                                ? 'text-slate-300 cursor-not-allowed' 
+                                : 'text-slate-500 hover:text-indigo-600 hover:bg-indigo-50'
+                            }`}
                             title="تعديل تفاصيل الطلب"
                           >
                             <Edit size={14} />
@@ -765,8 +774,13 @@ export default function SubmissionsTab({
               <span className="text-slate-500 text-xs font-bold">حالة الطلب:</span>
               <select
                 value={status}
+                disabled={userRole === 'viewer'}
                 onChange={(e) => setStatus(e.target.value as any)}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 font-black text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
+                className={`px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-black focus:outline-none focus:ring-2 focus:ring-indigo-600/20 transition-all duration-200 ${
+                  userRole === 'viewer'
+                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    : 'bg-slate-50 text-indigo-700'
+                }`}
               >
                 <option value="Pending">⏱️ قيد الفحص والانتظار</option>
                 <option value="Approved">✔️ موافق ومعتمد كلياً</option>
@@ -1225,8 +1239,13 @@ export default function SubmissionsTab({
               إلغاء وتراجع
             </button>
             <button
-              type="submit"
-              className="px-6 py-2 bg-indigo-650 hover:bg-indigo-700 bg-indigo-600 text-white font-extrabold text-xs rounded-xl shadow-md transition"
+              type={userRole === 'viewer' ? 'button' : 'submit'}
+              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية حفظ التعديلات') : undefined}
+              className={`px-6 py-2 text-white font-extrabold text-xs rounded-xl shadow-md transition ${
+                userRole === 'viewer'
+                  ? 'bg-slate-400 cursor-not-allowed'
+                  : 'bg-indigo-600 hover:bg-indigo-700'
+              }`}
             >
               حفظ التفاصيل ومزامنة البيانات
             </button>

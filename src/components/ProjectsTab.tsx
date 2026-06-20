@@ -18,8 +18,15 @@ import {
   Calculator,
   Users,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  Cloud,
+  CloudDownload,
+  FileUp,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle
 } from 'lucide-react';
+import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { Project, BOQItem, UserItem } from '../types';
 
 interface ProjectsTabProps {
@@ -27,9 +34,10 @@ interface ProjectsTabProps {
   setProjects: (projects: Project[]) => void;
   boqItems: BOQItem[];
   currentUserRole?: string;
+  onRestoreBackup: (payload: any) => void;
 }
 
-export default function ProjectsTab({ projects, setProjects, boqItems, currentUserRole }: ProjectsTabProps) {
+export default function ProjectsTab({ projects, setProjects, boqItems, currentUserRole, onRestoreBackup }: ProjectsTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -175,13 +183,15 @@ export default function ProjectsTab({ projects, setProjects, boqItems, currentUs
               className="bg-white border border-slate-200 rounded-2xl pr-10 pl-4 py-2 text-xs font-bold outline-none focus:border-indigo-400 transition-all w-64 shadow-sm"
             />
           </div>
-          <button 
-            onClick={() => { setShowForm(true); setEditingId(null); }}
-            className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-2xl text-xs font-black shadow-lg hover:bg-indigo-700 transition"
-          >
-            <Plus className="w-4 h-4" />
-            مشروع جديد
-          </button>
+          {currentUserRole !== 'viewer' && (
+            <button 
+              onClick={() => { setShowForm(true); setEditingId(null); }}
+              className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-2xl text-xs font-black shadow-lg hover:bg-indigo-700 transition"
+            >
+              <Plus className="w-4 h-4" />
+              مشروع جديد
+            </button>
+          )}
         </div>
       </div>
 
@@ -264,7 +274,17 @@ export default function ProjectsTab({ projects, setProjects, boqItems, currentUs
                 </div>
               </div>
               <div className="pt-4 flex gap-3">
-                <button onClick={handleSave} className="flex-1 bg-indigo-600 text-white rounded-2xl py-4 font-black shadow-lg hover:bg-indigo-700 transition">حفظ البيانات</button>
+                <button 
+                  onClick={currentUserRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية حفظ البيانات') : handleSave} 
+                  disabled={currentUserRole === 'viewer'}
+                  className={`flex-1 rounded-2xl py-4 font-black shadow-lg transition ${
+                    currentUserRole === 'viewer'
+                      ? 'bg-slate-200 text-slate-100 cursor-not-allowed'
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  }`}
+                >
+                  حفظ البيانات
+                </button>
                 <button onClick={() => setShowForm(false)} className="px-8 bg-slate-100 text-slate-600 rounded-2xl py-4 font-black hover:bg-slate-200 transition">إلغاء</button>
               </div>
             </div>
@@ -293,8 +313,8 @@ export default function ProjectsTab({ projects, setProjects, boqItems, currentUs
                     </p>
                   </div>
                 </div>
-                  <div className="flex gap-2">
-                    {(currentUserRole === 'admin' || currentUserRole === 'projects_manager') && (
+                  {currentUserRole !== 'viewer' && (
+                    <div className="flex gap-2">
                       <button 
                         onClick={() => handleOpenUserAssignment(project)}
                         className="p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition flex items-center gap-2 text-[10px] font-black"
@@ -303,20 +323,20 @@ export default function ProjectsTab({ projects, setProjects, boqItems, currentUs
                         <Users className="w-4 h-4" />
                         <span>الصلاحيات</span>
                       </button>
-                    )}
-                    <button 
-                      onClick={() => { setEditingId(project.id); setFormData(project); setShowForm(true); }}
-                      className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(project.id)}
-                      className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                      <button 
+                        onClick={() => { setEditingId(project.id); setFormData(project); setShowForm(true); }}
+                        className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(project.id)}
+                        className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -436,9 +456,13 @@ export default function ProjectsTab({ projects, setProjects, boqItems, currentUs
 
             <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
               <button 
-                disabled={isAssigning}
-                onClick={handleSaveUserAssignment} 
-                className="flex-1 bg-indigo-600 text-white rounded-2xl py-3.5 font-black shadow-lg hover:bg-indigo-700 transition disabled:opacity-50"
+                disabled={isAssigning || currentUserRole === 'viewer'}
+                onClick={currentUserRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية حفظ التعيينات') : handleSaveUserAssignment} 
+                className={`flex-1 rounded-2xl py-3.5 font-black shadow-lg transition ${
+                  isAssigning || currentUserRole === 'viewer'
+                    ? 'bg-slate-200 text-slate-100 cursor-not-allowed'
+                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                }`}
               >
                 {isAssigning ? 'جاري الحفظ...' : 'حفظ التعديلات'}
               </button>
@@ -447,6 +471,115 @@ export default function ProjectsTab({ projects, setProjects, boqItems, currentUs
           </div>
         </div>
       )}
+
+      {/* 📥 Restore from Backup Section */}
+      <div className="bg-slate-50 p-6 rounded-3xl border border-dashed border-slate-250 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+              <CloudDownload className="w-5 h-5 text-indigo-600" />
+              استعادة نسخة احتياطية (سحابية أو محلية)
+            </h3>
+            <p className="text-[11px] text-slate-500 font-bold mt-0.5">استورد بياناتك السابقة بالكامل من ملف محلي أو عبر Google Drive</p>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {/* Local Restore Button */}
+            <label className="flex items-center gap-1.5 px-4 py-2 bg-white text-slate-705 border border-slate-200 rounded-xl text-xs font-black hover:bg-slate-100 transition cursor-pointer">
+              <FileUp className="w-4 h-4 text-emerald-600 animate-bounce" />
+              استعادة من ملف محلي (JSON)
+              <input 
+                type="file" 
+                accept=".json" 
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (window.confirm('هل أنت متأكد من استعادة النسخة الاحتياطية المحلية؟ سيتم استبدال وحذف كل البيانات الحالية للموقع النشط.')) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      try {
+                        const parsed = JSON.parse(event.target?.result as string);
+                        onRestoreBackup(parsed);
+                        alert('تمت استعادة البيانات المحلية بنجاح!');
+                      } catch (err) {
+                        alert('الملف المرفق غير صالح.');
+                      }
+                    };
+                    reader.readAsText(file);
+                  }
+                }} 
+                className="hidden" 
+              />
+            </label>
+
+            {/* Google Drive load button */}
+            <button
+              onClick={async () => {
+                try {
+                  const auth = getAuth();
+                  const provider = new GoogleAuthProvider();
+                  provider.addScope('https://www.googleapis.com/auth/drive.file');
+                  
+                  const result = await signInWithPopup(auth, provider);
+                  const credential = GoogleAuthProvider.credentialFromResult(result);
+                  if (!credential || !credential.accessToken) {
+                    alert('لم يتم استلام رمز الوصول.');
+                    return;
+                  }
+                  
+                  // Fetch files
+                  const q = encodeURIComponent("name contains 'bunyan_backup_' and trashed = false");
+                  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id, name, createdTime)&orderBy=createdTime desc`, {
+                    headers: { 'Authorization': `Bearer ${credential.accessToken}` }
+                  });
+                  
+                  if (!res.ok) throw new Error();
+                  const data = await res.json();
+                  const filesList: any[] = data.files || [];
+                  
+                  if (filesList.length === 0) {
+                    alert('لم يتم العثور على أي نسخ احتياطية مسجلة سحابياً بجوجل درايف.');
+                    return;
+                  }
+                  
+                  // Let the user pick one dynamically in a prompt or alert
+                  const optionsText = filesList.map((f, i) => `${i + 1}- ${f.name} (${new Date(f.createdTime).toLocaleDateString('ar-EG')})`).join('\n');
+                  const selection = window.prompt(
+                    `اختر رقم النسخة الاحتياطية التي تود استعادتها من Google Drive:\n\n${optionsText}\n\nاكتب الرقم هنا لمتابعة الاستعادة:`
+                  );
+                  
+                  if (selection) {
+                    const idx = parseInt(selection, 10) - 1;
+                    if (idx >= 0 && idx < filesList.length) {
+                      const selectedFile = filesList[idx];
+                      if (window.confirm(`هل أنت متأكد من استعادة النسخة الاحتياطية السحابية "${selectedFile.name}"؟ سيؤدي ذلك لخطوة استبدال كافة السجلات الحالية.`)) {
+                        const dlRes = await fetch(`https://www.googleapis.com/drive/v3/files/${selectedFile.id}?alt=media`, {
+                          headers: { 'Authorization': `Bearer ${credential.accessToken}` }
+                        });
+                        if (dlRes.ok) {
+                          const backupData = await dlRes.json();
+                          onRestoreBackup(backupData);
+                          alert('تمت استعادة كافة البيانات والملفات السحابية بنجاح!');
+                        } else {
+                          alert('فشل تحميل محتوى الملف السحابي.');
+                        }
+                      }
+                    } else {
+                      alert('رقم اختيار غير صحيح.');
+                    }
+                  }
+                } catch (err) {
+                  alert('حدث خطأ أثناء الاتصال بجوجل والتجول عبر الملفات.');
+                }
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black hover:bg-slate-800 transition"
+            >
+              <CloudDownload className="w-4 h-4 text-indigo-400" />
+              استعراض واستعادة من Google Drive
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

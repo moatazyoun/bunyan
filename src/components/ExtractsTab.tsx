@@ -65,6 +65,7 @@ interface ExtractsTabProps {
   supervisors?: SupervisorEntity[];
   subcontractors?: Subcontractor[];
   extractType: 'Owner' | 'Subcontractor';
+  userRole?: string;
 }
 
 export default function ExtractsTab({ 
@@ -78,7 +79,8 @@ export default function ExtractsTab({
   owners = [],
   supervisors = [],
   subcontractors = [],
-  extractType
+  extractType,
+  userRole
 }: ExtractsTabProps) {
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [selectedExtract, setSelectedExtract] = useState<CustomExtract | null>(null);
@@ -106,31 +108,18 @@ export default function ExtractsTab({
       return;
     }
     const initialSettings = {
-      signatories: extractType === 'Owner' ? [
-        { id: 'sig-o-1', role: 'مهندس شركة المقاولات المنفذة', name: 'م/ المعتز أحمد يونس' },
-        { id: 'sig-o-2', role: 'مدير عام التنفيذ بشركة المقاولات', name: 'م/ محمد أحمد الرفاعى' },
-        { id: 'sig-o-3', role: 'مهندس المشروع بالجهاز (المالك)', name: 'م/ حســـــام محمـــد طــــه' },
-        { id: 'sig-o-4', role: 'مدير إدارة الطرق ورصف الأشغال', name: 'م/ إبراهيم سعيد إبراهيم' },
-        { id: 'sig-o-5', role: 'نائب رئيس الجهاز المشرف', name: 'م/ أحمد محمد مصطفى' },
-        { id: 'sig-o-6', role: 'يُعـتمـــد ، رئيس الجهاز', name: 'م/ محمد محمود الشربينى الغمراوى' }
-      ] : [
-        { id: 'sig-s-1', role: 'المراقب الميداني لمقاول الباطن', name: 'م/ أحمـد العسيلي مهران' },
-        { id: 'sig-s-2', role: 'مهندس قسم المكتب الفني بموقع الطرق', name: 'م/ عبد الرحمن خالد الديب' },
-        { id: 'sig-s-3', role: 'مدير عام إدارة التخطيط والمشروعات', name: 'م/ هشام عبد القدوس ممدوح' },
-        { id: 'sig-s-4', role: 'المدير المالي لشركة المقاولات العمومية', name: 'الأستاذ/ محمد صلاح مرسي' },
-        { id: 'sig-s-5', role: 'يعتمد، نائب رئيس مجلس الإدارة للتشغيل', name: 'المهندس/ يسرى عبد المنعم البهنساوي' }
-      ],
+      signatories: [],
       pageBookInfo: {},
       headerTexts: {
-        ministry: 'وزارة الإسكان والمرافق والمجتمعات العمرانية',
-        authority: 'هيئة المجتمعات العمرانية الجديدة',
-        device: 'جهاز مدينة برج العرب الجديدة',
-        title: extractType === 'Owner' ? 'مستخلص جاري رقم' : 'مستخلص جاري أعمال باطن رقم',
-        projectName: activeProject?.name || 'أعمال صيانة المحاور الرئيسية بمدينة برج العرب الجديدة',
-        reference: `رقم أمر الاسناد (${activeProject?.assignmentNumber || '...'}) بتاريخ ${activeProject ? new Date(activeProject.assignmentDate).toLocaleDateString('ar-EG') : '...'}`,
-        period: 'الأعمال المنفذة من بداية الأعمال حتى تاريخه',
-        contractor: 'شركة م/ فوزي محمود محمد الرفاعي وشركاه',
-        contractorDetails: 'للمقاولات العامة ورصف وإنشاء الطرق'
+        ministry: '',
+        authority: '',
+        device: '',
+        title: '',
+        projectName: '',
+        reference: '',
+        period: '',
+        contractor: '',
+        contractorDetails: ''
       }
     };
 
@@ -543,8 +532,9 @@ export default function ExtractsTab({
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-[20px] border border-slate-200">
                 <button 
-                  onClick={() => setIsCreatingNewExtract(!isCreatingNewExtract)} 
-                  className={`flex items-center gap-2 px-6 py-2.5 rounded-[18px] text-[11px] font-black transition-all ${isCreatingNewExtract ? 'bg-white text-rose-600 shadow-sm' : 'text-indigo-600 hover:bg-white hover:shadow-sm'}`}
+                  onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية إصدار مستخلص جديد') : () => setIsCreatingNewExtract(!isCreatingNewExtract)} 
+                  disabled={userRole === 'viewer'}
+                  className={`flex items-center gap-2 px-6 py-2.5 rounded-[18px] text-[11px] font-black transition-all ${userRole === 'viewer' ? 'bg-slate-300 text-slate-100 cursor-not-allowed border-none' : (isCreatingNewExtract ? 'bg-white text-rose-600 shadow-sm' : 'text-indigo-600 hover:bg-white hover:shadow-sm')}`}
                 >
                   {isCreatingNewExtract ? <><X className="w-4 h-4" /> إلغاء</> : <><Plus className="w-4 h-4" /> مستخلص جديد</>}
                 </button>
@@ -684,11 +674,13 @@ export default function ExtractsTab({
                     {/* Top Action & Badge Row */}
                     <div className="flex justify-between items-center mb-3">
                       <button 
-                        onClick={(e) => { e.stopPropagation(); handleDeleteExtract(ext.id); }} 
+                        onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية حذف المستخلصات') : (e) => { e.stopPropagation(); handleDeleteExtract(ext.id); }} 
                         className={`p-1.5 rounded-lg transition-all ${
-                          isSelected 
-                            ? 'text-indigo-300/80 hover:text-rose-400 hover:bg-white/10' 
-                            : 'text-slate-350 hover:text-rose-600 hover:bg-rose-50/80 opacity-0 group-hover:opacity-100'
+                          userRole === 'viewer'
+                            ? 'text-slate-200 cursor-not-allowed'
+                            : (isSelected 
+                              ? 'text-indigo-300/80 hover:text-rose-400 hover:bg-white/10' 
+                              : 'text-slate-350 hover:text-rose-600 hover:bg-rose-50/80 opacity-0 group-hover:opacity-100 cursor-pointer')
                         }`}
                         title="حذف المستخلص"
                       >
@@ -827,11 +819,14 @@ export default function ExtractsTab({
                   
                   <button 
                     type="button"
-                    onClick={() => setIsEditingHeader(!isEditingHeader)} 
+                    onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية التعديل') : () => setIsEditingHeader(!isEditingHeader)} 
+                    disabled={userRole === 'viewer'}
                     className={`p-2.5 transition-all rounded-2xl border flex items-center gap-1.5 text-[11px] font-black ${
-                      isEditingHeader 
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200' 
-                        : 'bg-white text-slate-400 border-slate-100 hover:text-indigo-600 hover:bg-slate-50 hover:shadow-sm'
+                      userRole === 'viewer'
+                        ? 'bg-slate-300 text-slate-100 cursor-not-allowed border-none'
+                        : (isEditingHeader 
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200' 
+                          : 'bg-white text-slate-400 border-slate-100 hover:text-indigo-600 hover:bg-slate-50 hover:shadow-sm')
                     }`} 
                     title="بيانات ترويسة التقرير"
                   >
@@ -841,11 +836,14 @@ export default function ExtractsTab({
                   
                   <button 
                     type="button"
-                    onClick={() => setIsEditingSignatoryNames(!isEditingSignatoryNames)} 
+                    onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية التعديل') : () => setIsEditingSignatoryNames(!isEditingSignatoryNames)} 
+                    disabled={userRole === 'viewer'}
                     className={`p-2.5 transition-all rounded-2xl border flex items-center gap-1.5 text-[11px] font-black ${
-                      isEditingSignatoryNames 
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200' 
-                        : 'bg-white text-slate-400 border-slate-100 hover:text-indigo-600 hover:bg-slate-50 hover:shadow-sm'
+                      userRole === 'viewer'
+                        ? 'bg-slate-300 text-slate-100 cursor-not-allowed border-none'
+                        : (isEditingSignatoryNames 
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200' 
+                          : 'bg-white text-slate-400 border-slate-100 hover:text-indigo-600 hover:bg-slate-50 hover:shadow-sm')
                     }`} 
                     title="تعديل أسماء المقررين المخولين بالتوقيع"
                   >
@@ -908,8 +906,8 @@ export default function ExtractsTab({
                     <button onClick={() => setIsEditingSignatoryNames(false)} className="text-slate-500 hover:text-white"><X className="w-5 h-5" /></button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {settings.signatories.map((sig: any) => (
-                      <div key={sig.id} className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/50 space-y-3">
+                    {settings.signatories.map((sig: any, idx: number) => (
+                      <div key={sig?.id || `sig0_${idx}`} className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/50 space-y-3">
                         <div className="space-y-1">
                           <label className="text-[9px] font-black text-slate-500">المسمى الوظيفي</label>
                           <input 
@@ -1125,7 +1123,8 @@ export default function ExtractsTab({
                                    type="number" 
                                    value={item.currentQuantity || ''} 
                                    onChange={(e) => handleUpdateItemQuantity(item.boqItemId, Number(e.target.value))}
-                                   className={`w-full h-full text-center font-mono font-black border-none focus:outline-none bg-transparent ${isExceeded ? 'text-rose-700 bg-amber-50' : 'focus:bg-emerald-100'} print:bg-transparent transition-all placeholder:text-slate-300`}
+                                   disabled={userRole === 'viewer'}
+                                   className={`w-full h-full text-center font-mono font-black border-none focus:outline-none bg-transparent ${isExceeded ? 'text-rose-700 bg-amber-50' : 'focus:bg-emerald-100'} print:bg-transparent transition-all placeholder:text-slate-300 ${userRole === 'viewer' ? 'cursor-not-allowed opacity-70' : ''}`}
                                    placeholder="0.00"
                                  />
                               </td>
@@ -1142,7 +1141,8 @@ export default function ExtractsTab({
                                     type="number" 
                                     value={item.retentionPercent} 
                                     onChange={(e) => handleUpdateItemRetention(item.boqItemId, Number(e.target.value))}
-                                    className="w-10 h-full text-right font-mono font-black border-none focus:outline-none bg-transparent focus:bg-rose-100 text-rose-600 print:bg-transparent transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    disabled={userRole === 'viewer'}
+                                    className={`w-10 h-full text-right font-mono font-black border-none focus:outline-none bg-transparent focus:bg-rose-100 text-rose-600 print:bg-transparent transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${userRole === 'viewer' ? 'cursor-not-allowed opacity-70' : ''}`}
                                   />
                                   <span className="text-rose-600 font-black text-xs select-none pr-1">%</span>
                                 </div>
@@ -1172,8 +1172,8 @@ export default function ExtractsTab({
                            ...(settings.signatories[0] ? [settings.signatories[0]] : []),
                            ...(settings.signatories[2] ? [settings.signatories[2]] : []),
                            ...(settings.signatories[4] ? [settings.signatories[4]] : [])
-                        ].map((sig: any) => (
-                           <div key={sig.id} className="flex flex-col items-center justify-between min-h-[120px]">
+                        ].map((sig: any, idx) => (
+                           <div key={sig?.id || `sig1_${idx}`} className="flex flex-col items-center justify-between min-h-[120px]">
                              <input 
                                value={sig.role}
                                onChange={(e) => {
@@ -1206,8 +1206,8 @@ export default function ExtractsTab({
                            ...(settings.signatories[1] ? [settings.signatories[1]] : []),
                            ...(settings.signatories[3] ? [settings.signatories[3]] : []),
                            ...(settings.signatories[5] ? [settings.signatories[5]] : [])
-                        ].map((sig: any) => (
-                           <div key={sig.id} className="flex flex-col items-center justify-between min-h-[120px]">
+                        ].map((sig: any, idx) => (
+                           <div key={sig?.id || `sig2_${idx}`} className="flex flex-col items-center justify-between min-h-[120px]">
                              <input 
                                value={sig.role}
                                onChange={(e) => {

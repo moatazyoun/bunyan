@@ -28,6 +28,8 @@ interface SuppliesDashboardProps {
   setSupplyItems: (items: SupplyItem[]) => void;
   setCubicCertificates: (certs: CubicCertificate[]) => void;
   setContractorsReport: (report: any[]) => void;
+  userRole?: string;
+  addAuditLog: (action: string, module: string, details: string) => void;
 }
 
 export default function SuppliesDashboard({ 
@@ -41,7 +43,9 @@ export default function SuppliesDashboard({
   setSupplyRecords,
   setSupplyItems,
   setCubicCertificates,
-  setContractorsReport
+  setContractorsReport,
+  userRole,
+  addAuditLog
 }: SuppliesDashboardProps) {
   // 1. Tab switches default: 'accounts' | 'records' | 'cubic' | 'settings'
   const [activeTab, setActiveTab] = useState<'accounts' | 'records' | 'cubic' | 'settings'>('accounts');
@@ -333,6 +337,8 @@ export default function SuppliesDashboard({
             supplyItems={supplyItems}
             onAddTransaction={onAddTransaction}
             onAddRecord={handleAddRecord}
+            userRole={userRole}
+            addAuditLog={addAuditLog}
           />
         )}
 
@@ -344,6 +350,8 @@ export default function SuppliesDashboard({
             onDeleteRecord={handleDeleteRecord}
             supplyItems={supplyItems}
             suppliers={suppliers}
+            userRole={userRole}
+            addAuditLog={addAuditLog}
           />
         )}
 
@@ -358,6 +366,8 @@ export default function SuppliesDashboard({
             setContractorsReport={setContractorsReport}
             supplyItems={supplyItems}
             workers={workers}
+            userRole={userRole}
+            addAuditLog={addAuditLog}
           />
         )}
 
@@ -368,6 +378,8 @@ export default function SuppliesDashboard({
             supplyItems={supplyItems}
             setSupplyItems={setSupplyItems}
             cubicCertificates={cubicCertificates}
+            userRole={userRole}
+            addAuditLog={addAuditLog}
           />
         )}
       </motion.div>

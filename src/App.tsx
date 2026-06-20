@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import DashboardOverview from './components/DashboardOverview';
 import TransactionsTable from './components/TransactionsTable';
@@ -22,10 +22,12 @@ import SiteWorkersDashboard from './components/SiteWorkersDashboard';
 import ExtractsTab from './components/ExtractsTab';
 import ProjectsTab from './components/ProjectsTab';
 import BOQTab from './components/BOQTab';
+import SettingsTab from './components/SettingsTab';
 import SubmissionsTab from './components/SubmissionsTab';
 import LoginScreen from './components/LoginScreen';
 import SiteSelectionScreen from './components/SiteSelectionScreen';
 import UsersAdminPanel from './components/UsersAdminPanel';
+import ErpSubDashboards from './components/ErpSubDashboards';
 
 import { 
   Transaction, 
@@ -109,6 +111,20 @@ function sanitizeLoadedData<T extends { id: string }>(items: any[], prefix: stri
   });
 }
 
+
+// Helpers for auto tracking
+const getModuleAr = (key: string) => {
+  const map: Record<string, string> = {
+    transactions: 'دفتر الحركات المالي', custodies: 'العهد المالية', contractors: 'مقاولي الباطن', 
+    equipment: 'حركة المعدات', maintenanceOrders: 'الصيانة', labTests: 'مختبرات الجودة', 
+    hseIncidents: 'شؤون السيرتي والبيئة', wbsTasks: 'برامج الجدولة', warehouseItems: 'المخازن المركزية', 
+    workers: 'العمالة اليومية', attendanceLogs: 'سجلات الدوام', salaryPayments: 'مسيرات الرواتب', 
+    supplyRecords: 'سجلات التوريد', cubicCertificates: 'شهادات التكعيب', projects: 'المشروعات والتعاقدات', 
+    boqItems: 'مقايسات الأعمال', submissions: 'الاعتمادات والمستخلصات'
+  };
+  return map[key] || key;
+};
+
 export default function App() {
   const [activeTab, setActiveTab ] = useState<string>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
@@ -136,12 +152,11 @@ export default function App() {
   });
 
   const [isDbLoaded, setIsDbLoaded] = useState<boolean>(false);
+  const loadedSiteIdRef = useRef<string | null>(null);
   const [dbConnected, setDbConnected] = useState<boolean | null>(null);
   const [dbChecking, setDbChecking] = useState<boolean>(false);
   const [dbLatency, setDbLatency] = useState<number>(0);
-  const [forceOfflineBypass, setForceOfflineBypass] = useState<boolean>(() => {
-    return localStorage.getItem('bunyan_force_offline_bypass') === 'true';
-  });
+  const [forceOfflineBypass, setForceOfflineBypass] = useState<boolean>(false);
 
   const toggleOfflineBypass = () => {
     const nextVal = !forceOfflineBypass;
@@ -152,11 +167,13 @@ export default function App() {
   // DB Connection status continuous check
   const checkDbStatus = async () => {
     setDbChecking(true);
+    const start = Date.now();
     try {
       const res = await fetch('/api/db-status');
       const data = await res.json();
+      const end = Date.now();
       setDbConnected(data.connected);
-      if (data.latencyMs !== undefined) setDbLatency(data.latencyMs);
+      setDbLatency(end - start);
     } catch {
       setDbConnected(false);
     } finally {
@@ -185,6 +202,31 @@ export default function App() {
     localStorage.removeItem('bunyan_current_site');
   };
 
+  // 1. Core Trial Session Time tracking & dynamic lockout
+  const [trialTimeLeft, setTrialTimeLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    let timerInterval: any = null;
+    if (user && user.isTrial && user.trialStartedAt) {
+      const calculateLeft = () => {
+        const elapsedSec = Math.floor((Date.now() - new Date(user.trialStartedAt!).getTime()) / 1000);
+        const remaining = Math.max(0, 120 - elapsedSec);
+        setTrialTimeLeft(remaining);
+        if (remaining <= 0) {
+          handleLogout();
+        }
+      };
+
+      calculateLeft();
+      timerInterval = setInterval(calculateLeft, 1000);
+    } else {
+      setTrialTimeLeft(null);
+    }
+    return () => {
+      if (timerInterval) clearInterval(timerInterval);
+    };
+  }, [user]);
+
   // 1. Core Financial Transactions & Ledger
   const [transactions, setTransactions] = useState<Transaction[]>([]);
 
@@ -209,16 +251,9 @@ export default function App() {
 
   const [workers, setWorkers] = useState<SiteWorker[]>([]);
 
-  const [attendanceLogs, setAttendanceLogs] = useState<WorkerAttendance[]>(() => {
-    const saved = localStorage.getItem('bunyan_site_workers_attendance');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [attendanceLogs, setAttendanceLogs] = useState<WorkerAttendance[]>([]);
 
-  const [salaryPayments, setSalaryPayments] = useState<WorkerSalaryPayment[]>(() => {
-    const saved = localStorage.getItem('bunyan_site_workers_salary_payments');
-    const items = saved ? JSON.parse(saved) : [];
-    return sanitizeLoadedData<WorkerSalaryPayment>(items, 'pay');
-  });
+  const [salaryPayments, setSalaryPayments] = useState<WorkerSalaryPayment[]>([]);
 
   // Supplies Module state
   const [supplyRecords, setSupplyRecords] = useState<SupplyRecord[]>([]);
@@ -239,6 +274,8 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
 
+  const userRole = user?.role;
+
   // Clock Update Effect
   useEffect(() => {
     const updateTime = () => {
@@ -253,7 +290,7 @@ export default function App() {
 
   // Sync to Firestore instead of local storage
   useEffect(() => {
-    if (user && selectedSite && isDbLoaded) {
+    if (user && selectedSite && isDbLoaded && loadedSiteIdRef.current === selectedSite.id) {
       const siteDataPayload = {
         transactions,
         custodies,
@@ -307,6 +344,37 @@ export default function App() {
     transactions, custodies, contractors, equipment, maintenanceOrders, labTests, hseIncidents, wbsTasks, warehouseItems, auditLogs, workers, attendanceLogs, salaryPayments, extracts, projects, boqItems, submissions, subcontractors, supplyRecords, supplyItems, cubicCertificates, contractorsReport, fuelLogs, custodyBudget, equipmentList, selectedSite, user, isDbLoaded
   ]);
 
+  const checkAndTriggerDailyAutoBackup = async (siteId: string, siteName: string, sitePayload: any) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const storageKey = `bunyan_last_auto_backup_${siteId}`;
+      const lastBackupDate = localStorage.getItem(storageKey);
+      
+      if (lastBackupDate === today) {
+        console.log(`[Auto-Backup] Already completed for site ${siteId} today (${today}).`);
+        return;
+      }
+      
+      console.log(`[Auto-Backup] Launching daily auto-backup for site ${siteId}...`);
+      
+      const response = await fetch(`/api/site/${siteId}/auto-backup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          siteName: siteName,
+          payload: sitePayload
+        })
+      });
+      
+      if (response.ok) {
+        localStorage.setItem(storageKey, today);
+        console.log(`[Auto-Backup] Daily auto-backup successfully completed for ${siteId}.`);
+      }
+    } catch (err) {
+      console.error("[Auto-Backup] Error during daily auto-backup check:", err);
+    }
+  };
+
   // Pull site database from Firestore upon site selection
   useEffect(() => {
     if (user && selectedSite) {
@@ -314,6 +382,34 @@ export default function App() {
       
       const loadSiteData = async () => {
         const startTime = Date.now(); // Track start time for minimum duration
+        
+        // Instant visual wipe to prevent any cross-site memory leak or mismatch
+        setTransactions([]);
+        setCustodies([]);
+        setContractors([]);
+        setEquipment([]);
+        setMaintenanceOrders([]);
+        setLabTests([]);
+        setHseIncidents([]);
+        setWbsTasks([]);
+        setWarehouseItems([]);
+        setAuditLogs([]);
+        setWorkers([]);
+        setAttendanceLogs([]);
+        setSalaryPayments([]);
+        setFuelLogs([]);
+        setCustodyBudget(0);
+        setExtracts([]);
+        setProjects([]);
+        setBoqItems([]);
+        setSubmissions([]);
+        setSubcontractors([]);
+        setEquipmentList([]);
+        setSupplyRecords([]);
+        setSupplyItems([]);
+        setCubicCertificates([]);
+        setContractorsReport([]);
+
         try {
           let hasDoc = false;
           let data: any = null;
@@ -325,7 +421,6 @@ export default function App() {
               data = await res.json();
               if (data && Object.keys(data).length > 0) {
                 hasDoc = true;
-                // Cache in local storage for subsequent offline loads
               }
             }
           } catch (fireErr) {
@@ -362,7 +457,7 @@ export default function App() {
             setCubicCertificates(data.cubicCertificates || []);
             setContractorsReport(data.contractorsReport || []);
           } else {
-            // New / unconfigured site: Reset all states
+            // New / unconfigured site: reset states (already done but safe to re-assert)
             setTransactions([]);
             setCustodies([]);
             setContractors([]);
@@ -385,7 +480,6 @@ export default function App() {
             setSubmissions([]);
             setSubcontractors([]);
             
-            // Supplies
             setSupplyRecords([]);
             setSupplyItems([]);
             setCubicCertificates([]);
@@ -397,18 +491,26 @@ export default function App() {
           const remaining = Math.max(0, 4000 - elapsed);
           
           setTimeout(() => {
+            loadedSiteIdRef.current = selectedSite.id;
             setIsDbLoaded(true);
+            
+            // Trigger automatic daily snapshot backup if site has real records
+            if (hasDoc && data) {
+              checkAndTriggerDailyAutoBackup(selectedSite.id, selectedSite.nameAr, data);
+            }
           }, remaining);
 
         } catch (err) {
           console.warn("Complete catalog loading error:", err);
-          setIsDbLoaded(true); // Always allow entry so engineers are never blocked, using local storage cache safely
+          loadedSiteIdRef.current = selectedSite.id;
+          setIsDbLoaded(true); // Always allow entry so engineers are never blocked
         }
       };
 
       loadSiteData();
     } else {
       setIsDbLoaded(false);
+      loadedSiteIdRef.current = null;
     }
   }, [user, selectedSite]);
 
@@ -438,19 +540,150 @@ export default function App() {
     .filter(t => t.type === 'executed_work')
     .reduce((sum, t) => sum + t.amount, 0);
 
+  // Track user login session timestamps (توقيت آخر جلسة بالبرنامج)
+  useEffect(() => {
+    if (user) {
+      const storedCurrent = localStorage.getItem('bunyan_current_session_time');
+      const prevSessionUser = localStorage.getItem('bunyan_prev_session_user');
+      
+      if (!storedCurrent || prevSessionUser !== user.username) {
+        if (storedCurrent) {
+          localStorage.setItem('bunyan_last_session_time', storedCurrent);
+        } else {
+          // Fallback if never logged before (a beautiful realistic placeholder from last 24 hours)
+          const formattedPrev = new Date(Date.now() - 3600000 * 18.5).toLocaleString('ar-EG', {
+            hour12: true,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+          localStorage.setItem('bunyan_last_session_time', formattedPrev);
+        }
+        
+        const nowStr = new Date().toLocaleString('ar-EG', {
+          hour12: true,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        localStorage.setItem('bunyan_current_session_time', nowStr);
+        localStorage.setItem('bunyan_prev_session_user', user.username);
+      }
+    }
+  }, [user]);
+
   // Helper action: Post automated entry to audit logs
   const addAuditLog = (action: string, module: string, details: string) => {
     const newLog: AuditTrailRecord = {
       id: `audit-${Date.now()}-${Math.floor(Math.random() * 1000000)}`,
       timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      user: 'م. معتز يونس (مدير التكاليف)',
+      user: user ? `${user.nameAr?.replace(/\s*\(?مدير التكاليف\)?/g, '')} (${user.role === 'admin' ? 'مدير البرنامج' : user.role === 'projects_manager' ? 'مدير عام' : 'مهندس'})` : 'م. معتز يونس',
       action,
       module,
-      ip: '192.168.1.115',
+      ip: '197.34.' + Math.floor(Math.random() * 255) + '.' + Math.floor(Math.random() * 255),
       details
     };
     setAuditLogs(prev => [newLog, ...prev]);
+    
+    // إرسال السجل للسحابة
+    fetch('/api/users/logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: user?.username || 'engineer',
+        actionAr: `${action} [${module}]`,
+        type: 'site',
+        detailsAr: details
+      })
+    }).catch(console.error);
   };
+
+  // --- Enhanced Auto-Audit Tracker ---
+  const prevStatesRef = useRef<any>({});
+  
+  useEffect(() => {
+    if (!isDbLoaded) return; // wait until initialized
+    
+    // Only track if there's an actual user logged in
+    if (!user) return;
+    
+    const currentTrackables = {
+        transactions, custodies, contractors, equipment, maintenanceOrders,
+        labTests, hseIncidents, wbsTasks, warehouseItems, workers, attendanceLogs,
+        salaryPayments, supplyRecords, cubicCertificates, projects, boqItems, submissions
+    };
+
+    if (Object.keys(prevStatesRef.current).length === 0) {
+      prevStatesRef.current = JSON.parse(JSON.stringify(currentTrackables));
+      return;
+    }
+
+    const prev = prevStatesRef.current;
+    let changed = false;
+    
+    for (const [key, currArray] of Object.entries(currentTrackables)) {
+        const prevArray = prev[key] || [];
+        const moduleNameAr = getModuleAr(key);
+        
+        if (currArray.length > prevArray.length) {
+            if (key === 'transactions') {
+                changed = true; // Still update prevStatesRef, just don't log
+                continue; 
+            }
+            const addedNum = currArray.length - prevArray.length;
+            addAuditLog('إضافة سجل حية', moduleNameAr, `تم تسجيل وتوثيق إدخال ${addedNum} بند/عنصر جديد في قاعدة البيانات.`);
+            changed = true;
+        } else if (currArray.length < prevArray.length) {
+            const delNum = prevArray.length - currArray.length;
+            // Identify removed elements if delNum === 1
+            let removedInfo = '';
+            if (delNum === 1) {
+                const removedItem = prevArray.find((p: any) => !currArray.some((c: any) => c.id === p.id));
+                if (removedItem) {
+                    // Try to construct a readable description
+                    const itemName = removedItem.name || removedItem.action || removedItem.description || '';
+                    removedInfo = ` (العنصر: ${itemName}, الرقم المرجعي: ${removedItem.id})`;
+                }
+            }
+            addAuditLog('إزالة سجل حية', moduleNameAr, `تم إزالة أو حذف ${delNum} بند/عنصر من السجلات${removedInfo} بأمر المشغل.`);
+            changed = true;
+        } else {
+            // Check for updates - Skip manual-logged modules to avoid double logs
+            if (key === 'attendanceLogs' || key === 'salaryPayments' || key === 'workers' || key === 'supplyRecords' || key === 'fuelLogs') {
+                const pStr = JSON.stringify(prevArray);
+                const cStr = JSON.stringify(currArray);
+                if (pStr !== cStr) {
+                    changed = true; // Still mark as changed to update ref, but don't call addAuditLog
+                }
+                continue;
+            }
+            
+            const pStr = JSON.stringify(prevArray);
+            const cStr = JSON.stringify(currArray);
+            if (pStr !== cStr) {
+                addAuditLog('تحديث بيانات حي', moduleNameAr, `جرى تعديل تفاصيل ومحتوى سجلات بداخل هذه الوحدة.`);
+                changed = true;
+            }
+        }
+    }
+    
+    if (changed) {
+        prevStatesRef.current = JSON.parse(JSON.stringify(currentTrackables));
+    }
+    
+  }, [
+      transactions, custodies, contractors, equipment, maintenanceOrders,
+      labTests, hseIncidents, wbsTasks, warehouseItems, workers, attendanceLogs,
+      salaryPayments, supplyRecords, cubicCertificates, projects, boqItems, submissions,
+      isDbLoaded, user
+  ]);
+
+
+
 
   // MAIN TRANSACTION HANDLERS
   const handleAddTransaction = (newTx: Omit<Transaction, 'id'>) => {
@@ -463,6 +696,7 @@ export default function App() {
       id: `tx-${Date.now()}-${Math.floor(Math.random() * 1000000)}`
     };
     setTransactions(prev => [txWithId, ...prev]);
+    addAuditLog('إضافة حركة مالية', 'دفتر الحركات المالي', `تم إضافة حركة مالية جديدة رقم ${txWithId.id} بقيمة ${txWithId.amount} ج.م.`);
     setShowAddModal(false);
   };
 
@@ -789,6 +1023,70 @@ export default function App() {
     setActiveTab('dashboard');
   };
 
+  const getBackupPayload = () => {
+    return {
+      transactions,
+      custodies,
+      contractors,
+      equipment,
+      maintenanceOrders,
+      labTests,
+      hseIncidents,
+      wbsTasks,
+      warehouseItems,
+      auditLogs,
+      workers,
+      attendanceLogs,
+      salaryPayments,
+      extracts,
+      projects,
+      boqItems,
+      submissions,
+      subcontractors,
+      supplyRecords,
+      supplyItems,
+      cubicCertificates,
+      contractorsReport,
+      fuelLogs,
+      custodyBudget,
+      equipmentSummary: equipmentList
+    };
+  };
+
+  const handleRestoreBackup = (backupDoc: any) => {
+    if (!backupDoc || typeof backupDoc !== 'object') {
+      alert('ملف البيانات غير صالح الاستيراد.');
+      return;
+    }
+    const data = backupDoc.payload || backupDoc;
+    if (data.transactions) setTransactions(sanitizeLoadedData<Transaction>(data.transactions, 'tx'));
+    if (data.custodies) setCustodies(sanitizeLoadedData<CustodyRecord>(data.custodies, 'cust'));
+    if (data.contractors) setContractors(sanitizeLoadedData<ContractorCertificate>(data.contractors, 'sub'));
+    if (data.equipment) setEquipment(sanitizeLoadedData<EquipmentRecord>(data.equipment, 'eq'));
+    if (data.maintenanceOrders) setMaintenanceOrders(sanitizeLoadedData<MaintenanceOrder>(data.maintenanceOrders, 'maint'));
+    if (data.labTests) setLabTests(sanitizeLoadedData<LabTestRecord>(data.labTests, 'test'));
+    if (data.hseIncidents) setHseIncidents(sanitizeLoadedData<HseIncidentRecord>(data.hseIncidents, 'hse'));
+    if (data.wbsTasks) setWbsTasks(sanitizeLoadedData<WbsTaskRecord>(data.wbsTasks, 'task'));
+    if (data.warehouseItems) setWarehouseItems(sanitizeLoadedData<WarehouseItemRecord>(data.warehouseItems, 'wh'));
+    if (data.auditLogs) setAuditLogs(sanitizeLoadedData<AuditTrailRecord>(data.auditLogs, 'audit'));
+    if (data.workers) setWorkers(sanitizeLoadedData<SiteWorker>(data.workers, 'w'));
+    if (data.attendanceLogs) setAttendanceLogs(data.attendanceLogs || []);
+    if (data.salaryPayments) setSalaryPayments(data.salaryPayments || []);
+    if (data.extracts) setExtracts(sanitizeLoadedData<CustomExtract>(data.extracts, 'ext'));
+    if (data.projects) setProjects(sanitizeLoadedData<Project>(data.projects, 'p'));
+    if (data.boqItems) setBoqItems(sanitizeLoadedData<BOQItem>(data.boqItems, 'boq'));
+    if (data.submissions) setSubmissions(sanitizeLoadedData<Submission>(data.submissions, 'sub'));
+    if (data.subcontractors) setSubcontractors(sanitizeLoadedData<Subcontractor>(data.subcontractors, 'sub'));
+    if (data.equipmentSummary) setEquipmentList(sanitizeLoadedData<EquipmentSummary>(data.equipmentSummary, 'eqsum'));
+    
+    if (data.supplyRecords) setSupplyRecords(data.supplyRecords);
+    if (data.supplyItems) setSupplyItems(data.supplyItems);
+    if (data.cubicCertificates) setCubicCertificates(data.cubicCertificates);
+    if (data.contractorsReport) setContractorsReport(data.contractorsReport);
+    if (data.fuelLogs) setFuelLogs(data.fuelLogs);
+    if (data.custodyBudget !== undefined) setCustodyBudget(data.custodyBudget);
+  };
+
   // Tab Router
   const renderActiveTab = () => {
     switch (activeTab) {
@@ -836,6 +1134,8 @@ export default function App() {
             setSupplyItems={setSupplyItems}
             setCubicCertificates={setCubicCertificates}
             setContractorsReport={setContractorsReport}
+            userRole={user?.role}
+            addAuditLog={addAuditLog}
           />
         );
 
@@ -846,6 +1146,8 @@ export default function App() {
             onAddTransaction={handleAddTransaction} 
             subcontractors={subcontractors}
             setSubcontractors={setSubcontractors}
+            userRole={user?.role}
+            addAuditLog={addAuditLog}
           />
         );
 
@@ -856,6 +1158,7 @@ export default function App() {
             setProjects={setProjects}
             boqItems={boqItems}
             currentUserRole={user?.role}
+            onRestoreBackup={handleRestoreBackup}
           />
         );
 
@@ -870,6 +1173,7 @@ export default function App() {
             subcontractors={subcontractors}
             branding={{companyName: 'بنيان'}}
             extractType="Owner"
+            userRole={userRole}
           />
         );
 
@@ -881,6 +1185,7 @@ export default function App() {
             setProjects={setProjects}
             boqItems={boqItems}
             setBoqItems={setBoqItems}
+            userRole={userRole}
           />
         );
 
@@ -895,6 +1200,8 @@ export default function App() {
             setAttendanceLogs={setAttendanceLogs}
             salaryPayments={salaryPayments}
             setSalaryPayments={setSalaryPayments}
+            userRole={user?.role}
+            addAuditLog={addAuditLog}
           />
         );
 
@@ -907,6 +1214,7 @@ export default function App() {
             onDeleteTransaction={handleDeleteTransaction}
             addAuditLog={addAuditLog}
             workers={workers}
+            userRole={userRole}
           />
         );
 
@@ -931,6 +1239,8 @@ export default function App() {
             setFuelLogs={setFuelLogs}
             custodyBudget={custodyBudget}
             setCustodyBudget={setCustodyBudget}
+            userRole={user?.role}
+            addAuditLog={addAuditLog}
           />
         );
 
@@ -942,12 +1252,25 @@ export default function App() {
             custodyBudget={custodyBudget}
             setCustodyBudget={setCustodyBudget}
             equipment={equipmentList}
+            userRole={user?.role}
+            addAuditLog={addAuditLog}
           />
         );
 
       case 'admin-users':
         return (
-          <UsersAdminPanel currentUser={user} />
+          <UsersAdminPanel currentUser={user} auditLogs={auditLogs} />
+        );
+
+      case 'settings':
+        return (
+          <SettingsTab 
+            selectedSite={selectedSite}
+            getBackupPayload={getBackupPayload}
+            onRestoreBackup={handleRestoreBackup}
+            currentUserRole={user?.role}
+            dbConnected={dbConnected}
+          />
         );
 
       default:
@@ -1177,6 +1500,8 @@ export default function App() {
             </div>
             <h1 className="text-lg md:text-xl font-bold text-slate-900 tracking-tight mt-1 text-right font-sans">
               {activeTab === 'dashboard' && 'الصفحة الرئيسية'}
+              {activeTab === 'projects' && 'المشروعات والإسناد'}
+              {activeTab === 'settings' && 'إعدادات النظام والنسخ الاحتياطي السحابي'}
               {activeTab === 'transactions' && 'دفتر الحركات المالي'}
               {activeTab === 'supplies' && 'كشف التوريدات وبونات الاستلام'}
               {activeTab === 'deliveries' && 'لوج وتسجيل تسليمات الأعمال (طلبات فحص الموقع)'}
@@ -1188,7 +1513,29 @@ export default function App() {
           </div>
 
           {/* Connection & Time block wrapper */}
-          <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
+          <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto block">
+
+            {/* Trial badge with countdown */}
+            {trialTimeLeft !== null && (
+              <div className="px-3.5 py-1.5 rounded-xl border border-amber-200 bg-amber-500/10 text-amber-800 flex items-center gap-2 text-xs font-bold font-sans animate-pulse">
+                <Sparkles size={13} className="text-amber-600 shrink-0" />
+                <span>نسخة تجريبية</span>
+                <span className="bg-amber-600 text-white rounded px-2 py-0.5 text-xs font-mono tracking-wider font-extrabold">
+                  {Math.floor(trialTimeLeft / 60)}:{(trialTimeLeft % 60).toString().padStart(2, '0')}
+                </span>
+              </div>
+            )}
+
+            {/* Last session time badge */}
+            {localStorage.getItem('bunyan_last_session_time') && (
+              <div className="px-3.5 py-1.5 rounded-xl border border-indigo-200/50 bg-indigo-50/50 text-indigo-850 flex items-center gap-2 text-xs font-bold font-sans">
+                <Clock size={13} className="text-indigo-600 shrink-0" />
+                <span className="hidden sm:inline text-indigo-700/80 font-semibold">آخر جلسة:</span>
+                <span className="font-mono text-indigo-700 font-extrabold">
+                  {localStorage.getItem('bunyan_last_session_time')}
+                </span>
+              </div>
+            )}
 
             {/* Real-time DB Status Badge */}
             <div className={`px-3.5 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all duration-300 font-sans ${

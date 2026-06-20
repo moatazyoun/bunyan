@@ -34,6 +34,8 @@ interface SuppliesAccountTabProps {
   supplyItems: SupplyItem[];
   onAddTransaction?: (tx: any) => void;
   onAddRecord?: (rec: SupplyRecord) => void;
+  userRole?: string;
+  addAuditLog: (action: string, module: string, details: string) => void;
 }
 
 export default function SuppliesAccountTab({
@@ -42,7 +44,9 @@ export default function SuppliesAccountTab({
   supplierPayments,
   supplyItems,
   onAddTransaction,
-  onAddRecord
+  onAddRecord,
+  userRole,
+  addAuditLog
 }: SuppliesAccountTabProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedSupplierId, setExpandedSupplierId] = useState<string | null>(null);
@@ -60,6 +64,7 @@ export default function SuppliesAccountTab({
 
   const handleQuickAddRecord = (e: React.FormEvent, supplier: any) => {
     e.preventDefault();
+    if (userRole === 'viewer') return;
     if (!onAddRecord) return;
     
     const material = supplyItems.find(i => i.code === supplier.materialCode);

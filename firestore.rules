@@ -101,5 +101,12 @@ service cloud.firestore {
     match /extractSettings/{projectId} {
       allow read, write: if true;
     }
+
+    // 6. Automated Daily Backups
+    match /siteBackups/{backupId} {
+      allow read, list: if isSignedIn();
+      allow create, update: if isSignedIn() && isValidId(backupId);
+      allow delete: if isAdmin();
+    }
   }
 }

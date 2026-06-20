@@ -43,12 +43,14 @@ import {
   INITIAL_FUEL_CUSTODY_BUDGET
 } from '../data/fuelInitialData';
 
-export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, setCustodyBudget, equipment }: {
+export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, setCustodyBudget, equipment, userRole, addAuditLog }: {
   fuelLogs: FuelLogRecord[];
   setFuelLogs: React.Dispatch<React.SetStateAction<FuelLogRecord[]>>;
   custodyBudget: number;
   setCustodyBudget: React.Dispatch<React.SetStateAction<number>>;
   equipment: any[];
+  userRole?: string;
+  addAuditLog: (action: string, module: string, details: string) => void;
 }) {
   // --- States ---
   
@@ -188,6 +190,7 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
         if (log.id === editingLogId) {
           return {
             id: log.id,
+            referenceNo: log.referenceNo,
             date: formState.date,
             day: formState.day,
             equipmentName: formState.equipmentName,
@@ -198,10 +201,13 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
         }
         return log;
       }));
+      addAuditLog('تعديل بون وقود', 'حركة المحروقات', `تم تعديل بون وقود مرجع: ${editingLogId}`);
       setEditingLogId(null);
     } else {
+      const refNo = `FUEL-${Date.now().toString().slice(-6)}`;
       const newRecord: FuelLogRecord = {
         id: `fuel-${Date.now()}`,
+        referenceNo: refNo,
         date: formState.date,
         day: formState.day,
         equipmentName: formState.equipmentName,
@@ -210,6 +216,7 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
         notes: formState.notes
       };
       setFuelLogs(prev => [newRecord, ...prev]);
+      addAuditLog('إضافة بون وقود', 'حركة المحروقات', `تم تسجيل بون وقود جديد رقم: ${refNo} للمعدة: ${formState.equipmentName} بكمية: ${qtyNum} لتر.`);
     }
 
     setShowAddModal(false);
@@ -321,8 +328,13 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
         {/* Action button bar */}
         <div className="flex flex-wrap gap-2.5 w-full lg:w-auto justify-end">
           <button
-            onClick={handleResetData}
-            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-black rounded-xl transition border border-slate-700 flex items-center gap-1.5 cursor-pointer"
+            onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية إعادة تعيين البيانات') : handleResetData}
+            disabled={userRole === 'viewer'}
+            className={`px-3.5 py-2 text-xs font-black rounded-xl transition border flex items-center gap-1.5 ${
+              userRole === 'viewer'
+                ? 'bg-slate-800 text-slate-500 cursor-not-allowed border-slate-700'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700 cursor-pointer'
+            }`}
             title="إعادة ضبط الحسابات إلى قيم الـ PDF الموجه"
           >
             إعادة للقيم الأصلية ↺
@@ -334,14 +346,19 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
             <Printer size={15} /> طباعة كشف المحروقات
           </button>
           <button
-            onClick={() => setShowAiIngest(!showAiIngest)}
-            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-750 text-amber-400 font-extrabold text-xs rounded-xl flex items-center gap-1.5 shadow-md transition cursor-pointer border border-slate-700 active:scale-95"
+            onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية استخدام المسح الذكي') : () => setShowAiIngest(!showAiIngest)}
+            disabled={userRole === 'viewer'}
+            className={`px-3.5 py-2 font-extrabold text-xs rounded-xl flex items-center gap-1.5 shadow-md transition border active:scale-95 ${
+              userRole === 'viewer'
+                ? 'bg-slate-800 text-slate-500 cursor-not-allowed border-slate-700'
+                : 'bg-slate-800 hover:bg-slate-750 text-amber-400 cursor-pointer border-slate-700'
+            }`}
           >
-            <Sparkles size={14} className="text-amber-400 animate-pulse" />
+            <Sparkles size={14} className={userRole === 'viewer' ? 'text-slate-500' : 'text-amber-400 animate-pulse'} />
             <span>تسجيل وقيد بالذكاء الاصطناعي ✨</span>
           </button>
           <button
-            onClick={() => {
+            onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية تسجيل بونات جديدة') : () => {
               setEditingLogId(null);
               setFormState({
                 date: new Date().toISOString().split('T')[0],
@@ -353,7 +370,12 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
               });
               setShowAddModal(true);
             }}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl transition shadow-lg flex items-center gap-1.5 cursor-pointer"
+            disabled={userRole === 'viewer'}
+            className={`px-4 py-2 text-xs font-black rounded-xl transition shadow-lg flex items-center gap-1.5 ${
+              userRole === 'viewer'
+                ? 'bg-indigo-300 text-indigo-50 cursor-not-allowed'
+                : 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer'
+            }`}
           >
             <Plus size={16} /> تسجيل بون وقود جديد
           </button>
@@ -525,7 +547,7 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
 
                 <div className="flex justify-end">
                   <button
-                    onClick={() => {
+                    onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية قيد السجلات من المسح الذكي') : () => {
                       setFuelLogs(prev => [...aiResultRecords, ...prev]);
                       alert(`تم بنجاح حصر وقيد عدد (${aiResultRecords.length}) بونات فحص سولار في السركي الميداني!`);
                       setAiResultRecords([]);
@@ -533,7 +555,12 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
                       setAiText('');
                       setAiImageBase64(null);
                     }}
-                    className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-lg active:scale-97"
+                    disabled={userRole === 'viewer'}
+                    className={`px-6 py-3 text-white text-xs font-black rounded-xl transition flex items-center gap-1.5 shadow-lg active:scale-97 ${
+                      userRole === 'viewer'
+                        ? 'bg-slate-400 cursor-not-allowed'
+                        : 'bg-emerald-600 hover:bg-emerald-500 cursor-pointer'
+                    }`}
                   >
                     <CheckCircle size={15} />
                     قيد وتثبيت كشف بونات السولار بحسابات السركي الميداني ✓
@@ -555,9 +582,14 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
               <input
                 type="number"
                 value={custodyBudget}
+                disabled={userRole === 'viewer'}
                 onChange={(e) => setCustodyBudget(Number(e.target.value) || 0)}
-                className="text-lg font-mono font-black text-slate-900 w-28 text-center bg-slate-50 border border-slate-200 rounded-lg py-0.5 focus:border-indigo-500"
-                title="اضغط لتغيير مخصص العهدة"
+                className={`text-lg font-mono font-black w-28 text-center rounded-lg py-0.5 focus:border-indigo-500 transition-all ${
+                  userRole === 'viewer'
+                    ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                    : 'bg-slate-50 border border-slate-200 text-slate-900 border-slate-200'
+                }`}
+                title={userRole === 'viewer' ? 'لا تملك صلاحية تعديل الميزانية' : 'اضغط لتغيير مخصص العهدة'}
               />
               <span className="text-xs text-slate-400 font-bold">ج.م</span>
             </div>
@@ -776,7 +808,8 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
                   
                   {/* Date */}
                   <td className="p-3 pr-6 text-right font-semibold text-slate-600 font-mono">
-                    {log.date}
+                    <span className="block">{log.date}</span>
+                    {log.referenceNo && <span className="block text-[8px] text-indigo-500 font-black">{log.referenceNo}</span>}
                   </td>
 
                   {/* Day */}
@@ -810,14 +843,22 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
                   <td className="p-3 font-sans">
                     <div className="flex items-center justify-center gap-1.5">
                       <button
-                        onClick={() => startEditLog(log)}
-                        className="p-1 px-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded transition text-[11px] font-black"
+                        onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية تعديل السجلات') : () => startEditLog(log)}
+                        className={`p-1 px-2.5 rounded transition text-[11px] font-black ${
+                          userRole === 'viewer'
+                            ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                            : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700'
+                        }`}
                       >
                         تعديل
                       </button>
                       <button
-                        onClick={() => handleDeleteLog(log.id, log.cost, log.equipmentName)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 transition"
+                        onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية حذف السجلات') : () => handleDeleteLog(log.id, log.cost, log.equipmentName)}
+                        className={`p-1.5 transition ${
+                          userRole === 'viewer'
+                            ? 'text-slate-200 cursor-not-allowed'
+                            : 'text-slate-400 hover:text-rose-600'
+                        }`}
                       >
                         <Trash2 size={12} />
                       </button>
@@ -858,123 +899,129 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden text-right font-sans"
+              className="bg-white border border-slate-200 rounded-[2.5rem] w-full max-w-4xl shadow-2xl flex flex-col md:flex-row max-h-[90vh] overflow-hidden text-right font-sans"
             >
-              {/* Modal header */}
-              <div className="bg-slate-900 text-white p-4 flex items-center justify-between flex-row-reverse border-b border-slate-800">
-                <h3 className="font-black text-sm flex items-center gap-1.5 justify-start">
-                  <Fuel size={16} className="text-indigo-400" />
-                  {editingLogId ? 'تعديل بون الصرف المحاسبي' : 'تسجيل بون صرف محروقات جديد'}
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="text-slate-400 hover:text-white transition font-bold"
-                >
-                  ✕
-                </button>
+              {/* Sidebar */}
+              <div className="hidden md:flex md:w-64 bg-slate-50 p-8 flex-col justify-between border-l border-slate-100 text-right">
+                <div>
+                  <div className="h-12 w-12 bg-indigo-50 rounded-2xl flex items-center justify-center border border-indigo-150 mb-6">
+                    <Fuel className="h-6 w-6 text-indigo-600" />
+                  </div>
+                  <h3 className="text-lg font-black mb-2 text-slate-800 leading-snug">إضافة بون وقود</h3>
+                  <p className="text-[10.5px] text-slate-500 font-medium leading-relaxed">تسجيل حركة صرف الوقود الجديدة للمعدات ومطابقتها مع المستندات الميدانية لضمان دقة التسوية المالية.</p>
+                </div>
               </div>
 
               {/* Form body */}
-              <form onSubmit={handleSaveLog} className="p-5 space-y-4">
-                
-                {/* Date and Custom Day */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-extrabold text-slate-705 mb-1">التاريخ *</label>
-                    <input
-                      type="date"
-                      required
-                      value={formState.date}
-                      onChange={(e) => handleDateChange(e.target.value)}
-                      className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 font-mono font-bold text-center"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-extrabold text-slate-705 mb-1">اليوم</label>
-                    <select
-                      value={formState.day}
-                      onChange={(e) => setFormState(prev => ({ ...prev, day: e.target.value }))}
-                      className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-550 font-bold"
-                    >
-                      {DAYS_OF_WEEK.map(d => (
-                        <option key={d} value={d}>{d}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Equipment Picker */}
-                <div>
-                  <label className="block text-xs font-extrabold text-slate-705 mb-1">المعدة المستحقة *</label>
-                  <select
-                    value={formState.equipmentName}
-                    onChange={(e) => setFormState(prev => ({ ...prev, equipmentName: e.target.value }))}
-                    className="w-full text-xs p-2.5 bg-slate-100 border border-slate-250 rounded-xl font-black text-indigo-950 focus:border-indigo-500"
-                  >
-                    {EQUIPMENTS_LIST.map(eq => (
-                      <option key={eq} value={eq}>{eq}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Quantity (Liters) & Cost (EGP) */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-extrabold text-slate-700 mb-1 font-sans">الكمية المصروفة (لتر) *</label>
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      placeholder="0.0"
-                      value={formState.quantity || ''}
-                      onChange={(e) => setFormState(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
-                      className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-center focus:border-indigo-550"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-extrabold text-slate-700 mb-1">التكلفة (ج.م) *</label>
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      placeholder="0.0"
-                      value={formState.cost || ''}
-                      onChange={(e) => setFormState(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
-                      className="w-full text-xs p-2.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl font-mono font-black text-center focus:border-indigo-550"
-                    />
-                  </div>
-                </div>
-
-                {/* Notes and details */}
-                <div>
-                  <label className="block text-xs font-extrabold text-slate-700 mb-1">الملاحظات ومستند الصرف (موقع، محطة)</label>
-                  <textarea
-                    placeholder="مثال: صرف بمستند رقم ٣٣٢٨ الميداني..."
-                    value={formState.notes}
-                    onChange={(e) => setFormState(prev => ({ ...prev, notes: e.target.value }))}
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl h-20 resize-none text-right focus:border-indigo-500 font-semibold"
-                  />
-                </div>
-
-                {/* Actions inside form */}
-                <div className="flex gap-2 justify-end pt-2 border-t border-slate-100 flex-row-reverse">
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow transition cursor-pointer"
-                  >
-                    {editingLogId ? 'حفظ التعديلات' : 'إدراج بون الوقود'}
-                  </button>
+              <div className="flex-1 flex flex-col min-h-0 min-w-0">
+                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white flex-shrink-0">
+                  <h3 className="font-extrabold text-sm">
+                    {editingLogId ? 'تعديل بون الصرف المحاسبي' : 'تسجيل بون صرف محروقات جديد'}
+                  </h3>
                   <button
                     type="button"
                     onClick={() => setShowAddModal(false)}
-                    className="px-3.5 py-2 bg-slate-150 hover:bg-slate-200 text-slate-750 rounded-xl text-xs font-bold transition cursor-pointer"
+                    className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 hover:text-slate-600 transition"
                   >
-                    إلغاء
+                    ✕
                   </button>
                 </div>
 
-              </form>
+                <form onSubmit={handleSaveLog} className="flex-1 overflow-y-auto p-8 bg-slate-50/20 space-y-6">
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-black text-slate-500 mr-1">التاريخ *</label>
+                        <input
+                          type="date"
+                          required
+                          value={formState.date}
+                          onChange={(e) => handleDateChange(e.target.value)}
+                          className="w-full text-xs p-3 bg-white border border-slate-200 rounded-2xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 font-mono font-bold text-center outline-none transition-all"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-black text-slate-500 mr-1">اليوم</label>
+                        <select
+                          value={formState.day}
+                          onChange={(e) => setFormState(prev => ({ ...prev, day: e.target.value }))}
+                          className="w-full text-xs p-3 bg-white border border-slate-200 rounded-2xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 font-bold outline-none text-right transition-all"
+                        >
+                          {DAYS_OF_WEEK.map(d => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black text-slate-500 mr-1">المعدة المستحقة *</label>
+                      <select
+                        value={formState.equipmentName}
+                        onChange={(e) => setFormState(prev => ({ ...prev, equipmentName: e.target.value }))}
+                        className="w-full text-xs p-3 bg-white border border-slate-200 rounded-2xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 font-bold outline-none text-right transition-all"
+                      >
+                        {EQUIPMENTS_LIST.map(eq => (
+                          <option key={eq} value={eq}>{eq}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-black text-slate-500 mr-1">الكمية المصروفة (لتر) *</label>
+                        <input
+                          type="number"
+                          step="any"
+                          required
+                          placeholder="0.0"
+                          value={formState.quantity || ''}
+                          onChange={(e) => setFormState(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
+                          className="w-full text-xs p-3 bg-white border border-slate-200 rounded-2xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 font-mono font-bold text-center outline-none transition-all"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-black text-slate-500 mr-1">التكلفة (ج.م) *</label>
+                        <input
+                          type="number"
+                          step="any"
+                          required
+                          placeholder="0.0"
+                          value={formState.cost || ''}
+                          onChange={(e) => setFormState(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
+                          className="w-full text-xs p-3 bg-white border border-slate-200 rounded-2xl focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 font-mono font-black text-center text-amber-900 outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black text-slate-500 mr-1">الملاحظات ومستند الصرف (موقع، محطة)</label>
+                      <textarea
+                        placeholder="مثال: صرف بمستند رقم ٣٣٢٨ الميداني..."
+                        value={formState.notes}
+                        onChange={(e) => setFormState(prev => ({ ...prev, notes: e.target.value }))}
+                        className="w-full text-xs p-3 bg-white border border-slate-200 rounded-2xl h-24 resize-none text-right focus:border-indigo-500 outline-none transition-all font-semibold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 justify-end pt-4 border-t border-slate-100 flex-row-reverse">
+                    <button
+                      type="submit"
+                      className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-black shadow-lg transition active:scale-95 cursor-pointer"
+                    >
+                      {editingLogId ? 'حفظ التعديلات' : 'إدراج بون الوقود'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddModal(false)}
+                      className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl text-xs font-bold transition active:scale-95 cursor-pointer"
+                    >
+                      إلغاء الرجوع
+                    </button>
+                  </div>
+                </form>
+              </div>
             </motion.div>
           </div>
         )}

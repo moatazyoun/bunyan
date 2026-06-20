@@ -559,7 +559,10 @@ export default function CustodyManager({ custodies, transactions, onAddCustody, 
                           const isSettledBill = tx.type === 'executed_work';
                           return (
                             <tr key={tx.id} className="hover:bg-slate-50/50">
-                              <td className="p-3 font-mono text-slate-500">{tx.date}</td>
+                              <td className="p-3 font-mono text-slate-500">
+                                <div>{tx.date}</div>
+                                <div className="text-[9px] text-indigo-550/85 mt-0.5" title="الرمز المرجعي">Ref: {tx.id}</div>
+                              </td>
                               <td className="p-3">
                                 {isSettledBill ? (
                                   <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-150 px-2 py-0.5 rounded-full">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Users, UserPlus, Calendar, DollarSign, Save, Trash2, Check, X, FileText, AlertCircle, Edit, ArrowDownToLine, Clock, Search, Briefcase, UserCheck, Timer, Wallet, Calculator, ChevronRight, ChevronLeft, MapPin, Info } from 'lucide-react';
+import { Users, UserPlus, Calendar, DollarSign, Save, Trash2, Check, X, FileText, AlertCircle, Edit, ArrowDownToLine, Clock, Search, Briefcase, UserCheck, Timer, Wallet, Calculator, ChevronRight, ChevronLeft, MapPin, Info, ChevronDown, CheckCircle2, XCircle, Home, Banknote, Building2, Ticket, MoreHorizontal, ShieldCheck, ExternalLink, CheckSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Transaction, SiteWorker, WorkerAttendance, WorkerEmploymentType, WorkerSalaryPayment } from '../types';
 import { INITIAL_WORKERS } from '../data/initialData';
@@ -7,6 +7,79 @@ import { INITIAL_WORKERS } from '../data/initialData';
 const GOVERNORATES = [
   "القاهرة", "الإسكندرية", "الجيزة", "الدقهلية", "البحر الأحمر", "البحيرة", "الفيوم", "الغربية", "الإسماعيلية", "المنوفية", "المنيا", "القليوبية", "الوادي الجديد", "الشرقية", "السويس", "أسوان", "أسيوط", "بني سويف", "بورسعيد", "دمياط", "الأقصر", "قنا", "شمال سيناء", "سوهاج", "جنوب سيناء", "كفر الشيخ", "مطروح"
 ];
+
+const CustomSelect = ({ 
+  options, 
+  value, 
+  onChange, 
+  disabled, 
+  className = "" 
+}: { 
+  options: { value: string, label: string, icon: React.ReactNode, colorClass?: string }[], 
+  value: string, 
+  onChange: (val: string) => void,
+  disabled?: boolean,
+  className?: string
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedOption = options.find(opt => opt.value === value) || options[0];
+
+  return (
+    <div className={`relative ${className}`}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setIsOpen(!isOpen)}
+        className={`flex items-center justify-between w-full px-2 py-1.5 rounded-xl text-[10px] font-black transition border shadow-sm ${
+          disabled ? 'bg-slate-200 text-slate-400 border-slate-100 cursor-not-allowed' : 
+          (selectedOption.colorClass || 'bg-slate-50 border-slate-100 text-slate-700 hover:border-indigo-200 focus:ring-2 focus:ring-indigo-100')
+        }`}
+      >
+        <div className="flex items-center gap-1.5 overflow-hidden">
+          <span className="flex-shrink-0">{selectedOption.icon}</span>
+          <span className="truncate">{selectedOption.label}</span>
+        </div>
+        {!disabled && <ChevronDown className={`w-3 h-3 flex-shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-indigo-500' : 'text-slate-400'}`} />}
+      </button>
+
+      <AnimatePresence>
+        {isOpen && !disabled && (
+          <>
+            <div className="fixed inset-0 z-[60]" onClick={() => setIsOpen(false)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: -5 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -5 }}
+              className="absolute z-[70] mt-1 w-full min-w-[120px] bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden py-1"
+            >
+              {options.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    onChange(opt.value);
+                    setIsOpen(false);
+                  }}
+                  className={`flex items-center gap-2 w-full px-3 py-2 text-[10px] font-black transition group text-right justify-start ${
+                    value === opt.value 
+                      ? (opt.colorClass ? opt.colorClass : 'bg-indigo-50 text-indigo-700') 
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className={`${value === opt.value ? '' : 'text-slate-400 group-hover:text-indigo-500'} transition-colors`}>
+                    {opt.icon}
+                  </span>
+                  <span className="truncate flex-1">{opt.label}</span>
+                  {value === opt.value && <Check className="w-3 h-3 text-current ml-auto" />}
+                </button>
+              ))}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
 
 export default function SiteWorkersDashboard({ 
   transactions, 
@@ -16,7 +89,9 @@ export default function SiteWorkersDashboard({
   attendanceLogs,
   setAttendanceLogs,
   salaryPayments,
-  setSalaryPayments
+  setSalaryPayments,
+  userRole,
+  addAuditLog
 }: { 
   transactions: Transaction[], 
   onAddTransaction: (tx: Omit<Transaction, 'id'>) => void,
@@ -25,7 +100,9 @@ export default function SiteWorkersDashboard({
   attendanceLogs: WorkerAttendance[],
   setAttendanceLogs: React.Dispatch<React.SetStateAction<WorkerAttendance[]>>,
   salaryPayments: WorkerSalaryPayment[],
-  setSalaryPayments: React.Dispatch<React.SetStateAction<WorkerSalaryPayment[]>>
+  setSalaryPayments: React.Dispatch<React.SetStateAction<WorkerSalaryPayment[]>>,
+  userRole?: string,
+  addAuditLog?: (action: string, module: string, details: string) => void
 }) {
   const [activeTab, setActiveTab] = useState<'workers' | 'settlements'>('workers');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -70,11 +147,32 @@ export default function SiteWorkersDashboard({
   });
 
   const [confirmDelete, setConfirmDelete] = useState<{ id: string, name: string } | null>(null);
+  const [deleteVerificationInput, setDeleteVerificationInput] = useState('');
+  const [expectedDeleteCode, setExpectedDeleteCode] = useState('');
 
-  const handleDeleteWorker = (id: string) => {
+  const generateRefNo = (prefix: string = 'W') => {
+    const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
+    const random = Math.floor(1000 + Math.random() * 9000);
+    return `${prefix}-${today}-${random}`;
+  };
+
+  const handleDeleteWorker = (id: string, name: string) => {
+    if (deleteVerificationInput !== expectedDeleteCode) {
+      alert('⚠️ كود التحقق غير صحيح. يرجى المحاولة مرة أخرى.');
+      return;
+    }
+
+    const refNo = generateRefNo('DEL-W');
     setWorkers(prev => prev.filter(w => w.id !== id));
     setAttendanceLogs(prev => prev.filter(l => l.workerId !== id));
     if (selectedWorker?.id === id) setShowDetailsModal(false);
+    
+    addAuditLog?.(
+      'حذف سجل عامل',
+      'العمالة الموقع',
+      `تم حذف العامل [${name}] نهائياً من السجلات بمرجع: ${refNo}`
+    );
+    
     setConfirmDelete(null);
   };
 
@@ -100,14 +198,48 @@ export default function SiteWorkersDashboard({
   // Daily processing
   const activeWorkers = useMemo(() => workers.filter(w => w.forceStatus === 'on-site' || attendanceLogs.some(a => a.workerId === w.id && a.date === selectedDate)), [workers, attendanceLogs, selectedDate]);
   
-  const dailyRecords = useMemo(() => {
-    const map = new Map<string, WorkerAttendance>();
-    attendanceLogs.filter(a => a.date === selectedDate).forEach(a => map.set(a.workerId, a));
-    return map;
-  }, [attendanceLogs, selectedDate]);
-
   const handleUpdateRecord = (workerId: string, updates: Partial<WorkerAttendance>, targetDate?: string) => {
+    if (userRole === 'viewer') return;
     const dateToUpdate = targetDate || selectedDate;
+    
+    // Find worker and existing log for audit purposes
+    const worker = workers.find(w => w.id === workerId);
+    const existingLog = attendanceLogs.find(a => a.workerId === workerId && a.date === dateToUpdate);
+
+    const statusMap: Record<string, string> = {
+      'present': 'حاضر',
+      'half-day': 'نصف يوم',
+      'absent': 'غائب',
+      'vacation': 'إجازة'
+    };
+
+    if (existingLog) {
+      const refCode = `REF-ATN-${existingLog.id.split('-')[1]?.slice(-6) || '000000'}`;
+      if (updates.status && updates.status !== existingLog.status) {
+        addAuditLog?.(
+          `تحديث حضور: ${worker?.name || 'عامل'}`,
+          'سجلات العمالة',
+          `تغيير الحالة من (${statusMap[existingLog.status] || existingLog.status}) إلى (${statusMap[updates.status] || updates.status}) - كود: ${refCode} - بتاريخ ${dateToUpdate}`
+        );
+      }
+      if (updates.overtimeValue !== undefined && updates.overtimeValue !== existingLog.overtimeValue) {
+        addAuditLog?.(
+          `تحديث سهرة: ${worker?.name || 'عامل'}`,
+          'سجلات العمالة',
+          `تعديل القيمة إلى (${updates.overtimeValue} ج.م) - كود: ${refCode} - بتاريخ ${dateToUpdate}`
+        );
+      }
+    } else {
+      const logStatus = updates.status || 'present';
+      const tempId = `att-${Date.now()}-${workerId}`;
+      const refCode = `REF-ATN-${tempId.split('-')[1]?.slice(-6) || 'XXXXXX'}`;
+      addAuditLog?.(
+        `تسجيل حضور: ${worker?.name || 'عامل'}`,
+        'سجلات العمالة',
+        `تسجيل حالة (${statusMap[logStatus] || logStatus}) - كود: ${refCode} - بتاريخ ${dateToUpdate}`
+      );
+    }
+
     setAttendanceLogs(prev => {
       const existingIdx = prev.findIndex(a => a.workerId === workerId && a.date === dateToUpdate);
       if (existingIdx >= 0) {
@@ -134,10 +266,16 @@ export default function SiteWorkersDashboard({
 
   const handleSaveWorker = (e: React.FormEvent) => {
     e.preventDefault();
+    if (userRole === 'viewer') return;
     
-    // Validation: Base rate must be > 0 for appointed workers
-    if (workerForm.type === 'appointed' && workerForm.baseRate <= 0) {
-      alert('⚠️ تنبيه: حقل "الراتب الشهري" إلزامي ولا يمكن أن يكون صفراً للفئة المعينة شهرياً.');
+    // Validation: Job Title and Salary are mandatory
+    if (!workerForm.jobTitle.trim()) {
+      alert('⚠️ تنبيه: حقل "المسمى الوظيفي" إلزامي.');
+      return;
+    }
+
+    if (workerForm.baseRate <= 0) {
+      alert('⚠️ تنبيه: حقل "الراتب/اليومية" إلزامي ويجب أن يكون أكبر من صفر.');
       return;
     }
 
@@ -157,14 +295,26 @@ export default function SiteWorkersDashboard({
     }
 
     if (editingWorker) {
+      const refNo = generateRefNo(`${editingWorker.jobTitle.includes('مهندس') ? 'ENG' : 'W'}-UPD`);
       setWorkers(prev => prev.map(w => w.id === editingWorker.id ? { ...w, ...workerForm } : w));
+      addAuditLog?.(
+        'تعديل بيانات عامل',
+        'العمالة الموقع',
+        `تم تحديث بيانات [${workerForm.name}] بمرجع: ${refNo}. المسمى: ${workerForm.jobTitle}.`
+      );
     } else {
       // Ensure startDate is set to default if empty
       const finalForm = { 
         ...workerForm, 
         startDate: workerForm.startDate || firstDayOfMonth 
       };
+      const refNo = generateRefNo(`${workerForm.jobTitle.includes('مهندس') ? 'ENG' : 'W'}-ADD`);
       setWorkers(prev => [...prev, { id: `w-${Date.now()}`, ...finalForm }]);
+      addAuditLog?.(
+        'إضافة عامل جديد',
+        'العمالة الموقع',
+        `تم تسجيل عامل جديد [${workerForm.name}] بمرجع: ${refNo}. الوظيفة: ${workerForm.jobTitle}.`
+      );
     }
     setShowWorkerModal(false);
     setWorkerForm({ 
@@ -187,6 +337,7 @@ export default function SiteWorkersDashboard({
 
   // Settlements logic
   const handleSettleWorker = (workerId: string, unsavedLogs: WorkerAttendance[]) => {
+    if (userRole === 'viewer') return;
     const worker = workers.find(w => w.id === workerId);
     if (!worker || unsavedLogs.length === 0) return;
 
@@ -215,6 +366,7 @@ export default function SiteWorkersDashboard({
     });
 
     const netAmount = totalEarned - totalDeductions - totalAdvances;
+    const refNo = generateRefNo('SETTL');
 
     // Create a transaction mapping
     onAddTransaction({
@@ -226,8 +378,15 @@ export default function SiteWorkersDashboard({
       description: `تصفية حساب (${worker.type === 'appointed' ? 'متغيرات' : 'يوميات'}): ${worker.jobTitle}`,
       recipient: worker.name,
       paymentMethod: 'نقدى',
-      referenceNo: `SETTL-${Date.now()}`
+      referenceNo: refNo,
+      notes: `تصفية حسابات بمرجع: ${refNo}`
     });
+
+    addAuditLog?.(
+      'تصفية وترحيل حساب عامل',
+      'سجلات الدوام',
+      `تم تصفية حساب [${worker.name}] بمبلغ ${netAmount} ج.م بمرجع: ${refNo}`
+    );
 
     // Mark as settled
     setAttendanceLogs(prev => prev.map(log => 
@@ -255,12 +414,15 @@ export default function SiteWorkersDashboard({
 
   const handleSavePayment = (e: React.FormEvent) => {
     e.preventDefault();
+    if (userRole === 'viewer') return;
     if (!selectedWorker || paymentForm.amount <= 0) return;
 
+    const refNo = paymentForm.referenceNo || generateRefNo('PAY');
     const newPayment: WorkerSalaryPayment = {
       id: `pay-${Date.now()}`,
       workerId: selectedWorker.id,
-      ...paymentForm
+      ...paymentForm,
+      referenceNo: refNo
     };
 
     setSalaryPayments(prev => [...prev, newPayment]);
@@ -272,11 +434,18 @@ export default function SiteWorkersDashboard({
       type: 'spent',
       nature: paymentForm.nature,
       category: paymentForm.nature === 'inside_custody' ? 'custody' : 'other',
-      description: `دفعة استلام راتب: ${selectedWorker.name} (${paymentForm.notes || 'بدون ملاحظات'})`,
+      description: `دفعة استلام راتب: ${selectedWorker.name}`,
       recipient: selectedWorker.name,
       paymentMethod: paymentForm.paymentMethod as any,
-      referenceNo: paymentForm.referenceNo
+      referenceNo: refNo,
+      notes: paymentForm.notes ? `${paymentForm.notes} (مرجع: ${refNo})` : `استلام راتب مرجع: ${refNo}`
     });
+
+    addAuditLog?.(
+      'صرف راتب/دفعة لعامل',
+      'مسيرات الرواتب',
+      `تم صرف مبلغ ${paymentForm.amount} ج.م للعامل [${selectedWorker.name}] بمرجع: ${refNo}`
+    );
 
     setPaymentForm({
       date: new Date().toISOString().split('T')[0],
@@ -289,8 +458,18 @@ export default function SiteWorkersDashboard({
   };
 
   const handleDeletePayment = (id: string) => {
-    if (confirm('هل أنت متأكد من حذف هذه الدفعة من السجل؟')) {
+    if (userRole === 'viewer') {
+      alert('عذراً، لا تملك صلاحية حذف الدفعات');
+      return;
+    }
+    if (confirm(`هل أنت متأكد من حذف هذه الدفعة [${id}] من السجل؟`)) {
+      const payment = salaryPayments.find(p => p.id === id);
       setSalaryPayments(prev => prev.filter(p => p.id !== id));
+      addAuditLog?.(
+        'حذف دفعة راتب',
+        'مسيرات الرواتب',
+        `تم حذف قيد صرف راتب بقيمة ${payment?.amount || 0} ج.م بمرجع: ${payment?.referenceNo || id}`
+      );
     }
   };
 
@@ -323,7 +502,7 @@ export default function SiteWorkersDashboard({
           <p className="text-sm text-slate-500 font-medium mt-1">حصر الحضور، الغياب، السلف، والسهرات وتصفية أجور العمالة المباشرة.</p>
         </div>
         <button
-          onClick={() => {
+          onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية إضافة عاملين') : () => {
             setEditingWorker(null);
             setWorkerForm({ 
               name: '', 
@@ -342,7 +521,12 @@ export default function SiteWorkersDashboard({
             });
             setShowWorkerModal(true);
           }}
-          className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow hover:bg-indigo-700 transition flex items-center gap-2 cursor-pointer"
+          disabled={userRole === 'viewer'}
+          className={`px-5 py-2.5 rounded-xl font-bold text-sm shadow transition flex items-center gap-2 ${
+            userRole === 'viewer'
+              ? 'bg-slate-300 text-slate-100 cursor-not-allowed'
+              : 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer'
+          }`}
         >
           <UserPlus size={16} /> اضافة عامل جديد
         </button>
@@ -411,7 +595,14 @@ export default function SiteWorkersDashboard({
                            <span className="block text-[10px] text-slate-500 font-black">الصافي المطلوب صرفه للمقاول أو العامل</span>
                            <span className="text-lg font-black text-slate-900 tracking-tight">{netAmount} <span className="text-xs text-slate-500">ج.م</span></span>
                          </div>
-                         <button onClick={() => handleSettleWorker(worker.id, unsavedLogs)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-xl text-[11px] font-black transition flex items-center gap-1.5 cursor-pointer shadow-sm">
+                         <button 
+                           onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية تصفية القيود') : () => handleSettleWorker(worker.id, unsavedLogs)} 
+                           className={`px-3 py-2 rounded-xl text-[11px] font-black transition flex items-center gap-1.5 shadow-sm ${
+                             userRole === 'viewer' 
+                               ? 'bg-slate-300 text-slate-100 cursor-not-allowed' 
+                               : 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer'
+                           }`}
+                         >
                            <ArrowDownToLine size={13} /> تصفية القيد
                          </button>
                       </div>
@@ -473,14 +664,21 @@ export default function SiteWorkersDashboard({
                     <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition">
                       <Users size={24} />
                     </div>
-                     <div className="flex gap-2">
+                    <div className="flex gap-2">
                         <button 
-                          onClick={(e) => { 
+                          onClick={userRole === 'viewer' ? (e) => { e.stopPropagation(); alert('عذراً، لا تملك صلاحية الحذف'); } : (e) => { 
                             e.preventDefault();
                             e.stopPropagation(); 
                             setConfirmDelete({ id: w.id, name: w.name }); 
+                            setDeleteVerificationInput('');
+                            setExpectedDeleteCode(Math.floor(1000 + Math.random() * 9000).toString());
                           }} 
-                          className="p-2 bg-rose-50 text-rose-500 hover:bg-rose-100 rounded-lg transition-all active:scale-95 shadow-sm border border-rose-100"
+                          disabled={userRole === 'viewer'}
+                          className={`p-2 rounded-lg transition-all active:scale-95 shadow-sm border ${
+                            userRole === 'viewer'
+                              ? 'bg-slate-200 text-slate-100 cursor-not-allowed border-slate-100'
+                              : 'bg-rose-50 text-rose-500 hover:bg-rose-100 border-rose-100'
+                          }`}
                           title="حذف العامل نهائياً"
                         >
                           <Trash2 size={15} />
@@ -553,7 +751,7 @@ export default function SiteWorkersDashboard({
                   </div>
                   <div className="flex gap-2">
                     <button 
-                      onClick={() => { 
+                      onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية التعديل') : () => { 
                         setEditingWorker(selectedWorker); 
                         setWorkerForm({
                           name: selectedWorker.name || '',
@@ -572,14 +770,28 @@ export default function SiteWorkersDashboard({
                         }); 
                         setShowWorkerModal(true); 
                       }} 
-                      className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition" 
+                      disabled={userRole === 'viewer'}
+                      className={`p-2 rounded-xl transition ${
+                        userRole === 'viewer'
+                          ? 'bg-slate-200 text-slate-100 cursor-not-allowed'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                      }`} 
                       title="تعديل بيانات العامل"
                     >
                       <Edit size={18} />
                     </button>
                     <button 
-                      onClick={() => setConfirmDelete({ id: selectedWorker.id, name: selectedWorker.name })} 
-                      className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition cursor-pointer" 
+                      onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية الحذف') : () => {
+                        setConfirmDelete({ id: selectedWorker.id, name: selectedWorker.name });
+                        setDeleteVerificationInput('');
+                        setExpectedDeleteCode(Math.floor(1000 + Math.random() * 9000).toString());
+                      }} 
+                      disabled={userRole === 'viewer'}
+                      className={`p-2 rounded-xl transition ${
+                        userRole === 'viewer'
+                          ? 'bg-slate-200 text-slate-100 cursor-not-allowed'
+                          : 'bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer'
+                      }`} 
                       title="حذف نهائي"
                     >
                       <Trash2 size={18} />
@@ -727,8 +939,9 @@ export default function SiteWorkersDashboard({
                           <tr>
                             <th className="p-3 rounded-r-xl">اليوم</th>
                             <th className="p-3">التاريخ</th>
-                            <th className="p-3 text-center">الحالة</th>
+                            <th className="p-3 text-center">الحالة والكود</th>
                             <th className="p-3 text-center">قيمة المعيشة</th>
+                            <th className="p-3 text-center">ساعات إضافية</th>
                             <th className="p-3 text-center">قيمة السهرة</th>
                             <th className="p-3 text-left rounded-l-xl">الإجمالي اليومي</th>
                           </tr>
@@ -737,6 +950,7 @@ export default function SiteWorkersDashboard({
                           {daysInMonth.map(dateStr => {
                             const log = attendanceLogs.find(l => l.workerId === selectedWorker.id && l.date === dateStr) || {
                               status: 'absent',
+                              overtimeHours: 0,
                               overtimeValue: 0,
                               isSettled: false
                             };
@@ -758,23 +972,34 @@ export default function SiteWorkersDashboard({
                                 <td className="p-3">
                                   <span className="text-xs font-black text-slate-700 font-mono">{dateStr}</span>
                                 </td>
-                                <td className="p-3 text-center">
-                                  <select 
-                                    disabled={log.isSettled}
-                                    value={log.status}
-                                    onChange={(e) => handleUpdateRecord(selectedWorker.id, { status: e.target.value as any }, dateStr)}
-                                    className={`px-2 py-1 rounded-lg text-[10px] font-black outline-none border transition w-28 text-center ${
-                                      log.status === 'present' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                                      log.status === 'half-day' ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                                      log.status === 'vacation' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
-                                      log.status === 'absent' ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-slate-50 text-slate-400 border-slate-100'
-                                    }`}
-                                  >
-                                    <option value="present">حاضر ✅</option>
-                                    <option value="half-day">نصف يوم ⏳</option>
-                                    <option value="absent">غائب ❌</option>
-                                    <option value="vacation">إجازة 🏠</option>
-                                  </select>
+                                <td className="p-3 text-center border-l border-slate-50">
+                                  <div className="flex flex-col items-center gap-1.5">
+                                    <CustomSelect 
+                                      disabled={log.isSettled || userRole === 'viewer'}
+                                      value={log.status}
+                                      onChange={(val) => handleUpdateRecord(selectedWorker.id, { status: val as any }, dateStr)}
+                                      className="w-28 mx-auto"
+                                      options={[
+                                        { value: 'present', label: 'حاضر', icon: <CheckSquare className="w-3 h-3" />, colorClass: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+                                        { value: 'half-day', label: 'نصف يوم', icon: <Timer className="w-3 h-3" />, colorClass: 'bg-amber-50 text-amber-700 border-amber-100' },
+                                        { value: 'absent', label: 'غائب', icon: <XCircle className="w-3 h-3" />, colorClass: 'bg-rose-50 text-rose-700 border-rose-100' },
+                                        { value: 'vacation', label: 'إجازة', icon: <Home className="w-3 h-3" />, colorClass: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+                                      ]}
+                                    />
+                                    <div className="flex flex-col items-center">
+                                      {log.isSettled ? (
+                                        <span className="text-[8px] font-black text-emerald-500 uppercase tracking-tighter">MOVED TO ACCOUNTS</span>
+                                      ) : (
+                                        'id' in log ? (
+                                          <span className="text-[10px] font-black text-slate-300 uppercase tracking-tighter font-mono">
+                                            REF-ATN-{(log as any).id.split('-')[1]?.slice(-6) || '000000'}
+                                          </span>
+                                        ) : (
+                                          <span className="text-[10px] font-black text-slate-200 uppercase tracking-tighter">غير مسجل</span>
+                                        )
+                                      )}
+                                    </div>
+                                  </div>
                                 </td>
                                 <td className="p-3 text-center">
                                   <span className={`text-[11px] font-bold ${dayLiving > 0 ? 'text-amber-600' : 'text-slate-300'}`}>
@@ -782,13 +1007,31 @@ export default function SiteWorkersDashboard({
                                   </span>
                                 </td>
                                 <td className="p-3 text-center">
+                                  <div className="flex items-center justify-center gap-1.5 bg-slate-50 border border-slate-100 rounded-lg p-1">
+                                    <input 
+                                      type="number" 
+                                      step="0.5"
+                                      disabled={log.isSettled || userRole === 'viewer'}
+                                      value={log.overtimeHours || ''}
+                                      onChange={(e) => handleUpdateRecord(selectedWorker.id, { overtimeHours: parseFloat(e.target.value) || 0 }, dateStr)}
+                                      className="w-10 text-center text-[11px] font-black text-indigo-600 bg-transparent outline-none focus:ring-0"
+                                      placeholder="0"
+                                    />
+                                    <span className="text-[9px] text-slate-400 font-black">س</span>
+                                  </div>
+                                </td>
+                                <td className="p-3 text-center">
                                   <div className="flex items-center justify-center gap-2">
                                     <input 
                                       type="number"
-                                      disabled={log.isSettled}
+                                      disabled={log.isSettled || userRole === 'viewer'}
                                       value={log.overtimeValue || ''}
                                       onChange={(e) => handleUpdateRecord(selectedWorker.id, { overtimeValue: Number(e.target.value) }, dateStr)}
-                                      className="w-20 bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 text-[11px] font-black text-indigo-700 text-center outline-none focus:bg-white focus:border-indigo-300"
+                                      className={`w-20 border rounded-lg px-2 py-1 text-[11px] font-black text-center outline-none transition ${
+                                        userRole === 'viewer'
+                                          ? 'bg-slate-200 text-slate-400 border-slate-100 cursor-not-allowed'
+                                          : 'bg-slate-50 border-slate-100 text-indigo-700 focus:bg-white focus:border-indigo-300'
+                                      }`}
                                       placeholder="سهرة..."
                                     />
                                   </div>
@@ -796,11 +1039,6 @@ export default function SiteWorkersDashboard({
                                 <td className="p-3 text-left">
                                   <div className="flex flex-col items-start lg:items-end">
                                     <span className="text-xs font-black text-slate-900 font-mono">{dailyEarned.toLocaleString()} ج</span>
-                                    {log.isSettled ? (
-                                      <span className="text-[8px] font-black text-emerald-500 uppercase tracking-tighter">MOVED TO ACCOUNTS</span>
-                                    ) : (
-                                      <span className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">PENDING APPROVAL</span>
-                                    )}
                                   </div>
                                 </td>
                               </tr>
@@ -817,7 +1055,10 @@ export default function SiteWorkersDashboard({
                     {/* Add Payment Form */}
                     <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
                       <h5 className="text-[11px] font-black text-slate-400 mb-4 uppercase tracking-wider">تسجيل دفعة استلام راتب جديدة</h5>
-                      <form onSubmit={handleSavePayment} className="grid grid-cols-1 md:grid-cols-6 gap-3">
+                       <form 
+                        onSubmit={userRole === 'viewer' ? (e) => { e.preventDefault(); alert('عذراً، لا تملك صلاحية تسجيل دفعات'); } : handleSavePayment} 
+                        className="grid grid-cols-1 md:grid-cols-6 gap-3"
+                      >
                         <div>
                           <label className="block text-[10px] font-black text-slate-500 mb-1">التاريخ</label>
                           <input 
@@ -838,29 +1079,29 @@ export default function SiteWorkersDashboard({
                             className="w-full bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:bg-white focus:border-indigo-300 font-mono" 
                           />
                         </div>
-                        <div>
+                        <div className="md:col-span-1">
                           <label className="block text-[10px] font-black text-slate-500 mb-1">طريقة الدفع</label>
-                          <select 
+                          <CustomSelect 
                             value={paymentForm.paymentMethod} 
-                            onChange={e => setPaymentForm(prev => ({ ...prev, paymentMethod: e.target.value as any }))}
-                            className="w-full bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:bg-white focus:border-indigo-300"
-                          >
-                            <option value="نقدى">نقدى 💵</option>
-                            <option value="تحويل بنكى">تحويل بنكى 🏦</option>
-                            <option value="شيك">شيك 🎫</option>
-                            <option value="اخرى">اخرى ⏺️</option>
-                          </select>
+                            onChange={val => setPaymentForm(prev => ({ ...prev, paymentMethod: val as any }))}
+                            options={[
+                              { value: 'نقدى', label: 'نقدى', icon: <Banknote className="w-3 h-3" /> },
+                              { value: 'تحويل بنكى', label: 'تحويل بنكى', icon: <Building2 className="w-3 h-3" /> },
+                              { value: 'شيك', label: 'شيك', icon: <Ticket className="w-3 h-3" /> },
+                              { value: 'اخرى', label: 'اخرى', icon: <MoreHorizontal className="w-3 h-3" /> },
+                            ]}
+                          />
                         </div>
-                        <div>
+                        <div className="md:col-span-1">
                           <label className="block text-[10px] font-black text-slate-500 mb-1">مصدر التمويل</label>
-                          <select 
+                          <CustomSelect 
                             value={paymentForm.nature} 
-                            onChange={e => setPaymentForm(prev => ({ ...prev, nature: e.target.value as any }))}
-                            className={`w-full border rounded-xl px-3 py-2 text-xs font-black outline-none transition ${paymentForm.nature === 'inside_custody' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-amber-50 border-amber-100 text-amber-700'}`}
-                          >
-                            <option value="inside_custody">من العهدة ✅</option>
-                            <option value="outside_custody">خارج العهدة 🏦</option>
-                          </select>
+                            onChange={val => setPaymentForm(prev => ({ ...prev, nature: val as any }))}
+                            options={[
+                              { value: 'inside_custody', label: 'من العهدة', icon: <ShieldCheck className="w-3 h-3" />, colorClass: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+                              { value: 'outside_custody', label: 'خارج العهدة', icon: <ExternalLink className="w-3 h-3" />, colorClass: 'bg-amber-50 text-amber-700 border-amber-100' },
+                            ]}
+                          />
                         </div>
                         <div>
                           <label className="block text-[10px] font-black text-slate-500 mb-1">ملاحظات / مرجع</label>
@@ -872,11 +1113,19 @@ export default function SiteWorkersDashboard({
                             className="w-full bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:bg-white focus:border-indigo-300" 
                           />
                         </div>
-                        <div className="flex items-end">
-                          <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white p-2 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer shadow-sm">
-                            <Save size={14} /> حفظ الدفعة
-                          </button>
-                        </div>
+                         <div className="flex items-end">
+                           <button 
+                            type="submit" 
+                            disabled={userRole === 'viewer'}
+                            className={`w-full p-2 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 shadow-sm ${
+                              userRole === 'viewer'
+                                ? 'bg-slate-300 text-slate-100 cursor-not-allowed'
+                                : 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer'
+                            }`}
+                           >
+                             <Save size={14} /> حفظ الدفعة
+                           </button>
+                         </div>
                       </form>
                     </div>
 
@@ -905,9 +1154,17 @@ export default function SiteWorkersDashboard({
                                 </td>
                                 <td className="p-3 text-slate-500 font-medium">{p.notes || '-'}</td>
                                 <td className="p-3 text-left">
-                                  <button onClick={() => handleDeletePayment(p.id)} className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100 cursor-pointer">
-                                    <Trash2 size={14} />
-                                  </button>
+                                 <button 
+                                  onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية حذف الدفعات') : () => handleDeletePayment(p.id)} 
+                                  disabled={userRole === 'viewer'}
+                                  className={`p-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100 ${
+                                    userRole === 'viewer'
+                                      ? 'text-slate-200 cursor-not-allowed'
+                                      : 'text-slate-300 hover:text-rose-500 hover:bg-rose-50 cursor-pointer'
+                                  }`}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
                                 </td>
                               </tr>
                             ))
@@ -943,7 +1200,10 @@ export default function SiteWorkersDashboard({
                           ) : (
                             transactions.filter(tx => tx.recipient === selectedWorker.name && tx.type === 'spent').sort((a,b) => b.date.localeCompare(a.date)).map(tx => (
                               <tr key={tx.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition">
-                                <td className="p-3 font-mono">{tx.date}</td>
+                                <td className="p-3 font-mono">
+                                  <div>{tx.date}</div>
+                                  <div className="text-[9px] text-indigo-500 font-bold">Ref: {tx.id}</div>
+                                </td>
                                 <td className="p-3 font-bold text-slate-700">{tx.description}</td>
                                 <td className="p-3">
                                   <span className="px-1.5 py-0.5 bg-slate-100 rounded text-[9px] font-black">{tx.paymentMethod}</span>
@@ -964,192 +1224,273 @@ export default function SiteWorkersDashboard({
 
       {/* Add Worker Modal */}
       {showWorkerModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-2xl w-full max-w-2xl overflow-hidden relative text-right shadow-2xl">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 flex-row-reverse">
-              <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
-                <UserPlus size={16} className="text-indigo-600" />
-                {editingWorker ? 'تعديل بيانات العامل' : 'تسجيل وإدراج عامل جديد للقوة'}
-              </h3>
-              <button type="button" onClick={() => setShowWorkerModal(false)} className="text-slate-400 hover:text-slate-600 hover:bg-slate-200 p-1.5 rounded-lg transition cursor-pointer"><X size={16} /></button>
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-slate-900 border border-slate-800 w-full max-w-4xl rounded-[2.5rem] shadow-2xl overflow-hidden relative text-right flex flex-col md:flex-row">
+            
+            {/* Sidebar Branding / Decorative for Modal */}
+            <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 md:w-1/3 p-10 flex flex-col justify-between relative overflow-hidden shrink-0">
+               <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl" />
+               <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-indigo-400/20 rounded-full blur-3xl" />
+               
+               <div className="relative z-10">
+                 <div className="bg-white/10 w-16 h-16 rounded-2xl flex items-center justify-center mb-6 backdrop-blur-sm border border-white/10">
+                    <UserPlus className="h-8 w-8 text-white" />
+                 </div>
+                 <h2 className="text-2xl font-black text-white mb-3">
+                   {editingWorker ? 'تعديل بيانات عامل' : 'تسجيل وإدراج عامل جديد للقوة'}
+                 </h2>
+                 <p className="text-indigo-100/70 text-xs font-medium leading-relaxed font-sans">
+                   قم بإضافة بيانات العاملين والمقاولين الباطن لتنظيم سجلات الحضور والغياب واليوميات والعهد المالية الخاصة بهم بدقة عالية.
+                 </p>
+               </div>
+
+               <div className="relative z-10 pt-10 border-t border-white/10 font-sans">
+                 <div className="flex items-center gap-3 text-indigo-100/50 text-[10px] font-bold">
+                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
+                    نظام إدارة العمالة والشؤون الإدارية
+                 </div>
+               </div>
             </div>
-            <form onSubmit={handleSaveWorker} className="p-6 space-y-5 bg-white">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-extrabold text-slate-600 mb-1.5">اسم العامل الرباعي / اللقب <span className="text-rose-500">*</span></label>
-                  <input type="text" required value={workerForm.name} onChange={e => setWorkerForm(prev => ({ ...prev, name: e.target.value }))} className="w-full border border-slate-200 bg-slate-50 rounded-xl p-2.5 text-sm font-bold outline-none focus:border-indigo-500 focus:bg-white transition" placeholder="مثال: أحمد محمود عباس" />
-                </div>
-                <div>
-                  <label className="block text-xs font-extrabold text-slate-600 mb-1.5">الرقم القومي (14 رقم) <span className="text-rose-500">*</span></label>
-                  <input 
-                    type="text" 
-                    maxLength={14}
-                    required 
-                    value={workerForm.nationalId} 
-                    onChange={e => setWorkerForm(prev => ({ ...prev, nationalId: e.target.value.replace(/\D/g, '') }))} 
-                    className="w-full border border-slate-200 bg-slate-50 rounded-xl p-2.5 text-sm font-bold font-mono outline-none focus:border-indigo-500 focus:bg-white transition" 
-                    placeholder="29001010100000" 
-                  />
-                </div>
+
+            <div className="flex-1 p-8 md:p-10 max-h-[90vh] overflow-y-auto custom-scrollbar bg-slate-900">
+              <div className="flex justify-between items-center mb-8">
+                <div className="h-1 w-20 bg-indigo-500/20 rounded-full" />
+                <button 
+                  type="button"
+                  onClick={() => setShowWorkerModal(false)}
+                  className="p-2 hover:bg-slate-800 rounded-xl transition-colors text-slate-400 cursor-pointer"
+                >
+                  <X />
+                </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-extrabold text-slate-600 mb-1.5">المحافظة <span className="text-rose-500">*</span></label>
-                  <select 
-                    value={workerForm.governorate} 
-                    onChange={e => setWorkerForm(prev => ({ ...prev, governorate: e.target.value }))} 
-                    className="w-full border border-slate-200 bg-slate-50 rounded-xl p-2.5 text-sm font-bold outline-none focus:border-indigo-500 focus:bg-white transition"
+              <form onSubmit={handleSaveWorker} className="space-y-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-1 flex items-center gap-1 font-sans">
+                      اسم العامل الرباعي / اللقب <span className="text-rose-500">*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      required 
+                      value={workerForm.name} 
+                      onChange={e => setWorkerForm(prev => ({ ...prev, name: e.target.value }))} 
+                      className="w-full bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4 text-sm font-bold text-slate-100 focus:ring-4 focus:ring-indigo-500/10 outline-none focus:border-indigo-500 transition-all shadow-sm" 
+                      placeholder="مثال: أحمد محمود عباس" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-1 flex items-center gap-1 font-sans">
+                      الرقم القومي (14 رقم) <span className="text-rose-500">*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      maxLength={14}
+                      required 
+                      value={workerForm.nationalId} 
+                      onChange={e => setWorkerForm(prev => ({ ...prev, nationalId: e.target.value.replace(/\D/g, '') }))} 
+                      className="w-full bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4 text-sm font-mono font-bold text-slate-100 focus:ring-4 focus:ring-indigo-500/10 outline-none focus:border-indigo-500 transition-all shadow-sm" 
+                      placeholder="29001010100000" 
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-1 flex items-center gap-1 font-sans">
+                      المحافظة <span className="text-rose-500">*</span>
+                    </label>
+                    <select 
+                      value={workerForm.governorate} 
+                      onChange={e => setWorkerForm(prev => ({ ...prev, governorate: e.target.value }))} 
+                      className="w-full bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4 text-sm font-bold text-slate-100 focus:ring-4 focus:ring-indigo-500/10 outline-none focus:border-indigo-500 transition-all shadow-sm appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%200%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%2394a3b8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_1rem_center] bg-no-repeat"
+                    >
+                      {GOVERNORATES.map(g => (
+                        <option key={g} value={g} className="bg-slate-900">{g}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-1 flex items-center gap-1 font-sans">تاريخ الالتحاق بالموقع</label>
+                    <input 
+                      type="date" 
+                      required 
+                      value={workerForm.startDate} 
+                      onChange={e => setWorkerForm(prev => ({ ...prev, startDate: e.target.value }))} 
+                      className="w-full bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4 text-sm font-bold text-slate-100 focus:ring-4 focus:ring-indigo-500/10 outline-none focus:border-indigo-500 transition-all shadow-sm" 
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center mr-1 font-sans">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                        رقم المحمول الأول <span className="text-rose-500">*</span>
+                      </label>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          setWorkerForm(prev => {
+                            const current = prev.whatsAppOn;
+                            let next: any = 'none';
+                            if (current === 'none') next = 'phone1';
+                            else if (current === 'phone1') next = 'none';
+                            else if (current === 'phone2') next = 'both';
+                            else if (current === 'both') next = 'phone2';
+                            return { ...prev, whatsAppOn: next };
+                          });
+                        }}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black transition-all border ${
+                          (workerForm.whatsAppOn === 'phone1' || workerForm.whatsAppOn === 'both') 
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                          : 'bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-600'
+                        }`}
+                      >
+                        <Check size={10} /> واتساب
+                      </button>
+                    </div>
+                    <input 
+                      type="text" 
+                      required 
+                      value={workerForm.phone1} 
+                      onChange={e => setWorkerForm(prev => ({ ...prev, phone1: e.target.value }))} 
+                      className="w-full bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4 text-sm font-mono font-bold text-slate-100 focus:ring-4 focus:ring-indigo-500/10 outline-none focus:border-indigo-500 transition-all shadow-sm" 
+                      placeholder="01xxxxxxxxx" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center mr-1 font-sans">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">رقم المحمول الثاني (اختياري)</label>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          setWorkerForm(prev => {
+                            const current = prev.whatsAppOn;
+                            let next: any = 'none';
+                            if (current === 'none') next = 'phone2';
+                            else if (current === 'phone2') next = 'none';
+                            else if (current === 'phone1') next = 'both';
+                            else if (current === 'both') next = 'phone1';
+                            return { ...prev, whatsAppOn: next };
+                          });
+                        }}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black transition-all border ${
+                          (workerForm.whatsAppOn === 'phone2' || workerForm.whatsAppOn === 'both') 
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                          : 'bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-600'
+                        }`}
+                      >
+                        <Check size={10} /> واتساب
+                      </button>
+                    </div>
+                    <input 
+                      type="text" 
+                      value={workerForm.phone2 || ''} 
+                      onChange={e => setWorkerForm(prev => ({ ...prev, phone2: e.target.value }))} 
+                      className="w-full bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4 text-sm font-mono font-bold text-slate-100 focus:ring-4 focus:ring-indigo-500/10 outline-none focus:border-indigo-500 transition-all shadow-sm" 
+                      placeholder="01xxxxxxxxx" 
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-1 flex items-center gap-1 font-sans">رقم تحويل الراتب (محفظة / انستا باي)</label>
+                    <input 
+                      type="text" 
+                      value={workerForm.salaryTransferNo || ''} 
+                      onChange={e => setWorkerForm(prev => ({ ...prev, salaryTransferNo: e.target.value }))} 
+                      className="w-full bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4 text-sm font-mono font-bold text-slate-100 focus:ring-4 focus:ring-indigo-500/10 outline-none focus:border-indigo-500 transition-all shadow-sm" 
+                      placeholder="رقم المحفظة أو العنوان الإلكتروني" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-1 flex items-center gap-1 font-sans">
+                      المسمى الوظيفي <span className="text-rose-500">*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      required 
+                      value={workerForm.jobTitle} 
+                      onChange={e => setWorkerForm(prev => ({ ...prev, jobTitle: e.target.value }))} 
+                      className="w-full bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4 text-sm font-bold text-slate-100 focus:ring-4 focus:ring-indigo-500/10 outline-none focus:border-indigo-500 transition-all shadow-sm" 
+                      placeholder="مثال: نجار مسلح" 
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-1 flex items-center gap-1 font-sans">فئة التوظيف</label>
+                    <select 
+                      value={workerForm.type} 
+                      onChange={e => setWorkerForm(prev => ({ ...prev, type: e.target.value as any }))} 
+                      className="w-full bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4 text-sm font-bold text-slate-100 focus:ring-4 focus:ring-indigo-500/10 outline-none focus:border-indigo-500 transition-all shadow-sm appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%200%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%2394a3b8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_1rem_center] bg-no-repeat"
+                    >
+                      <option value="appointed" className="bg-slate-900">معين (شهري)</option>
+                      <option value="saraky" className="bg-slate-900">سراكى (يومية)</option>
+                      <option value="laborer" className="bg-slate-900">عمال يومية</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-1 flex items-center gap-1 font-sans">قوة العمل</label>
+                    <select 
+                      value={workerForm.forceStatus} 
+                      onChange={e => setWorkerForm(prev => ({ ...prev, forceStatus: e.target.value as any }))} 
+                      className="w-full bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4 text-sm font-bold text-slate-100 focus:ring-4 focus:ring-indigo-500/10 outline-none focus:border-indigo-500 transition-all shadow-sm appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%200%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%2394a3b8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_1rem_center] bg-no-repeat"
+                    >
+                      <option value="on-site" className="bg-slate-900">على قوة الموقع</option>
+                      <option value="external" className="bg-slate-900">خارج القوة</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-1 flex items-center gap-1 font-sans">
+                      {workerForm.type === 'appointed' ? 'الراتب (شهري)' : 'اليومية (ج.م)'} <span className="text-rose-500">*</span>
+                    </label>
+                    <input 
+                      type="number" 
+                      required
+                      min="1"
+                      value={workerForm.baseRate === 0 ? '' : workerForm.baseRate} 
+                      onChange={e => setWorkerForm(prev => ({ ...prev, baseRate: e.target.value === '' ? 0 : Number(e.target.value) }))} 
+                      className="w-full bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4 text-sm font-mono font-bold text-emerald-400 focus:ring-4 focus:ring-emerald-500/10 outline-none focus:border-emerald-500 transition-all shadow-sm"
+                      placeholder={workerForm.type === 'appointed' ? 'الراتب الشهري' : '0'} 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-1 flex items-center gap-1 font-sans">قيمة المعيشة</label>
+                    <input 
+                      type="number" 
+                      value={workerForm.livingAllowance === 0 ? '' : workerForm.livingAllowance} 
+                      onChange={e => setWorkerForm(prev => ({ ...prev, livingAllowance: e.target.value === '' ? 0 : Number(e.target.value) }))} 
+                      className="w-full bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4 text-sm font-mono font-bold text-amber-400 focus:ring-4 focus:ring-amber-500/10 outline-none focus:border-amber-500 transition-all shadow-sm" 
+                      placeholder="0" 
+                    />
+                  </div>
+                </div>
+                
+                <div className="pt-8 flex gap-4 font-sans">
+                   <button
+                    type="button"
+                    onClick={() => setShowWorkerModal(false)}
+                    className="px-8 py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-black rounded-2xl transition-all active:scale-95 cursor-pointer"
                   >
-                    {GOVERNORATES.map(g => (
-                      <option key={g} value={g}>{g}</option>
-                    ))}
-                  </select>
+                    تراجع
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-black py-4 rounded-2xl transition-all shadow-xl shadow-indigo-950 shadow-inner active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Save className="h-5 w-5" />
+                    {editingWorker ? 'حفظ التعديلات في السجل' : 'حفظ كقوة موقع جديدة'}
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-xs font-extrabold text-slate-600 mb-1.5">تاريخ الالتحاق بالموقع</label>
-                  <input type="date" required value={workerForm.startDate} onChange={e => setWorkerForm(prev => ({ ...prev, startDate: e.target.value }))} className="w-full border border-slate-200 bg-slate-50 rounded-xl p-2.5 text-sm font-bold outline-none focus:border-indigo-500 focus:bg-white transition" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-extrabold text-slate-600 mb-1.5 flex items-center justify-between">
-                    <span>رقم المحمول الأول <span className="text-rose-500">*</span></span>
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        setWorkerForm(prev => {
-                          const current = prev.whatsAppOn;
-                          let next: any = 'none';
-                          if (current === 'none') next = 'phone1';
-                          else if (current === 'phone1') next = 'none';
-                          else if (current === 'phone2') next = 'both';
-                          else if (current === 'both') next = 'phone2';
-                          return { ...prev, whatsAppOn: next };
-                        });
-                      }}
-                      className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black transition-all border ${
-                        (workerForm.whatsAppOn === 'phone1' || workerForm.whatsAppOn === 'both') 
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                        : 'bg-slate-50 text-slate-400 border-slate-100 hover:border-slate-200'
-                      }`}
-                    >
-                      <Check size={10} /> واتساب
-                    </button>
-                  </label>
-                  <input 
-                    type="text" 
-                    required 
-                    value={workerForm.phone1} 
-                    onChange={e => setWorkerForm(prev => ({ ...prev, phone1: e.target.value }))} 
-                    className="w-full border border-slate-200 bg-slate-50 rounded-xl p-2.5 text-sm font-bold font-mono outline-none focus:border-indigo-500 focus:bg-white transition" 
-                    placeholder="01xxxxxxxxx" 
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-extrabold text-slate-600 mb-1.5 flex items-center justify-between">
-                    <span>رقم المحمول الثاني (اختياري)</span>
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        setWorkerForm(prev => {
-                          const current = prev.whatsAppOn;
-                          let next: any = 'none';
-                          if (current === 'none') next = 'phone2';
-                          else if (current === 'phone2') next = 'none';
-                          else if (current === 'phone1') next = 'both';
-                          else if (current === 'both') next = 'phone1';
-                          return { ...prev, whatsAppOn: next };
-                        });
-                      }}
-                      className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black transition-all border ${
-                        (workerForm.whatsAppOn === 'phone2' || workerForm.whatsAppOn === 'both') 
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                        : 'bg-slate-50 text-slate-400 border-slate-100 hover:border-slate-200'
-                      }`}
-                    >
-                      <Check size={10} /> واتساب
-                    </button>
-                  </label>
-                  <input 
-                    type="text" 
-                    value={workerForm.phone2 || ''} 
-                    onChange={e => setWorkerForm(prev => ({ ...prev, phone2: e.target.value }))} 
-                    className="w-full border border-slate-200 bg-slate-50 rounded-xl p-2.5 text-sm font-bold font-mono outline-none focus:border-indigo-500 focus:bg-white transition" 
-                    placeholder="01xxxxxxxxx" 
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-extrabold text-slate-600 mb-1.5">رقم تحويل الراتب (محفظة / انستا باي)</label>
-                  <input 
-                    type="text" 
-                    value={workerForm.salaryTransferNo || ''} 
-                    onChange={e => setWorkerForm(prev => ({ ...prev, salaryTransferNo: e.target.value }))} 
-                    className="w-full border border-slate-200 bg-slate-50 rounded-xl p-2.5 text-sm font-bold font-mono outline-none focus:border-indigo-500 focus:bg-white transition" 
-                    placeholder="رقم المحفظة أو العنوان الإلكتروني" 
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-extrabold text-slate-600 mb-1.5">المسمى الوظيفي</label>
-                  <input type="text" required value={workerForm.jobTitle} onChange={e => setWorkerForm(prev => ({ ...prev, jobTitle: e.target.value }))} className="w-full border border-slate-200 bg-slate-50 rounded-xl p-2.5 text-sm font-bold outline-none focus:border-indigo-500 focus:bg-white transition" placeholder="مثال: نجار مسلح" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-extrabold text-slate-600 mb-1.5">فئة التوظيف</label>
-                  <select value={workerForm.type} onChange={e => setWorkerForm(prev => ({ ...prev, type: e.target.value as any }))} className="w-full border border-slate-200 bg-slate-50 rounded-xl p-2.5 text-sm font-bold outline-none focus:border-indigo-500 focus:bg-white transition">
-                    <option value="appointed">معين (شهري)</option>
-                    <option value="saraky">سراكى (يومية)</option>
-                    <option value="laborer">عمال يومية</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-extrabold text-slate-600 mb-1.5">قوة العمل</label>
-                  <select value={workerForm.forceStatus} onChange={e => setWorkerForm(prev => ({ ...prev, forceStatus: e.target.value as any }))} className="w-full border border-slate-200 bg-slate-50 rounded-xl p-2.5 text-sm font-bold outline-none focus:border-indigo-500 focus:bg-white transition">
-                    <option value="on-site">على قوة الموقع</option>
-                    <option value="external">خارج القوة</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-extrabold text-slate-600 mb-1.5 flex items-center justify-between">
-                    <span>{workerForm.type === 'appointed' ? 'الراتب (شهري)' : 'اليومية (ج.م)'}</span>
-                  </label>
-                  <input 
-                    type="number" 
-                    value={workerForm.baseRate === 0 ? '' : workerForm.baseRate} 
-                    onChange={e => setWorkerForm(prev => ({ ...prev, baseRate: e.target.value === '' ? 0 : Number(e.target.value) }))} 
-                    className={`w-full border rounded-xl p-2.5 text-sm font-mono font-bold outline-none transition ${workerForm.type === 'appointed' && workerForm.baseRate === 0 ? 'border-rose-300 bg-rose-50/50 focus:border-rose-500' : 'border-slate-200 bg-slate-50 focus:border-indigo-500 focus:bg-white'} text-indigo-700`}
-                    placeholder={workerForm.type === 'appointed' ? 'الراتب الشهري' : '0'} 
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-extrabold text-slate-600 mb-1.5">قيمة المعيشة</label>
-                  <input 
-                    type="number" 
-                    value={workerForm.livingAllowance === 0 ? '' : workerForm.livingAllowance} 
-                    onChange={e => setWorkerForm(prev => ({ ...prev, livingAllowance: e.target.value === '' ? 0 : Number(e.target.value) }))} 
-                    className="w-full border border-slate-200 bg-slate-50 rounded-xl p-2.5 text-sm font-mono font-bold outline-none focus:border-indigo-500 focus:bg-white transition text-indigo-700" 
-                    placeholder="0" 
-                  />
-                </div>
-              </div>
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2 flex-row-reverse text-left">
-                <button type="submit" className="bg-indigo-600 text-white rounded-xl px-5 py-2.5 text-xs font-black shadow-md hover:bg-indigo-700 transition cursor-pointer">
-                  {editingWorker ? 'حفظ التعديلات في السجل' : 'حفظ كقوة موقع جديدة'}
-                </button>
-                <button type="button" onClick={() => setShowWorkerModal(false)} className="bg-white text-slate-500 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold hover:bg-slate-50 transition cursor-pointer">
-                  تراجع
-                </button>
-              </div>
-            </form>
+              </form>
+            </div>
           </motion.div>
         </div>
       )}
@@ -1169,10 +1510,27 @@ export default function SiteWorkersDashboard({
             <div className="bg-rose-50 border border-rose-100 p-3 rounded-lg mb-4 text-rose-700 text-[11px] font-bold leading-relaxed">
               🚨 تحذير: سيتم مسح كافة سجلات الحضور والبيانات المالية المرتبطة بالعامل <span className="underline">[{confirmDelete.name}]</span> ولا يمكن التراجع أو استعادة البيانات المحذوفة.
             </div>
+            
+            <div className="mb-4 space-y-2">
+              <label className="block text-[10px] font-black text-slate-500 mb-1 uppercase tracking-widest">كود التحقق لتأكيد الحذف: <span className="text-rose-600 text-sm ml-2 select-all font-mono tracking-widest bg-rose-50 px-2 py-0.5 rounded border border-rose-100">{expectedDeleteCode}</span></label>
+              <input 
+                type="text"
+                value={deleteVerificationInput}
+                onChange={(e) => setDeleteVerificationInput(e.target.value)}
+                placeholder="أدخل كود التحقق..."
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center text-sm font-black tracking-widest text-slate-700 outline-none focus:border-rose-300 transition-colors"
+              />
+            </div>
+
             <div className="flex flex-col gap-2">
               <button
-                onClick={() => handleDeleteWorker(confirmDelete.id)}
-                className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-xl transition shadow-lg shadow-rose-200 active:scale-95 cursor-pointer"
+                onClick={() => handleDeleteWorker(confirmDelete.id, confirmDelete.name)}
+                disabled={deleteVerificationInput !== expectedDeleteCode}
+                className={`w-full py-3 font-black rounded-xl transition shadow-lg active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${
+                  deleteVerificationInput === expectedDeleteCode
+                  ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-200'
+                  : 'bg-slate-300 text-slate-100 cursor-not-allowed shadow-none'
+                }`}
               >
                 تأكيد وبدء الحذف
               </button>

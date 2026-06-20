@@ -11,7 +11,7 @@ import dotenv from "dotenv";
 import fs from "fs";
 import * as XLSX from "xlsx";
 import { initializeApp, getApp, getApps } from "firebase/app";
-import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs } from "firebase/firestore";
+import { getFirestore, initializeFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, writeBatch } from "firebase/firestore";
 import { getAuth, signInAnonymously } from "firebase/auth";
 
 dotenv.config();
@@ -29,41 +29,65 @@ class LocalDocRef {
     return "";
   }
 
+  getRealRef() {
+    return doc(globalRealDb, this.colPath, this.docId);
+  }
+
   async get() {
-    if (globalRealDb && isFirestoreHealthy) {
-        const docSnap = await getDoc(doc(globalRealDb, this.colPath, this.docId));
+    if (globalRealDb) {
+      try {
+        const docSnap = await getDoc(this.getRealRef());
         return {
           exists: docSnap.exists(),
           data: () => docSnap.data(),
         };
+      } catch (err) {
+        console.error(`[Firestore Get Error] ${this.colPath}/${this.docId}:`, err);
+        throw err;
+      }
     }
     throw new Error("قاعدة البيانات السحابية غير متصلة.");
   }
 
   async set(data: any, options?: { merge?: boolean }) {
-    if (globalRealDb && isFirestoreHealthy) {
+    if (globalRealDb) {
+      try {
         if (options?.merge) {
-          await setDoc(doc(globalRealDb, this.colPath, this.docId), data, { merge: true });
+          await setDoc(this.getRealRef(), data, { merge: true });
         } else {
-          await setDoc(doc(globalRealDb, this.colPath, this.docId), data);
+          await setDoc(this.getRealRef(), data);
         }
         return;
+      } catch (err) {
+        console.error(`[Firestore Set Error] ${this.colPath}/${this.docId}:`, err);
+        throw err;
+      }
     }
     throw new Error("قاعدة البيانات السحابية غير متصلة.");
   }
 
   async update(data: any) {
-    if (globalRealDb && isFirestoreHealthy) {
-        await updateDoc(doc(globalRealDb, this.colPath, this.docId), data);
+    if (globalRealDb) {
+      try {
+        await updateDoc(this.getRealRef(), data);
         return;
+      } catch (err) {
+        console.error(`[Firestore Update Error] ${this.colPath}/${this.docId}:`, err);
+        throw err;
+      }
     }
     throw new Error("قاعدة البيانات السحابية غير متصلة.");
   }
 
   async delete() {
-    if (globalRealDb && isFirestoreHealthy) {
-        await deleteDoc(doc(globalRealDb, this.colPath, this.docId));
+    if (globalRealDb) {
+      try {
+        await deleteDoc(this.getRealRef());
         return;
+      } catch (err) {
+        console.error(`[Firestore Delete Error] ${this.colPath}/${this.docId}:`, err);
+        throw err;
+      }
     }
     throw new Error("قاعدة البيانات السحابية غير متصلة.");
   }
@@ -77,22 +101,58 @@ class LocalColRef {
   }
 
   async get() {
-    if (globalRealDb && isFirestoreHealthy) {
+    if (globalRealDb) {
+      try {
         const snapshot = await getDocs(collection(globalRealDb, this.colPath));
         return {
           docs: snapshot.docs.map((d: any) => ({
             id: d.id,
+            ref: d.ref,
             data: () => d.data(),
           })),
         };
+      } catch (err) {
+        console.error(`[Firestore Get Collection Error] ${this.colPath}:`, err);
+        throw err;
+      }
     }
     throw new Error("قاعدة البيانات السحابية غير متصلة.");
+  }
+}
+
+class LocalBatch {
+  private ops: { ref: any; data: any; options?: any }[] = [];
+
+  set(docRef: any, data: any, options?: any) {
+    this.ops.push({ ref: docRef, data, options });
+  }
+
+  async commit() {
+    if (globalRealDb) {
+      try {
+        const b = writeBatch(globalRealDb);
+        for (const op of this.ops) {
+          const realRef = op.ref.getRealRef ? op.ref.getRealRef() : op.ref;
+          b.set(realRef, op.data, op.options || {});
+        }
+        await b.commit();
+      } catch (err) {
+        console.error("[Firestore Batch Commit Error]:", err);
+        throw err;
+      }
+    } else {
+      throw new Error("قاعدة البيانات السحابية غير متصلة.");
+    }
   }
 }
 
 class LocalFirestoreWrapper {
   collection(name: string) {
     return new LocalColRef(name);
+  }
+
+  batch() {
+    return new LocalBatch();
   }
 }
 
@@ -105,20 +165,28 @@ try {
     const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
     const databaseId = firebaseConfig.firestoreDatabaseId;
 
-    if (!getApps().length) {
-      initializeApp(firebaseConfig);
-    }
+    const appInstance = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-    if (databaseId && databaseId !== "(default)") {
-      globalRealDb = getFirestore(getApp(), databaseId);
-    } else {
-      globalRealDb = getFirestore();
+    try {
+      globalRealDb = initializeFirestore(appInstance, {
+        experimentalForceLongPolling: true,
+      }, databaseId || undefined);
+    } catch (e) {
+      if (databaseId && databaseId !== "(default)") {
+        globalRealDb = getFirestore(appInstance, databaseId);
+      } else {
+        globalRealDb = getFirestore(appInstance);
+      }
     }
   } else {
-    if (!getApps().length) {
-      initializeApp();
+    const appInstance = getApps().length ? getApp() : initializeApp();
+    try {
+      globalRealDb = initializeFirestore(appInstance, {
+        experimentalForceLongPolling: true,
+      });
+    } catch (e) {
+      globalRealDb = getFirestore(appInstance);
     }
-    globalRealDb = getFirestore();
   }
 } catch (err) {
   // Silent fallback setup
@@ -141,7 +209,6 @@ async function checkFirestoreHealth() {
   } catch (err) {
     isFirestoreHealthy = false;
     console.error("[Persistence] Firestore health check FAILED:", err);
-    globalRealDb = null;
     console.log("[Persistence] Active container restrictions or configuration issue. Falling back seamlessly to local JSON persistence.");
   }
 }
@@ -156,7 +223,7 @@ async function initializeAdminUser() {
     if (!doc.exists) {
       await adminRef.set({
         password: 'moat_010100',
-        nameAr: 'م. معتز يونس (مدير التكاليف)',
+        nameAr: 'م. معتز يونس',
         role: 'admin'
       });
       console.log("[Auth] Loaded administrative profile.");
@@ -475,8 +542,38 @@ app.post("/api/site/:siteId/save", async (req, res) => {
   }
 });
 
+app.post("/api/site/:siteId/auto-backup", async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: "قاعدة البيانات غير متصلة على الخادم." });
+  }
+  const { siteId } = req.params;
+  const { siteName, payload } = req.body;
+  if (!payload) {
+    return res.status(400).json({ error: "لا توجد بيانات صالحة للنسخ الاحتياطي التلقائي." });
+  }
+
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const backupId = `${siteId}_backup_${today}`;
+    
+    await db.collection('siteBackups').doc(backupId).set({
+      siteId,
+      siteName: siteName || "موقع افتراضي",
+      backupDate: today,
+      createdAt: new Date().toISOString(),
+      payload: payload
+    });
+    
+    console.log(`[Server] Daily auto-backup saved for site ${siteId} as ${backupId}`);
+    res.json({ success: true, backupId });
+  } catch (err: any) {
+    console.error("Auto-backup save error:", err);
+    res.status(500).json({ error: err.message || "Failed to save daily auto-backup" });
+  }
+});
+
 app.get("/api/db-status", async (req, res) => {
-    if (globalRealDb && isFirestoreHealthy) {
+    if (globalRealDb) {
       res.json({ 
         connected: true, 
         cloud: true, 
@@ -485,10 +582,10 @@ app.get("/api/db-status", async (req, res) => {
       });
     } else {
       res.json({ 
-        connected: true, 
+        connected: false, 
         cloud: false, 
-        mode: "التخزين المحلي النشط", 
-        info: "مفعل التخزين المحلي الاحتياطي بالكامل بسبب قيود اتصال فايربيز على الخادم الرئيسي" 
+        mode: "التخزين المحلي", 
+        info: "قاعدة البيانات السحابية غير مهيأة على خادم التطبيق" 
       });
     }
 });

@@ -22,7 +22,11 @@ import {
   Trash2,
   FileEdit,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  Menu,
+  CheckCircle,
+  DollarSign,
+  Settings
 } from 'lucide-react';
 import { Transaction, ProjectCategory, TransactionType, TransactionNature, PaymentMethod, SiteWorker } from '../types';
 
@@ -32,6 +36,7 @@ interface WeeklyExpenseReportProps {
   onUpdateTransaction?: (tx: Transaction) => void;
   onDeleteTransaction?: (id: string) => void;
   addAuditLog: (action: string, module: string, details: string) => void;
+  userRole?: string;
 }
 
 // 16 approved coding categories and specific items extracted directly from the uploaded spreadsheet
@@ -195,7 +200,8 @@ export default function WeeklyExpenseReport({
   onUpdateTransaction,
   onDeleteTransaction,
   addAuditLog,
-  workers
+  workers,
+  userRole
 }: WeeklyExpenseReportProps & { workers: SiteWorker[] }) {
   // 1. Dynamic Benod Tree State
   const [benodTree, setBenodTree] = useState<{ [categoryNameAr: string]: { coreCategory: ProjectCategory; items: string[] } }>(() => {
@@ -419,6 +425,24 @@ export default function WeeklyExpenseReport({
     localStorage.setItem('bunyan_closing_day_index', closingDayIndex.toString());
   }, [closingDayIndex]);
 
+  // Signature configs
+  const [sig1Title, setSig1Title] = useState(() => localStorage.getItem('bunyan_sig1_title') || 'المحاسب المالي');
+  const [sig2Title, setSig2Title] = useState(() => localStorage.getItem('bunyan_sig2_title') || 'مهندس أول المشروع والمراجعة');
+  const [sig3Title, setSig3Title] = useState(() => localStorage.getItem('bunyan_sig3_title') || 'مدير عام قطاع التنفيذ للمشاريع');
+  
+  const [sig1Name, setSig1Name] = useState(() => localStorage.getItem('bunyan_sig1_name') || '');
+  const [sig2Name, setSig2Name] = useState(() => localStorage.getItem('bunyan_sig2_name') || '');
+  const [sig3Name, setSig3Name] = useState(() => localStorage.getItem('bunyan_sig3_name') || '');
+
+  useEffect(() => {
+    localStorage.setItem('bunyan_sig1_title', sig1Title);
+    localStorage.setItem('bunyan_sig2_title', sig2Title);
+    localStorage.setItem('bunyan_sig3_title', sig3Title);
+    localStorage.setItem('bunyan_sig1_name', sig1Name);
+    localStorage.setItem('bunyan_sig2_name', sig2Name);
+    localStorage.setItem('bunyan_sig3_name', sig3Name);
+  }, [sig1Title, sig2Title, sig3Title, sig1Name, sig2Name, sig3Name]);
+
   const getWeekStartDate = (date: Date, closingDay: number): Date => {
     const startDayIndex = (closingDay + 1) % 7;
     const result = new Date(date);
@@ -493,9 +517,9 @@ export default function WeeklyExpenseReport({
   const [responsibleName, setResponsibleName] = useState<string>('محاسب الموقع');
   const [priorSpent, setPriorSpent] = useState<number>(0); // مرحل المنصرف
   const [priorBalance, setPriorBalance] = useState<number>(0); // مرحل الرصيد (deficit -430)
-  const [custodyNote, setCustodyNote] = useState<string>('إجمالي الرصيد النقدي المتوفر للمنصرفات');
+  const [custodyNote, setCustodyNote] = useState<string>('');
   const [balanceNote, setBalanceNote] = useState<string>('');
-  const [totalSpentNote, setTotalSpentNote] = useState<string>('مجموع صرفيات الأيام للأسبوع الحالي');
+  const [totalSpentNote, setTotalSpentNote] = useState<string>('');
   
   // Daily Custody inputs (العهدة / وارد) - Map offset days starting from startDate
   const [custodyInputs, setCustodyInputs] = useState<{ [date: string]: number }>({});
@@ -503,12 +527,12 @@ export default function WeeklyExpenseReport({
   const [custodyDescriptions, setCustodyDescriptions] = useState<{ [date: string]: string }>({});
 
   // Manual transaction form states with smart matching
+  const [formRecordType, setFormRecordType] = useState<'spent' | 'income'>('spent');
   const [formCategory, setFormCategory] = useState<string>('رواتب');
   const [formItem, setFormItem] = useState<string>('');
   const [formDate, setFormDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [formAmount, setFormAmount] = useState<string>('');
   const [formRecipient, setFormRecipient] = useState<string>('');
-  const [formNotes, setFormNotes] = useState<string>('');
   const [formIsExecuted, setFormIsExecuted] = useState<boolean>(false);
   const [formSuccess, setFormSuccess] = useState<string>('');
   const [formError, setFormError] = useState<string>('');
@@ -590,6 +614,12 @@ export default function WeeklyExpenseReport({
     });
   };
 
+  const generateRefNo = (date: string) => {
+    const datePart = date.replace(/-/g, '');
+    const randomPart = Math.floor(1000 + Math.random() * 9000);
+    return `EXP-${datePart}-${randomPart}`;
+  };
+
   const handleSaveChanges = () => {
     if (!editingItem) return;
     if (!editDescription.trim()) {
@@ -621,6 +651,7 @@ export default function WeeklyExpenseReport({
         }
       } else {
         if (newVal > 0) {
+          const refNo = generateRefNo(rd.date);
           onAddTransaction({
             date: rd.date,
             description: editDescription.trim(),
@@ -629,7 +660,9 @@ export default function WeeklyExpenseReport({
             amount: newVal,
             type: editingItem.type || 'spent',
             nature: editingItem.nature || 'inside_custody',
-            paymentMethod: 'اخرى'
+            paymentMethod: 'اخرى',
+            referenceNo: refNo,
+            notes: refNo
           });
         }
       }
@@ -679,17 +712,23 @@ export default function WeeklyExpenseReport({
     }
   };
 
-  // Synchronize form values on category selection change
+  // Synchronize form values on category or record type selection change
   useEffect(() => {
-    const defaultList = benodTree[formCategory]?.items || [];
-    if (defaultList.length > 0) {
-      setFormItem(defaultList[0]);
-      setFormRecipient(defaultList[0]);
+    if (formRecordType === 'income') {
+      setFormCategory('عهدة');
+      setFormItem('استلام عهدة مالية / تمويل');
+      setFormRecipient('المكتب الرئيسي');
     } else {
-      setFormItem('');
-      setFormRecipient('');
+      const defaultList = benodTree[formCategory]?.items || [];
+      if (defaultList.length > 0) {
+        setFormItem(defaultList[0]);
+        setFormRecipient(defaultList[0]);
+      } else {
+        setFormItem('');
+        setFormRecipient('');
+      }
     }
-  }, [formCategory, benodTree]);
+  }, [formCategory, benodTree, formRecordType]);
 
   // Synchronize date to start of week if invalid
   useEffect(() => {
@@ -737,6 +776,9 @@ export default function WeeklyExpenseReport({
       return;
     }
 
+    // Generate a reference number
+    const refNo = generateRefNo(formDate);
+
     // Determine the mapped core ProjectCategory
     const mappedCore = benodTree[formCategory]?.coreCategory || 'supplies';
     
@@ -746,27 +788,28 @@ export default function WeeklyExpenseReport({
     // Execute standard addition
     onAddTransaction({
       date: formDate,
-      category: mappedCore,
+      category: formRecordType === 'income' ? 'custody' : mappedCore,
       amount: qty,
-      type: formIsExecuted ? 'executed_work' : 'spent',
+      type: formRecordType === 'income' ? 'income' : (formIsExecuted ? 'executed_work' : 'spent'),
       nature: 'inside_custody', // Default to inside_custody for manual
-      description: fullDescription,
+      description: formRecordType === 'income' ? `وارد (إيداع/تمويل): ${fullDescription}` : fullDescription,
       recipient: formRecipient || formItem,
       paymentMethod: 'نقدى', // Default to نقدى
-      notes: formNotes
+      notes: refNo,
+      referenceNo: refNo
     });
 
+    const actionText = formRecordType === 'income' ? 'تسجيل وارد جديد' : 'تسجيل بند مصروف يدوي';
     const dayName = reportDays.find(rd => rd.date === formDate)?.dayNameAr || '';
     addAuditLog(
-      'تسجيل بند مصروف يدوي',
+      actionText,
       'كشف المصاريف الأسبوعي',
-      `تم ترميم وتسجيل بند [${formCategory} - ${formItem}] بقيمة ${qty} ج.م ليوم ${dayName} الموافق ${formDate}.`
+      `تم تسجيل بند [${formCategory} - ${formItem}] بقيمة ${qty} ج.م بمرجع ${refNo} ليوم ${dayName} الموافق ${formDate}.`
     );
 
     // Show success message and clear form
-    setFormSuccess(`تم تسجيل وتسوية بند [${formItem}] بقيمة ${qty} ج.م بنجاح ليوم ${dayName}!`);
+    setFormSuccess(`تم تسجيل القيد [${formItem}] بمرجع ${refNo} بقيمة ${qty} ج.م بنجاح!`);
     setFormAmount('');
-    setFormNotes('');
   };
 
   // Classify system transactions inside the 7 days into report lines
@@ -807,8 +850,8 @@ export default function WeeklyExpenseReport({
 
     // Helper to bucket transactions and sort them dynamically based on user manual entry descriptors
     filteredTxs.forEach(tx => {
-      // ONLY include transactions that are explicitly 'inside_custody'
-      if (tx.nature !== 'inside_custody') return;
+      // ONLY include transactions that are explicitly 'inside_custody' AND NOT 'income'
+      if (tx.nature !== 'inside_custody' || tx.type === 'income') return;
 
       const descLower = tx.description.toLowerCase();
       let targetGroup: keyof typeof categories = 'other';
@@ -914,7 +957,20 @@ export default function WeeklyExpenseReport({
   });
 
   const totalSpentThisWeek = dailySpentTotals.reduce((sum, d) => sum + d.total, 0);
-  const totalCustodyThisWeek = reportDays.reduce((sum, rd) => sum + (custodyInputs[rd.date] || 0), 0);
+
+  // Compute daily incoming custody from transactions
+  const dailyIncomeTotals = reportDays.map(rd => {
+    const incomeForDay = transactions
+      .filter(tx => tx.date === rd.date && tx.type === 'income' && tx.nature === 'inside_custody')
+      .reduce((sum, tx) => sum + tx.amount, 0);
+    return { date: rd.date, total: incomeForDay };
+  });
+
+  const totalCustodyThisWeek = reportDays.reduce((sum, rd) => {
+    const manualInput = custodyInputs[rd.date] || 0;
+    const txIncome = dailyIncomeTotals.find(d => d.date === rd.date)?.total || 0;
+    return sum + manualInput + txIncome;
+  }, 0);
 
   // Math exactly replicating PDF page 1:
   // إجمالي المصروف التراكمي = مرحل المنصرف السابق + مصروف هذا الأسبوع
@@ -1003,15 +1059,19 @@ export default function WeeklyExpenseReport({
       (tx.category === 'custody' || !!tx.paymentMethod?.includes('عهدة') || !!tx.description?.includes('عهد') || !!tx.recipient?.includes('عهد'))
     );
     spentTxs.forEach(tx => {
+      const txDate = tx.date || new Date().toISOString().split('T')[0];
+      const refNo = generateRefNo(txDate);
       onAddTransaction({
-        date: tx.date || new Date().toISOString().split('T')[0],
+        date: txDate,
         category: (tx.category as ProjectCategory) || 'custody',
         amount: Number(tx.amount || 0),
         type: tx.type || 'spent',
         nature: 'inside_custody', // Default for imported as per requirement
         description: tx.description || 'مصروف مسجل بالذكاء الاصطناعي',
         recipient: tx.recipient || 'مستفيد مجهول',
-        paymentMethod: 'نقدى' as PaymentMethod
+        paymentMethod: 'نقدى' as PaymentMethod,
+        referenceNo: refNo,
+        notes: tx.notes ? `${tx.notes} (مرجع AI: ${refNo})` : `مرجع استيراد ذكي: ${refNo}`
       });
     });
 
@@ -1201,10 +1261,14 @@ export default function WeeklyExpenseReport({
                         </div>
                         <div className="flex-1 text-right text-xs">
                           <p className="font-bold text-slate-900 leading-normal">{tx.description}</p>
-                          <div className="flex items-center gap-3 text-[10px] text-slate-500 mt-1 font-mono">
+                          <div className="flex items-center gap-3 text-[10px] text-slate-500 mt-1 font-mono flex-wrap">
                             <span>المستفيد: {tx.recipient}</span>
                             <span>•</span>
                             <span>{tx.date}</span>
+                            <span>•</span>
+                            <span className="text-[9.5px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">
+                              Ref: {tx.id}
+                            </span>
                           </div>
                         </div>
                         <div className="text-left font-mono">
@@ -1220,8 +1284,13 @@ export default function WeeklyExpenseReport({
               {analyzedTransactions.length > 0 && (
                 <div className="pt-4 border-t border-slate-200 mt-4 space-y-3">
                   <button
-                    onClick={handleImportTransactions}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2 active:scale-[0.98]"
+                    onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية استيراد الحسابات') : handleImportTransactions}
+                    disabled={userRole === 'viewer'}
+                    className={`w-full font-bold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2 active:scale-[0.98] ${
+                      userRole === 'viewer'
+                        ? 'bg-slate-300 text-slate-100 cursor-not-allowed shadow-none'
+                        : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                    }`}
                   >
                     <Check size={16} />
                     تأكيد وإدراج هذه الحسابات في دفتر التطبيق المفتوح
@@ -1416,19 +1485,24 @@ export default function WeeklyExpenseReport({
           </div>
 
           {/* NEW: APPROVED CODING & MANUAL EXPENSE REGISTRATION FORM */}
-          <div className="bg-slate-900 border border-slate-850 rounded-2xl p-5 text-right text-slate-100 space-y-4 shadow-md bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 gap-3">
-              <div className="flex items-center gap-2">
-                <span className="p-1.5 bg-amber-500/10 text-amber-400 rounded-md">
-                  <Sparkles size={16} />
-                </span>
+          <div className="bg-[#0b0e14] border border-[#1a2333] rounded-[2rem] p-6 text-right text-slate-100 space-y-6 shadow-2xl relative overflow-hidden isolate">
+            
+            {/* Background glowing orbs */}
+            <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-[100px] pointer-events-none mix-blend-screen"></div>
+            <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-500/10 rounded-full blur-[100px] pointer-events-none mix-blend-screen"></div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-5 border-b border-[#1a2333] gap-4 relative z-10">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-gradient-to-br from-amber-400 to-orange-500 text-slate-950 rounded-2xl shadow-lg shadow-orange-500/20">
+                  <Sparkles size={22} className="stroke-[2.5]" />
+                </div>
                 <div>
-                  <h4 className="text-xs font-bold text-amber-400">تكويد وتسجيل منصرف مالي جديد باليوم والتاريخ</h4>
-                  <p className="text-[10px] text-slate-400">اختر فئة الباب المكود واليوم التفصيلي لتفرغه تلقائياً بدقة بالجدول الحسابي أدناه.</p>
+                  <h4 className="text-[15px] font-black text-amber-400 tracking-wide">تكويد وتسجيل منصرف مالي جديد باليوم والتاريخ</h4>
+                  <p className="text-[11px] text-slate-400 mt-1 font-medium">اختر فئة الباب المكود واليوم التفصيلي لتفرغه تلقائياً بدقة بالجدول الحسابي أدناه.</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 self-start sm:self-auto">
-                <span className="px-2 py-0.5 text-[9px] bg-slate-850 border border-slate-700 text-slate-350 font-bold rounded">لوحة تحكم مشفرة</span>
+              <div className="flex items-center gap-3 self-start sm:self-auto">
+                <span className="px-3 py-1.5 text-[10px] bg-[#1a2333] border border-[#2a3441] text-indigo-300 font-black rounded-lg uppercase tracking-wider backdrop-blur-md">لوحة تحكم مشفرة</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -1437,50 +1511,51 @@ export default function WeeklyExpenseReport({
                       setEditSelectedCategory(formCategory);
                     }
                   }}
-                  className="px-3 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-black rounded-md flex items-center gap-1 transition cursor-pointer"
+                  className="px-4 py-2 bg-[#131b26] hover:bg-[#1a2333] text-amber-400 border border-amber-500/30 text-[11px] font-black rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-lg shadow-black/20"
                   id="toggle-tree-editor-btn"
                 >
-                  ⚙️ {showTreeEditor ? 'إغلاق شجرة الأكواد' : 'تعديل وإدارة شجرة البنود (ترميز الأسعار)'}
+                  <Settings size={14} className={showTreeEditor ? "rotate-90 transition-transform" : "transition-transform"} /> 
+                  {showTreeEditor ? 'إغلاق شجرة الأكواد' : 'تعديل وإدارة شجرة البنود (ترميز الأسعار)'}
                 </button>
               </div>
             </div>
 
             {/* EXPANDED INTERACTIVE BOND DYNAMIC TREE CONFIGURATION PANEL */}
             {showTreeEditor && (
-              <div className="p-4 bg-slate-950/60 rounded-xl border border-slate-800 space-y-4 animate-scaleUp text-right">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
+              <div className="p-6 bg-[#131b26] rounded-2xl border border-[#2a3441] space-y-6 animate-scaleUp text-right relative z-10 shadow-inner">
+                <div className="flex items-center justify-between pb-4 border-b border-[#2a3441]">
                   <div>
-                    <h5 className="text-[11.5px] font-black text-amber-400">منصة التحكم وتعديل بنود الفهرسة وأبواب التشفير الرسمية</h5>
-                    <p className="text-[9.5px] text-slate-400 mt-0.5">يمكنك إضافة فئات أبواب جديدة، ربطها بدفتر حسابات الـ ERP، أو إدارة البنود المعتمدة بمرونة.</p>
+                    <h5 className="text-[13px] font-black text-amber-400">منصة التحكم وتعديل بنود الفهرسة وأبواب التشفير الرسمية</h5>
+                    <p className="text-[11px] text-slate-400 mt-1">يمكنك إضافة فئات أبواب جديدة، ربطها بدفتر حسابات الـ ERP، أو إدارة البنود المعتمدة بمرونة.</p>
                   </div>
                   <button
                     type="button"
                     onClick={handleResetTree}
-                    className="p-1 px-2.5 bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/20 text-[9px] font-bold rounded transition"
+                    className="px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[11px] font-bold rounded-xl transition-all"
                   >
                     إعادة الشجرة الافتراضية ⟲
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {/* Category lists and assignments control */}
-                  <div className="md:col-span-1 space-y-3 border-l border-slate-800/80 pl-4">
-                    <span className="block text-[10.5px] text-slate-400 font-bold">1. تعديل الأبواب (الفئات)</span>
+                  <div className="md:col-span-1 space-y-4 border-l border-[#2a3441] pl-6">
+                    <span className="block text-[12px] text-indigo-300 font-black tracking-wide">1. تعديل الأبواب (الفئات)</span>
                     
                     {/* Tiny Creation line */}
-                    <form onSubmit={handleAddCategory} className="space-y-2">
+                    <form onSubmit={handleAddCategory} className="space-y-3">
                       <input
                         type="text"
                         placeholder="اسم فئة جديدة (مثلا: بوفيه)"
                         value={newCategoryName}
                         onChange={(e) => setNewCategoryName(e.target.value)}
-                        className="w-full text-[10.5px] p-1.5 bg-slate-900 border border-slate-800 rounded placeholder-slate-500 text-white font-semibold focus:outline-none focus:border-amber-400"
+                        className="w-full text-xs p-3 bg-[#0b0e14] border border-[#2a3441] rounded-xl placeholder-slate-600 text-white font-bold focus:outline-none focus:border-amber-400 transition-colors shadow-inner"
                       />
-                      <div className="flex gap-1.5">
+                      <div className="flex gap-2">
                         <select
                           value={newCategoryCore}
                           onChange={(e) => setNewCategoryCore(e.target.value as ProjectCategory)}
-                          className="flex-1 text-[9.5px] p-1.5 bg-slate-900 border border-slate-800 text-slate-300 rounded focus:outline-none"
+                          className="flex-1 text-xs p-3 bg-[#0b0e14] border border-[#2a3441] text-slate-300 rounded-xl focus:outline-none focus:border-amber-400 transition-colors shadow-inner appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%2394a3b8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.2rem_1.2rem] bg-[left_0.75rem_center] bg-no-repeat"
                         >
                           <option value="supplies">التوريدات ومواد الموقع</option>
                           <option value="equipment">صيانة وإيجار المعدات</option>
@@ -1490,7 +1565,7 @@ export default function WeeklyExpenseReport({
                         </select>
                         <button
                           type="submit"
-                          className="px-3 bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10.5px] font-black rounded transition"
+                          className="px-4 bg-gradient-to-br from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 text-xs font-black rounded-xl transition-all shadow-lg active:scale-95"
                         >
                           + إضافة
                         </button>
@@ -1498,7 +1573,7 @@ export default function WeeklyExpenseReport({
                     </form>
 
                     {/* Scrollable list of categories */}
-                    <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1 mt-2">
+                    <div className="space-y-2 max-h-[180px] overflow-y-auto custom-scrollbar pr-2 mt-4">
                       {Object.keys(benodTree).map((catName) => {
                         const isChosen = editSelectedCategory === catName;
                         const coreLabelAr = 
@@ -1511,15 +1586,15 @@ export default function WeeklyExpenseReport({
                           <div
                             key={catName}
                             onClick={() => setEditSelectedCategory(catName)}
-                            className={`flex items-center justify-between p-1.5 px-2.5 rounded cursor-pointer transition text-xs font-semibold ${
+                            className={`flex items-center justify-between p-2.5 px-3.5 rounded-xl cursor-pointer transition-all text-[11px] font-bold ${
                               isChosen 
-                                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' 
-                                : 'bg-slate-900/60 hover:bg-slate-900 text-slate-300 border border-transparent'
+                                ? 'bg-amber-400/10 text-amber-400 border border-amber-400/30 shadow-sm' 
+                                : 'bg-[#0b0e14] hover:bg-[#1a2333] text-slate-300 border border-[#2a3441]'
                             }`}
                           >
                             <span className="truncate">{catName}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[8.5px] px-1 bg-slate-800 border border-slate-700/60 text-slate-400 rounded">
+                            <div className="flex items-center gap-3">
+                              <span className="text-[9px] px-1.5 py-0.5 bg-[#1a2333] border border-[#2a3441] text-indigo-300 rounded-md tracking-wider">
                                 {coreLabelAr}
                               </span>
                               <button
@@ -1528,7 +1603,7 @@ export default function WeeklyExpenseReport({
                                   e.stopPropagation();
                                   handleEditCategoryName(catName);
                                 }}
-                                className="text-slate-400 hover:text-amber-400 text-[10px] font-bold px-1"
+                                className="text-slate-500 hover:text-amber-400 text-[12px] font-bold transition-colors"
                                 title="تعديل مسمى الباب"
                               >
                                 ✎
@@ -1539,7 +1614,7 @@ export default function WeeklyExpenseReport({
                                   e.stopPropagation();
                                   handleRemoveCategory(catName);
                                 }}
-                                className="text-slate-500 hover:text-red-450 text-[13px] px-1 font-bold"
+                                className="text-slate-500 hover:text-rose-500 px-1 font-bold text-[14px] transition-colors"
                                 title="حذف الباب بالكامل"
                               >
                                 ×
@@ -1552,52 +1627,52 @@ export default function WeeklyExpenseReport({
                   </div>
 
                   {/* Subitems pills manage */}
-                  <div className="md:col-span-2 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10.5px] text-slate-400 font-bold">
-                        2. البنود المعتمدة المتاحة تحت الباب: <span className="text-amber-400">"{editSelectedCategory}"</span>
+                  <div className="md:col-span-2 space-y-4">
+                    <div className="flex items-center justify-between bg-[#0b0e14] p-3 border border-[#2a3441] rounded-xl">
+                      <span className="text-[12px] text-slate-300 font-bold">
+                        2. البنود المعتمدة تحت الباب: <span className="text-amber-400 mx-1 px-2 py-0.5 bg-amber-400/10 rounded-md">"{editSelectedCategory}"</span>
                       </span>
-                      <span className="text-[9.5px] text-slate-500 font-bold font-mono">
-                        {(benodTree[editSelectedCategory]?.items || []).length} كود بند
+                      <span className="text-[11px] text-indigo-400 font-black px-2 py-1 bg-indigo-500/10 rounded-lg">
+                        {(benodTree[editSelectedCategory]?.items || []).length} بنود
                       </span>
                     </div>
 
                     {/* Add new item to selected category form */}
-                    <form onSubmit={handleAddItem} className="flex gap-2">
+                    <form onSubmit={handleAddItem} className="flex gap-3">
                       <input
                         type="text"
                         required
                         placeholder="اكتب اسم بند جديد بالتحديد (مثال: عمال إضافيين)"
                         value={newItemName}
                         onChange={(e) => setNewItemName(e.target.value)}
-                        className="flex-1 text-[10.5px] p-1.5 px-3 bg-slate-900 border border-slate-800 rounded placeholder-slate-500 text-white font-semibold focus:outline-none focus:border-amber-400"
+                        className="flex-1 text-xs p-3 px-4 bg-[#0b0e14] border border-[#2a3441] rounded-xl placeholder-slate-600 text-white font-bold focus:outline-none focus:border-indigo-400 transition-colors shadow-inner"
                       />
                       <button
                         type="submit"
-                        className="px-4.5 bg-slate-800 hover:bg-slate-705 text-amber-400 border border-slate-700 text-[10.5px] font-bold rounded transition whitespace-nowrap"
+                        className="px-6 bg-[#1a2333] hover:bg-[#2a3441] text-indigo-400 border border-indigo-500/30 text-xs font-black rounded-xl transition-all whitespace-nowrap shadow-lg active:scale-95"
                       >
                         + إدراج كود بند
                       </button>
                     </form>
 
                     {/* Pill items listing with delete capability */}
-                    <div className="flex flex-wrap gap-1.5 max-h-[160px] overflow-y-auto pr-1 mt-2">
+                    <div className="flex flex-wrap gap-2 max-h-[160px] overflow-y-auto custom-scrollbar pr-1 mt-4 p-4 bg-[#0b0e14] rounded-xl border border-[#2a3441] min-h-[100px]">
                       {(benodTree[editSelectedCategory]?.items || []).length === 0 ? (
-                        <div className="w-full text-center p-6 text-slate-500 text-[10.5px]">
-                          لا توجد أكواد أو بنود مضافة تحت هذه الفئة بعد. اكتب اسما في الخانة أعلاه لإضافته!
+                        <div className="w-full text-center p-8 text-slate-500 text-xs font-medium content-center">
+                          لا توجد أكواد أو بنود مضافة تحت هذه الفئة بعد.
                         </div>
                       ) : (
                         (benodTree[editSelectedCategory]?.items || []).map((it, idx) => (
                           <span
                             key={idx}
-                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-900 border border-slate-800 rounded-full text-[10px] font-black text-slate-350"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-[#1a2333] border border-[#2a3441] rounded-xl text-[11px] font-bold text-slate-200 hover:border-indigo-500/50 transition-colors group"
                           >
                             <span>{it}</span>
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1.5 border-r border-[#2a3441] pr-2 opacity-60 group-hover:opacity-100 transition-opacity">
                               <button
                                 type="button"
                                 onClick={() => handleEditItemName(editSelectedCategory, it)}
-                                className="text-slate-400 hover:text-amber-400 font-bold cursor-pointer text-[10px]"
+                                className="text-slate-400 hover:text-indigo-400 font-bold cursor-pointer text-[12px]"
                                 title="تعديل مسمى البند الفرعي"
                               >
                                 ✎
@@ -1605,7 +1680,7 @@ export default function WeeklyExpenseReport({
                               <button
                                 type="button"
                                 onClick={() => handleRemoveItem(editSelectedCategory, it)}
-                                className="text-slate-500 hover:text-red-400 font-bold cursor-pointer text-xs"
+                                className="text-slate-500 hover:text-rose-500 font-bold cursor-pointer text-sm leading-none"
                                 title="حذف هذا البند بالتحديد"
                               >
                                 ×
@@ -1618,24 +1693,44 @@ export default function WeeklyExpenseReport({
                   </div>
                 </div>
 
-                <div className="p-2 bg-amber-500/5 rounded-lg border border-amber-500/10 text-center text-[10px] text-amber-500 leading-normal font-sans font-bold">
-                   ✓ تم تفعيل شجرة البنود المعدلة تلقائياً. أي تحديث فوق سينعكس فوراً بدفاتر وخيارات تسجيل المكتشفات المالية التابعة.
+                <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-center text-xs text-emerald-400 font-bold">
+                   <CheckCircle className="inline-block w-4 h-4 mr-2 mb-0.5" />
+                   تم تفعيل شجرة البنود المعدلة تلقائياً، ستنعكس فورا بجميع الدفاتر.
                 </div>
               </div>
             )}
 
-            <form onSubmit={handleAddManualExpense} className="grid grid-cols-1 md:grid-cols-6 gap-3.5 items-end">
+            <form id="expense-form-element" onSubmit={handleAddManualExpense} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4 items-end bg-[#131b26]/80 p-6 rounded-[1.5rem] border border-[#2a3441] shadow-2xl relative z-10 backdrop-blur-xl">
               
+              {/* Transaction Type */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1 flex items-center gap-1.5">
+                  <Menu className="h-3.5 w-3.5 text-orange-400" />
+                  1. نوع القيد:
+                </label>
+                <select
+                  value={formRecordType}
+                  onChange={(e) => setFormRecordType(e.target.value as 'spent' | 'income')}
+                  className="w-full bg-[#0b0e14] border border-[#2a3441] rounded-xl p-3.5 text-right text-[13px] font-bold text-white focus:ring-2 focus:ring-orange-500/20 outline-none focus:border-orange-500 transition-all shadow-inner appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%2394a3b8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.2rem_1.2rem] bg-[left_0.75rem_center] bg-no-repeat"
+                >
+                  <option value="spent" className="bg-[#131b26]">سجل منصرف (دفع)</option>
+                  <option value="income" className="bg-[#131b26]">تسجيل وارد (تمويل عهدة)</option>
+                </select>
+              </div>
+
               {/* Day & Date Selection inside the current week */}
-              <div className="md:col-span-1">
-                <label className="block text-[11px] font-bold text-slate-350 mb-1.5">1. تحديد اليوم والتاريخ:</label>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1 flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5 text-amber-500" />
+                  2. التاريخ:
+                </label>
                 <select
                   value={formDate}
                   onChange={(e) => setFormDate(e.target.value)}
-                  className="w-full text-xs p-2 bg-slate-800 text-white border border-slate-700 rounded-lg focus:outline-none focus:border-amber-400 font-bold font-sans"
+                  className="w-full bg-[#0b0e14] border border-[#2a3441] rounded-xl p-3.5 text-right text-[13px] font-bold text-white focus:ring-2 focus:ring-amber-500/20 outline-none focus:border-amber-500 transition-all shadow-inner appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%2394a3b8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.2rem_1.2rem] bg-[left_0.75rem_center] bg-no-repeat"
                 >
                   {reportDays.map((rd, i) => (
-                    <option key={i} value={rd.date}>
+                    <option key={i} value={rd.date} className="bg-[#131b26] text-[13px]">
                       {rd.dayNameAr} ({rd.date})
                     </option>
                   ))}
@@ -1643,43 +1738,62 @@ export default function WeeklyExpenseReport({
               </div>
 
               {/* General Category Section - Map items from benodTree */}
-              <div className="md:col-span-1">
-                <label className="block text-[11px] font-bold text-slate-350 mb-1.5">2. الفئة والباب المكود:</label>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1 flex items-center gap-1.5">
+                  <Menu className="h-3.5 w-3.5 text-indigo-400" />
+                  3. الفئة:
+                </label>
                 <select
                   value={formCategory}
                   onChange={(e) => setFormCategory(e.target.value)}
-                  className="w-full text-xs p-2 bg-slate-800 text-white border border-slate-700 rounded-lg focus:outline-none focus:border-amber-400 font-bold"
+                  disabled={formRecordType === 'income'}
+                  className="w-full bg-[#0b0e14] border border-[#2a3441] rounded-xl p-3.5 text-right text-[13px] font-bold text-white focus:ring-2 focus:ring-indigo-500/20 outline-none focus:border-indigo-500 transition-all shadow-inner appearance-none disabled:opacity-50 disabled:cursor-not-allowed bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%2394a3b8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.2rem_1.2rem] bg-[left_0.75rem_center] bg-no-repeat"
                 >
-                  {Object.keys(benodTree).map((category, idx) => (
-                    <option key={idx} value={category}>
-                      {category}
-                    </option>
-                  ))}
+                  {formRecordType === 'income' ? (
+                    <option value="وارد" className="bg-[#131b26] text-[13px] text-right">وارد وتمويلات</option>
+                  ) : (
+                    Object.keys(benodTree).map((category, idx) => (
+                      <option key={idx} value={category} className="bg-[#131b26] text-[13px] text-right">
+                        {category}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
 
               {/* Dynamic subitems retrieved from dynamic benodTree */}
-              <div className="md:col-span-1">
-                <label className="block text-[11px] font-bold text-slate-350 mb-1.5">3. البند المعتمد بالتحديد:</label>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1 flex items-center gap-1.5">
+                  <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />
+                   4. البند:
+                </label>
                 <select
                   value={formItem}
                   onChange={(e) => {
                     setFormItem(e.target.value);
                     setFormRecipient(e.target.value);
                   }}
-                  className="w-full text-xs p-2 bg-slate-800 text-white border border-slate-700 rounded-lg focus:outline-none focus:border-amber-400 font-bold"
+                  disabled={formRecordType === 'income'}
+                  className="w-full bg-[#0b0e14] border border-[#2a3441] rounded-xl p-3.5 text-right text-[13px] font-bold text-white focus:ring-2 focus:ring-emerald-500/20 outline-none focus:border-emerald-500 transition-all shadow-inner appearance-none disabled:opacity-50 disabled:cursor-not-allowed bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%2394a3b8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.2rem_1.2rem] bg-[left_0.75rem_center] bg-no-repeat"
                 >
-                  {(benodTree[formCategory]?.items || []).map((item, idx) => (
-                    <option key={idx} value={item}>
-                      {item}
-                    </option>
-                  ))}
+                  {formRecordType === 'income' ? (
+                     <option value="استلام عهدة مالية / تمويل" className="bg-[#131b26] text-[13px] text-right">استلام عهدة مالية / تمويل</option>
+                  ) : (
+                    (benodTree[formCategory]?.items || []).map((item, idx) => (
+                      <option key={idx} value={item} className="bg-[#131b26] text-[13px] text-right">
+                        {item}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
 
               {/* Amount value */}
-              <div className="md:col-span-1">
-                <label className="block text-[11px] font-bold text-slate-350 mb-1.5">4. القيمة المالية (ج.م):</label>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1 flex items-center gap-1.5">
+                  <DollarSign className="h-3.5 w-3.5 text-rose-400" />
+                  5. القيمة:
+                </label>
                 <div className="relative">
                   <input
                     type="number"
@@ -1687,75 +1801,55 @@ export default function WeeklyExpenseReport({
                     placeholder="٠.٠٠"
                     value={formAmount}
                     onChange={(e) => setFormAmount(e.target.value)}
-                    className="w-full text-xs p-2 bg-slate-800 text-white border border-slate-700 rounded-lg text-center font-bold font-mono focus:outline-none focus:border-amber-400 pr-8"
+                    className="w-full bg-[#0b0e14] border border-[#2a3441] rounded-xl p-3.5 text-center text-[15px] font-mono font-black text-rose-400 focus:ring-2 focus:ring-rose-500/20 outline-none focus:border-rose-500 transition-all shadow-inner"
                   />
-                  <span className="absolute right-2.5 top-2.5 text-[10px] text-slate-400 font-bold">ج.م</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-500">ج.م</span>
                 </div>
               </div>
 
               {/* Recipient / Owner of cash */}
-              <div className="md:col-span-1">
-                <label className="block text-[11px] font-bold text-slate-350 mb-1.5 flex justify-between items-center">
-                  <span>5. المستفيد (المقاول/المهندس):</span>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1 flex items-center gap-1.5">
+                  <User className="h-3.5 w-3.5 text-blue-400" />
+                  6. المستفيد / المصدر:
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="المستفيد من المقاصة"
+                  placeholder={formRecordType === 'income' ? "المكتب الرئيسي / الصراف..." : "اسم المستفيد..."}
                   value={formRecipient}
                   onChange={(e) => setFormRecipient(e.target.value)}
-                  className="w-full text-xs p-2 bg-slate-800 text-white border border-slate-700 rounded-lg focus:outline-none focus:border-amber-400 font-bold"
+                  className="w-full bg-[#0b0e14] border border-[#2a3441] rounded-xl p-3.5 text-right text-[13px] font-bold text-white focus:ring-2 focus:ring-blue-500/20 outline-none focus:border-blue-500 transition-all shadow-inner"
                 />
               </div>
 
-              {/* Button launcher */}
-              <div className="md:col-span-1">
+              {/* Save Button */}
+              <div className="relative z-10">
                 <button
                   type="submit"
-                  className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2 px-3 rounded-lg text-xs transition active:scale-[0.98] shadow flex items-center justify-center gap-1 h-[36px] cursor-pointer"
+                  disabled={userRole === 'viewer'}
+                  onClick={userRole === 'viewer' ? (e) => { e.preventDefault(); alert('عذراً، لا تملك صلاحية التسجيل'); } : undefined}
+                  className={`w-full h-[50px] font-black rounded-xl text-[14px] transition-all active:scale-[0.98] shadow-2xl flex items-center justify-center gap-2 ${
+                    userRole === 'viewer'
+                      ? 'bg-[#1a2333] text-slate-500 cursor-not-allowed shadow-none border border-[#2a3441]'
+                      : 'bg-gradient-to-r from-[#ff5100] to-[#ff7b00] hover:from-[#e64a00] hover:to-[#e66f00] text-white shadow-orange-500/25 shadow-inner'
+                  }`}
                 >
-                  <Plus size={15} />
-                  تسجيل وحفظ البند
+                  <Plus size={18} className="stroke-[3]" />
+                  تسجيل
                 </button>
               </div>
 
             </form>
 
-            {/* Form details extensions (Notes & Toggle Work) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-              <div>
-                <label className="block text-[10px] text-slate-400 mb-1">ملاحظة أو تبرير مالي إضافي (اختياري):</label>
-                <input
-                  type="text"
-                  placeholder="مثال: تصفية أوراق، دفعة تحت الحساب لمشروع رصف الطرق..."
-                  value={formNotes}
-                  onChange={(e) => setFormNotes(e.target.value)}
-                  className="w-full text-xs p-2 bg-slate-800/60 text-slate-200 border border-slate-700 rounded-lg focus:outline-none focus:border-amber-400"
-                />
-              </div>
-              <div className="flex items-center justify-end gap-3 self-end h-[36px]">
-                <label className="text-[11px] font-bold text-slate-400">طبيعة البند المعاملاتي:</label>
-                <button
-                  type="button"
-                  onClick={() => setFormIsExecuted(!formIsExecuted)}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition ${
-                    !formIsExecuted
-                      ? 'bg-orange-500/10 text-orange-400 border-orange-550/30'
-                      : 'bg-emerald-500/10 text-emerald-400 border-emerald-550/30'
-                  }`}
-                >
-                  {!formIsExecuted ? '🔴 بند تسوية مصروف منصرف فعلي (Spent)' : '🟢 بند تصفية أعمال معتمدة (Executed RFI)'}
-                </button>
-              </div>
-            </div>
-
             {/* Error or Success Toast with Animation */}
             {formSuccess && (
-              <div className="bg-emerald-950/30 border border-emerald-800 text-emerald-300 p-3 rounded-xl text-xs flex items-center gap-2 animate-fadeIn font-bold font-sans">
-                <Check size={16} />
+              <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-4 rounded-xl text-[13px] flex items-center gap-3 animate-fadeIn font-extrabold relative z-10 shadow-lg">
+                <CheckCircle size={20} className="text-emerald-400 drop-shadow-md" />
                 <span>{formSuccess}</span>
               </div>
             )}
+
             {formError && (
               <div className="bg-rose-900/30 border border-rose-800 text-rose-300 p-3 rounded-xl text-xs flex items-center gap-2 animate-fadeIn font-bold font-sans">
                 <AlertCircle size={16} />
@@ -1763,9 +1857,6 @@ export default function WeeklyExpenseReport({
               </div>
             )}
           </div>
-
-[diff_block_start]
-[diff_block_end]
 
           {/* PRINT-READY CONTAINER WITH STRICT ACCENT ACCORDANCE */}
           <div className="bg-white border border-slate-200 rounded-2xl shadow-md p-6 overflow-x-auto print:border-none print:shadow-none print:p-0" id="print-canvas">
@@ -1811,29 +1902,29 @@ export default function WeeklyExpenseReport({
             </div>
 
             {/* Classical Arabic Grid Layout Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-right border-collapse border border-slate-400 text-xs font-sans" style={{ minWidth: '950px' }}>
+            <div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-slate-200">
+              <table className="w-full text-right border-collapse text-xs font-sans" style={{ minWidth: '950px' }}>
                 <thead>
                   {/* Row Dates Header */}
-                  <tr className="bg-sky-50 text-sky-950 font-bold border border-slate-400">
-                    <th rowSpan={2} className="border border-slate-400 p-2 text-center w-10">م</th>
-                    <th rowSpan={2} className="border border-slate-400 p-2 text-center w-64">البيان</th>
-                    <th rowSpan={2} className="border border-slate-400 p-2 text-center w-24">مرحل البند</th>
-                    <th colSpan={7} className="border border-slate-400 p-1 text-center text-[10px] bg-sky-100/80">التاريخ اليومي التفصيلي</th>
-                    <th rowSpan={2} className="border border-slate-400 p-2 text-center w-24">الإجمالي</th>
-                    <th rowSpan={2} className="border border-slate-400 p-2 text-center w-32">ملاحظات</th>
-                    <th rowSpan={2} className="border border-slate-400 p-2 text-center w-24 no-print bg-sky-100/40 text-[10px] text-slate-700 font-sans">خيارات</th>
+                  <tr className="bg-slate-800 text-white font-bold">
+                    <th rowSpan={2} className="border border-slate-700 p-3 text-center w-10">م</th>
+                    <th rowSpan={2} className="border border-slate-700 p-3 text-center w-64 text-[13px]">البيان</th>
+                    <th rowSpan={2} className="border border-slate-700 p-3 text-center w-24 text-[11px] text-slate-300">مرحل البند</th>
+                    <th colSpan={7} className="border border-slate-700 p-1.5 text-center text-[11px] bg-slate-900 tracking-wider">التاريخ اليومي التفصيلي</th>
+                    <th rowSpan={2} className="border border-slate-700 p-3 text-center w-24 text-[13px] bg-slate-900/50">الإجمالي</th>
+                    <th rowSpan={2} className="border border-slate-700 p-3 text-center w-32">ملاحظات</th>
+                    <th rowSpan={2} className="border border-slate-700 p-3 text-center w-24 no-print text-[11px] text-slate-400">خيارات</th>
                   </tr>
-                  <tr className="bg-slate-100 border border-slate-400 font-mono text-[10px] text-center">
+                  <tr className="bg-slate-800/90 text-slate-200 font-mono text-[10px] text-center border-b-2 border-slate-900">
                     {reportDays.map((rd, idx) => (
-                      <th key={idx} className="border border-slate-400 p-1.5 font-bold">
-                        <span className="block text-slate-800 text-[10px] font-sans">{rd.dayNameAr}</span>
-                        <span className="block text-slate-500 font-medium text-[9px] mt-0.5">{rd.dateFormatted}</span>
+                      <th key={idx} className="border border-slate-700 p-2 font-bold hover:bg-slate-700 transition-colors">
+                        <span className="block text-white text-[11px] font-sans pb-1">{rd.dayNameAr}</span>
+                        <span className="block text-slate-400 font-medium text-[9px]">{rd.dateFormatted}</span>
                       </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-200">
                   
                   {/* Render Salaries Items */}
                   {classified.salaries.items.map((item, index) => {
@@ -1859,15 +1950,23 @@ export default function WeeklyExpenseReport({
                         <td className="border border-slate-400 p-1.5 text-center no-print">
                           <div className="flex items-center justify-center gap-1.5">
                             <button
-                              onClick={() => handleStartEditRow(item)}
-                              className="p-1 hover:bg-slate-200/80 text-amber-600 rounded cursor-pointer transition"
+                              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية التعديل') : () => handleStartEditRow(item)}
+                              className={`p-1 rounded transition ${
+                                userRole === 'viewer'
+                                  ? 'text-slate-200 cursor-not-allowed'
+                                  : 'hover:bg-slate-200/80 text-amber-600 cursor-pointer'
+                              }`}
                               title="تعديل البند بالكامل"
                             >
                               <FileEdit size={13} />
                             </button>
                             <button
-                              onClick={() => handleDeleteRow(item)}
-                              className="p-1 hover:bg-slate-200/80 text-rose-600 rounded cursor-pointer transition"
+                              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية الحذف') : () => handleDeleteRow(item)}
+                              className={`p-1 rounded transition ${
+                                userRole === 'viewer'
+                                  ? 'text-slate-200 cursor-not-allowed'
+                                  : 'hover:bg-slate-200/80 text-rose-600 cursor-pointer'
+                              }`}
                               title="حذف البند وتصفية حركاته"
                             >
                               <Trash2 size={13} />
@@ -1902,15 +2001,23 @@ export default function WeeklyExpenseReport({
                         <td className="border border-slate-400 p-1.5 text-center no-print">
                           <div className="flex items-center justify-center gap-1.5">
                             <button
-                              onClick={() => handleStartEditRow(item)}
-                              className="p-1 hover:bg-slate-200/80 text-amber-600 rounded cursor-pointer transition"
+                              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية التعديل') : () => handleStartEditRow(item)}
+                              className={`p-1 rounded transition ${
+                                userRole === 'viewer'
+                                  ? 'text-slate-200 cursor-not-allowed'
+                                  : 'hover:bg-slate-200/80 text-amber-600 cursor-pointer'
+                              }`}
                               title="تعديل البند بالكامل"
                             >
                               <FileEdit size={13} />
                             </button>
                             <button
-                              onClick={() => handleDeleteRow(item)}
-                              className="p-1 hover:bg-slate-200/80 text-rose-600 rounded cursor-pointer transition"
+                              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية الحذف') : () => handleDeleteRow(item)}
+                              className={`p-1 rounded transition ${
+                                userRole === 'viewer'
+                                  ? 'text-slate-200 cursor-not-allowed'
+                                  : 'hover:bg-slate-200/80 text-rose-600 cursor-pointer'
+                              }`}
                               title="حذف البند وتصفية حركاته"
                             >
                               <Trash2 size={13} />
@@ -1945,15 +2052,23 @@ export default function WeeklyExpenseReport({
                         <td className="border border-slate-400 p-1.5 text-center no-print">
                           <div className="flex items-center justify-center gap-1.5">
                             <button
-                              onClick={() => handleStartEditRow(item)}
-                              className="p-1 hover:bg-slate-200/80 text-amber-600 rounded cursor-pointer transition"
+                              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية التعديل') : () => handleStartEditRow(item)}
+                              className={`p-1 rounded transition ${
+                                userRole === 'viewer'
+                                  ? 'text-slate-200 cursor-not-allowed'
+                                  : 'hover:bg-slate-200/80 text-amber-600 cursor-pointer'
+                              }`}
                               title="تعديل البند بالكامل"
                             >
                               <FileEdit size={13} />
                             </button>
                             <button
-                              onClick={() => handleDeleteRow(item)}
-                              className="p-1 hover:bg-slate-200/80 text-rose-600 rounded cursor-pointer transition"
+                              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية الحذف') : () => handleDeleteRow(item)}
+                              className={`p-1 rounded transition ${
+                                userRole === 'viewer'
+                                  ? 'text-slate-200 cursor-not-allowed'
+                                  : 'hover:bg-slate-200/80 text-rose-600 cursor-pointer'
+                              }`}
                               title="حذف البند وتصفية حركاته"
                             >
                               <Trash2 size={13} />
@@ -1988,15 +2103,23 @@ export default function WeeklyExpenseReport({
                         <td className="border border-slate-400 p-1.5 text-center no-print">
                           <div className="flex items-center justify-center gap-1.5">
                             <button
-                              onClick={() => handleStartEditRow(item)}
-                              className="p-1 hover:bg-slate-200/80 text-amber-600 rounded cursor-pointer transition"
+                              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية التعديل') : () => handleStartEditRow(item)}
+                              className={`p-1 rounded transition ${
+                                userRole === 'viewer'
+                                  ? 'text-slate-200 cursor-not-allowed'
+                                  : 'hover:bg-slate-200/80 text-amber-600 cursor-pointer'
+                              }`}
                               title="تعديل البند بالكامل"
                             >
                               <FileEdit size={13} />
                             </button>
                             <button
-                              onClick={() => handleDeleteRow(item)}
-                              className="p-1 hover:bg-slate-200/80 text-rose-600 rounded cursor-pointer transition"
+                              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية الحذف') : () => handleDeleteRow(item)}
+                              className={`p-1 rounded transition ${
+                                userRole === 'viewer'
+                                  ? 'text-slate-200 cursor-not-allowed'
+                                  : 'hover:bg-slate-200/80 text-rose-600 cursor-pointer'
+                              }`}
                               title="حذف البند وتصفية حركاته"
                             >
                               <Trash2 size={13} />
@@ -2031,15 +2154,23 @@ export default function WeeklyExpenseReport({
                         <td className="border border-slate-400 p-1.5 text-center no-print">
                           <div className="flex items-center justify-center gap-1.5">
                             <button
-                              onClick={() => handleStartEditRow(item)}
-                              className="p-1 hover:bg-slate-200/80 text-amber-600 rounded cursor-pointer transition"
+                              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية التعديل') : () => handleStartEditRow(item)}
+                              className={`p-1 rounded transition ${
+                                userRole === 'viewer'
+                                  ? 'text-slate-200 cursor-not-allowed'
+                                  : 'hover:bg-slate-200/80 text-amber-600 cursor-pointer'
+                              }`}
                               title="تعديل البند بالكامل"
                             >
                               <FileEdit size={13} />
                             </button>
                             <button
-                              onClick={() => handleDeleteRow(item)}
-                              className="p-1 hover:bg-slate-200/80 text-rose-600 rounded cursor-pointer transition"
+                              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية الحذف') : () => handleDeleteRow(item)}
+                              className={`p-1 rounded transition ${
+                                userRole === 'viewer'
+                                  ? 'text-slate-200 cursor-not-allowed'
+                                  : 'hover:bg-slate-200/80 text-rose-600 cursor-pointer'
+                              }`}
                               title="حذف البند وتصفية حركاته"
                             >
                               <Trash2 size={13} />
@@ -2074,15 +2205,23 @@ export default function WeeklyExpenseReport({
                         <td className="border border-slate-400 p-1.5 text-center no-print text-center">
                           <div className="flex items-center justify-center gap-1.5">
                             <button
-                              onClick={() => handleStartEditRow(item)}
-                              className="p-1 hover:bg-slate-200/80 text-amber-600 rounded cursor-pointer transition"
+                              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية التعديل') : () => handleStartEditRow(item)}
+                              className={`p-1 rounded transition ${
+                                userRole === 'viewer'
+                                  ? 'text-slate-200 cursor-not-allowed'
+                                  : 'hover:bg-slate-200/80 text-amber-600 cursor-pointer'
+                              }`}
                               title="تعديل البند بالكامل"
                             >
                               <FileEdit size={13} />
                             </button>
                             <button
-                              onClick={() => handleDeleteRow(item)}
-                              className="p-1 hover:bg-slate-200/80 text-rose-600 rounded cursor-pointer transition"
+                              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية الحذف') : () => handleDeleteRow(item)}
+                              className={`p-1 rounded transition ${
+                                userRole === 'viewer'
+                                  ? 'text-slate-200 cursor-not-allowed'
+                                  : 'hover:bg-slate-200/80 text-rose-600 cursor-pointer'
+                              }`}
                               title="حذف البند وتصفية حركاته"
                             >
                               <Trash2 size={13} />
@@ -2123,49 +2262,45 @@ export default function WeeklyExpenseReport({
                     <td className="border border-slate-400 p-1.5 no-print text-center font-mono font-bold bg-orange-100/50">-</td>
                   </tr>
 
-                  {/* Row: إجمالي العهدة (Green Block) - Editable */}
-                  <tr className="bg-emerald-50/60 text-emerald-950 font-bold border border-slate-400 text-xs">
-                    <td colSpan={2} className="border border-slate-400 p-2 text-right">
+                  {/* Row: إجمالي العهدة والوارد (Green Block) - Read-only from Tx */}
+                  <tr className="bg-emerald-50 text-emerald-950 font-bold border border-emerald-200 text-[13px] shadow-sm">
+                    <td colSpan={2} className="border border-emerald-200 p-3 text-right">
                       <div className="flex items-center justify-between">
-                        <span>العهدة والرصيد السابق</span>
-                        <Coins size={12} className="text-emerald-600" />
+                        <span className="font-extrabold text-emerald-800">إجمالي العهدة السابقة والوارد المالي</span>
+                        <Coins size={14} className="text-emerald-500" />
                       </div>
                     </td>
-                    <td className="border border-slate-400 p-0 font-mono text-center bg-emerald-100/40">
+                    <td className="border border-emerald-200 p-0 font-mono text-center bg-emerald-100/60 transition-colors">
                       <input
                         type="number"
                         value={priorBalance || ''}
                         onChange={(e) => setPriorBalance(Number(e.target.value))}
-                        className="w-full h-full p-2 text-center bg-transparent focus:outline-none text-emerald-950 font-black"
+                        className="w-full h-full p-2 text-center bg-transparent focus:outline-none focus:bg-emerald-100/80 text-emerald-950 font-black"
+                        placeholder="السابق..."
                       />
                     </td>
                     {reportDays.map((rd, i) => {
-                      const cv = custodyInputs[rd.date] || 0;
+                      const txIncome = dailyIncomeTotals.find(d => d.date === rd.date)?.total || 0;
                       return (
-                        <td key={i} className="border border-slate-400 p-0 text-center font-mono bg-emerald-100/20">
-                          <input
-                            type="number"
-                            value={cv || ''}
-                            onChange={(e) => {
-                              const val = Number(e.target.value);
-                              setCustodyInputs(prev => ({ ...prev, [rd.date]: val }));
-                            }}
-                            className="w-full h-full p-1 text-center bg-transparent focus:outline-none text-emerald-900 font-bold"
-                          />
+                        <td key={i} className="border border-emerald-200 p-2 text-center font-mono bg-emerald-50/50 font-bold text-emerald-900 border-x border-emerald-100">
+                          {txIncome > 0 ? txIncome.toLocaleString('ar-EG') : <span className="text-emerald-300">-</span>}
                         </td>
                       );
                     })}
-                    <td className="border border-slate-400 p-2 text-center font-mono bg-emerald-200/40 text-sm font-black">
+                    <td className="border border-emerald-200 p-3 text-center font-mono bg-emerald-600 text-white text-[15px] font-black shadow-inner">
                       {totalCustodyAvailable.toLocaleString('ar-EG')}
                     </td>
-                    <td className="border border-slate-400 p-0 opacity-80 text-[10px] bg-emerald-50/10">
+                    <td className="border border-emerald-200 p-0 opacity-90 text-[11px] bg-emerald-50/30">
                       <input
                         value={custodyNote}
                         onChange={(e) => setCustodyNote(e.target.value)}
-                        className="w-full h-full p-1.5 bg-transparent focus:outline-none text-right"
+                        className="w-full h-full p-2 bg-transparent focus:outline-none text-right placeholder:text-emerald-300"
+                        placeholder="ملاحظات العهدة..."
                       />
                     </td>
-                    <td className="border border-slate-400 p-1.5 no-print text-center font-mono font-bold bg-emerald-100/40">-</td>
+                    <td className="border border-emerald-200 p-2 no-print text-center font-mono font-bold bg-emerald-100/40">
+                      <CheckCircle size={14} className="mx-auto text-emerald-500" />
+                    </td>
                   </tr>
 
                   {/* Row: رصيد نهاية الأسبوع */}
@@ -2178,7 +2313,7 @@ export default function WeeklyExpenseReport({
                     </td>
                     <td className="border border-slate-400 p-0 text-center font-bold text-sm bg-sky-200/20">
                       <input
-                        value={balanceNote || (endOfWeekBalance < 0 ? 'عجز ⚠️' : 'فائض ✅')}
+                        value={balanceNote || ''}
                         onChange={(e) => setBalanceNote(e.target.value)}
                         className="w-full h-full p-1.5 bg-transparent focus:outline-none text-center"
                       />
@@ -2193,22 +2328,55 @@ export default function WeeklyExpenseReport({
             {/* Classical signature blocks exact layout at footer of image */}
             <div className="grid grid-cols-3 gap-6 text-center mt-8 border-t border-slate-200 pt-6 font-sans text-slate-800">
               <div className="space-y-4">
-                <span className="block font-black text-xs text-slate-900 bg-slate-100 py-1.5 rounded-md">المحاسب المالي</span>
-                <span className="block text-xs font-bold text-slate-700">.......................</span>
-                <div className="border-b border-dashed border-slate-300 w-2/3 mx-auto h-4" />
-                <span className="block text-[10px] text-slate-400">التوقيع والختم</span>
+                <input 
+                  type="text"
+                  value={sig1Title}
+                  onChange={(e) => setSig1Title(e.target.value)}
+                  className="block w-full text-center font-black text-xs text-slate-900 bg-slate-100/50 hover:bg-slate-100 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 border border-transparent focus:border-indigo-400 py-1.5 rounded-md outline-none transition-all print:bg-slate-100 print:border-none"
+                />
+                <input 
+                  type="text"
+                  value={sig1Name}
+                  onChange={(e) => setSig1Name(e.target.value)}
+                  placeholder="......................."
+                  className="block w-full text-center text-xs font-bold text-indigo-700 bg-transparent hover:bg-slate-50 focus:bg-slate-50 border border-transparent focus:border-indigo-200 py-1 rounded outline-none transition-all placeholder:text-slate-400 print:placeholder:text-transparent print:bg-transparent print:border-none"
+                />
+                <div className="border-b border-dashed border-slate-300 w-2/3 mx-auto h-2" />
+                <span className="block text-[10px] text-slate-400 font-bold">التوقيع والختم</span>
               </div>
               <div className="space-y-4">
-                <span className="block font-black text-xs text-slate-900 bg-slate-100 py-1.5 rounded-md">مهندس أول المشروع والمراجعة</span>
-                <span className="block text-xs font-bold text-slate-700">.......................</span>
-                <div className="border-b border-dashed border-slate-300 w-2/3 mx-auto h-4" />
-                <span className="block text-[10px] text-slate-400">التوقيع والاعتماد الهندسي</span>
+                <input 
+                  type="text"
+                  value={sig2Title}
+                  onChange={(e) => setSig2Title(e.target.value)}
+                  className="block w-full text-center font-black text-xs text-slate-900 bg-slate-100/50 hover:bg-slate-100 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 border border-transparent focus:border-indigo-400 py-1.5 rounded-md outline-none transition-all print:bg-slate-100 print:border-none"
+                />
+                <input 
+                  type="text"
+                  value={sig2Name}
+                  onChange={(e) => setSig2Name(e.target.value)}
+                  placeholder="......................."
+                  className="block w-full text-center text-xs font-bold text-indigo-700 bg-transparent hover:bg-slate-50 focus:bg-slate-50 border border-transparent focus:border-indigo-200 py-1 rounded outline-none transition-all placeholder:text-slate-400 print:placeholder:text-transparent print:bg-transparent print:border-none"
+                />
+                <div className="border-b border-dashed border-slate-300 w-2/3 mx-auto h-2" />
+                <span className="block text-[10px] text-slate-400 font-bold">التوقيع والاعتماد الهندسي</span>
               </div>
               <div className="space-y-4">
-                <span className="block font-black text-xs text-slate-900 bg-slate-100 py-1.5 rounded-md">مدير عام قطاع التنفيذ للمشاريع</span>
-                <span className="block text-xs font-bold text-slate-700">.......................</span>
-                <div className="border-b border-dashed border-slate-300 w-2/3 mx-auto h-4" />
-                <span className="block text-[10px] text-slate-400">اعتماد ومطابقة الإدارة الإنشائية</span>
+                <input 
+                  type="text"
+                  value={sig3Title}
+                  onChange={(e) => setSig3Title(e.target.value)}
+                  className="block w-full text-center font-black text-xs text-slate-900 bg-slate-100/50 hover:bg-slate-100 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 border border-transparent focus:border-indigo-400 py-1.5 rounded-md outline-none transition-all print:bg-slate-100 print:border-none"
+                />
+                <input 
+                  type="text"
+                  value={sig3Name}
+                  onChange={(e) => setSig3Name(e.target.value)}
+                  placeholder="......................."
+                  className="block w-full text-center text-xs font-bold text-indigo-700 bg-transparent hover:bg-slate-50 focus:bg-slate-50 border border-transparent focus:border-indigo-200 py-1 rounded outline-none transition-all placeholder:text-slate-400 print:placeholder:text-transparent print:bg-transparent print:border-none"
+                />
+                <div className="border-b border-dashed border-slate-300 w-2/3 mx-auto h-2" />
+                <span className="block text-[10px] text-slate-400 font-bold">اعتماد ومطابقة الإدارة الإنشائية</span>
               </div>
             </div>
 

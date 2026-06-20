@@ -20,11 +20,12 @@ import {
   MapPin,
   Building,
   FileSpreadsheet,
-  FileCheck
+  FileCheck,
+  Settings
 } from 'lucide-react';
 import BunyanLogo from './BunyanLogo';
 
-import { UserItem } from '../types';
+import { UserItem, UserModulePermissions } from '../types';
 
 interface SidebarProps {
   activeTab: string;
@@ -47,26 +48,32 @@ export default function Sidebar({
   onLogout,
   onChangeSite
 }: SidebarProps) {
+  const checkPerm = (key: keyof UserModulePermissions): boolean => {
+    if (user?.role === 'admin') return true;
+    return user?.permissions?.[key] !== 'none';
+  };
+
   const menuItems = [
     { id: 'dashboard', label: 'الصفحة الرئيسية', subtitle: 'Dashboard', icon: Home, perm: true },
-    { id: 'projects', label: 'المشروعات والإسناد', subtitle: 'Projects', icon: Briefcase, perm: user?.permissions?.projects },
-    { id: 'transactions', label: 'دفتر الحركات المالي', subtitle: 'Ledger', icon: Receipt, perm: true },
-    { id: 'extracts', label: 'المستخلصات الفنية', subtitle: 'Extracts', icon: FileSpreadsheet, perm: true },
-    { id: 'deliveries', label: 'التسليمات وفحص الأعمال', subtitle: 'Deliveries & Inspection', icon: FileCheck, perm: true },
-    { id: 'boq', label: 'المقايسة التثمنية', subtitle: 'Bill of Quantities', icon: FileText, perm: user?.permissions?.projects },
-    { id: 'supplies', label: 'إدارة التوريدات', subtitle: 'Supplies', icon: Truck, perm: user?.permissions?.supplies },
-    { id: 'subcontractors', label: 'مقاولين باطن', subtitle: 'Subcontractors', icon: Users, perm: user?.permissions?.contractors },
-    { id: 'weekly-report', label: 'المنصرف الأسبوعي', subtitle: 'Weekly Report', icon: FileText, perm: true },
-    { id: 'site-workers', label: 'العاملين بالموقع', subtitle: 'Site Workers', icon: Users, perm: user?.permissions?.contractors },
-    { id: 'fuel-dashboard', label: 'حساب المحروقات', subtitle: 'Fuel Log', icon: Fuel, perm: user?.permissions?.equipment },
-    { id: 'equipment-dashboard', label: 'بيان المعدات والآلات', subtitle: 'Equipment Log', icon: LayoutDashboard, perm: user?.permissions?.equipment },
+    { id: 'projects', label: 'المشروعات والإسناد', subtitle: 'Projects', icon: Briefcase, perm: checkPerm('projects') },
+    { id: 'transactions', label: 'دفتر الحركات المالي', subtitle: 'Ledger', icon: Receipt, perm: checkPerm('transactions') },
+    { id: 'extracts', label: 'المستخلصات الفنية', subtitle: 'Extracts', icon: FileSpreadsheet, perm: checkPerm('extracts') },
+    { id: 'deliveries', label: 'التسليمات وفحص الأعمال', subtitle: 'Deliveries & Inspection', icon: FileCheck, perm: checkPerm('deliveries') },
+    { id: 'boq', label: 'المقايسة التثمنية', subtitle: 'Bill of Quantities', icon: FileText, perm: checkPerm('boq') },
+    { id: 'supplies', label: 'إدارة التوريدات', subtitle: 'Supplies', icon: Truck, perm: checkPerm('supplies') },
+    { id: 'subcontractors', label: 'مقاولين باطن', subtitle: 'Subcontractors', icon: Users, perm: checkPerm('subcontractors') },
+    { id: 'weekly-report', label: 'المنصرف الأسبوعي', subtitle: 'Weekly Report', icon: FileText, perm: checkPerm('weeklyReport') },
+    { id: 'site-workers', label: 'العاملين بالموقع', subtitle: 'Site Workers', icon: Users, perm: checkPerm('siteWorkers') },
+    { id: 'fuel-dashboard', label: 'حساب المحروقات', subtitle: 'Fuel Log', icon: Fuel, perm: checkPerm('fuelDashboard') },
+    { id: 'equipment-dashboard', label: 'بيان المعدات والآلات', subtitle: 'Equipment Log', icon: LayoutDashboard, perm: checkPerm('equipmentDashboard') },
+    { id: 'settings', label: 'إعدادات النظام والنسخ', subtitle: 'Backup Settings', icon: Settings, perm: true },
   ];
 
   // Filter menu items by permissions
   const visibleMenuItems = menuItems.filter(item => item.perm === true);
 
   // If user is Admin or has usersManagement permission, add user management tab
-  if (user?.role === 'admin' || user?.role === 'projects_manager' || user?.permissions?.usersManagement) {
+  if (user?.role === 'admin' || user?.permissions?.usersManagement !== 'none') {
     visibleMenuItems.push({ id: 'admin-users', label: 'حسابات المستخدمين والصلاحيات', subtitle: 'User Roles', icon: Users, perm: true });
   }
 
@@ -178,9 +185,9 @@ export default function Sidebar({
                 {user?.nameAr ? user.nameAr.charAt(0) : 'م'}
               </div>
               <div className="overflow-hidden text-right">
-                <p className="text-xs font-extrabold text-slate-800 truncate leading-none">{user?.nameAr || 'مستخدم عام'}</p>
+                <p className="text-xs font-extrabold text-slate-800 truncate leading-none">{user?.nameAr?.replace(/\s*\(?مدير التكاليف\)?/g, '') || 'مستخدم عام'}</p>
                 <span className="inline-block mt-1 text-[8.5px] font-extrabold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded-md border border-indigo-100/40">
-                  {user?.role === 'admin' && 'مدير نظام'}
+                  {user?.role === 'admin' && 'مدير البرنامج'}
                   {user?.role === 'projects_manager' && 'مدير مشروعات'}
                   {user?.role === 'site_manager' && 'مدير موقع'}
                   {user?.role === 'site_engineer' && 'مهندس موقع'}

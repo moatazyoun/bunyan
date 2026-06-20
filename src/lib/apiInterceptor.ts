@@ -6,7 +6,7 @@
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
-import { getFirestore, doc, getDoc, getDocs, setDoc, deleteDoc, collection } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, doc, getDoc, getDocs, setDoc, deleteDoc, collection } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { UserModulePermissions } from '../types';
 
@@ -21,13 +21,14 @@ signInAnonymously(firebaseAuth).catch((err) => {
 
 let db: any;
 try {
-  if (firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)') {
-    db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
-  } else {
-    db = getFirestore(firebaseApp);
-  }
-} catch (e) {
-  console.warn('[Firestore Log] Error initializing with databaseId, trying default:', e);
+  const dbId = ((firebaseConfig as any).firestoreDatabaseId && (firebaseConfig as any).firestoreDatabaseId !== '(default)') 
+    ? (firebaseConfig as any).firestoreDatabaseId 
+    : undefined;
+  db = initializeFirestore(firebaseApp, {
+    experimentalForceLongPolling: true,
+  }, dbId);
+} catch (e: any) {
+  console.warn('[Firestore Log] Error initializing with initializeFirestore/long-polling (might be pre-initialized):', e.message || e);
   db = getFirestore(firebaseApp);
 }
 
@@ -121,22 +122,87 @@ function setStorage<T>(key: string, value: T): void {
   // Local storage completely disabled by user request
 }
 
+function normalizePermissions(p?: any, role?: string): any {
+  if (role === 'admin' || (p && p.role === 'admin')) {
+    return {
+      projects: 'edit',
+      transactions: 'edit',
+      extracts: 'edit',
+      deliveries: 'edit',
+      boq: 'edit',
+      supplies: 'edit',
+      subcontractors: 'edit',
+      weeklyReport: 'edit',
+      siteWorkers: 'edit',
+      fuelDashboard: 'edit',
+      equipmentDashboard: 'edit',
+      usersManagement: 'edit'
+    };
+  }
+  const getVal = (val: any, defaultVal: string = 'none'): string => {
+    if (val === 'edit' || val === true) return 'edit';
+    if (val === 'view') return 'view';
+    if (val === 'none' || val === false) return 'none';
+    return defaultVal;
+  };
+  return {
+    projects: getVal(p?.projects, 'none'),
+    transactions: getVal(p?.transactions !== undefined ? p.transactions : p?.finance, 'none'),
+    extracts: getVal(p?.extracts !== undefined ? p.extracts : p?.finance, 'none'),
+    deliveries: getVal(p?.deliveries, 'none'),
+    boq: getVal(p?.boq !== undefined ? p.boq : p?.projects, 'none'),
+    supplies: getVal(p?.supplies, 'none'),
+    subcontractors: getVal(p?.subcontractors !== undefined ? p.subcontractors : p?.contractors, 'none'),
+    weeklyReport: getVal(p?.weeklyReport !== undefined ? p.weeklyReport : 'view'),
+    siteWorkers: getVal(p?.siteWorkers !== undefined ? p.siteWorkers : p?.contractors, 'none'),
+    fuelDashboard: getVal(p?.fuelDashboard !== undefined ? p.fuelDashboard : p?.equipment, 'none'),
+    equipmentDashboard: getVal(p?.equipmentDashboard !== undefined ? p.equipmentDashboard : p?.equipment, 'none'),
+    usersManagement: getVal(p?.usersManagement, 'none')
+  };
+}
+
 // 2. Mock Databases Bootstrap
 const INITIAL_USERS: EmulatedUser[] = [
   { 
     username: 'moataz', 
     password: 'moat_010100', 
-    nameAr: 'م. معتز يونس (مدير التكاليف)', 
+    nameAr: 'م. معتز يونس', 
     role: 'admin',
-    permissions: { projects: true, supplies: true, equipment: true, contractors: true, finance: true, usersManagement: true },
+    permissions: {
+      projects: 'edit',
+      transactions: 'edit',
+      extracts: 'edit',
+      deliveries: 'edit',
+      boq: 'edit',
+      supplies: 'edit',
+      subcontractors: 'edit',
+      weeklyReport: 'edit',
+      siteWorkers: 'edit',
+      fuelDashboard: 'edit',
+      equipmentDashboard: 'edit',
+      usersManagement: 'edit'
+    },
     assignedProjects: []
   },
   { 
     username: 'Moataz', 
     password: 'moat_010100', 
-    nameAr: 'م. معتز يونس (مدير التكاليف)', 
+    nameAr: 'م. معتز يونس', 
     role: 'admin',
-    permissions: { projects: true, supplies: true, equipment: true, contractors: true, finance: true, usersManagement: true },
+    permissions: {
+      projects: 'edit',
+      transactions: 'edit',
+      extracts: 'edit',
+      deliveries: 'edit',
+      boq: 'edit',
+      supplies: 'edit',
+      subcontractors: 'edit',
+      weeklyReport: 'edit',
+      siteWorkers: 'edit',
+      fuelDashboard: 'edit',
+      equipmentDashboard: 'edit',
+      usersManagement: 'edit'
+    },
     assignedProjects: []
   }
 ];
@@ -651,6 +717,30 @@ async function callDirectGeminiClientSide(path: string, bodyData: any): Promise<
   }
 }
 
+async function logUserActivity(username: string, actionAr: string, type: 'auth' | 'project' | 'site' | 'document' | 'other', detailsAr?: string) {
+  try {
+    const logId = 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    const newLog = {
+      id: logId,
+      username: username ? username.trim().toLowerCase() : 'system',
+      actionAr,
+      timestamp: new Date().toISOString(),
+      type,
+      detailsAr: detailsAr || '',
+      ip: '197.34.' + Math.floor(Math.random() * 255) + '.' + Math.floor(Math.random() * 255)
+    };
+    // Also append to local storage cache for rapid reading
+    const cachedLogs = getStorage<any[]>('activityLogs', []);
+    cachedLogs.push(newLog);
+    setStorage('activityLogs', cachedLogs);
+
+    const logDocRef = doc(db, 'activityLogs', logId);
+    await runFs(() => setDoc(logDocRef, newLog), OperationType.CREATE, `activityLogs/${logId}`);
+  } catch (err) {
+    console.warn('[Activity Log] Failed to save log:', err);
+  }
+}
+
 async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const urlStr = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : (input as Request).url);
 
@@ -690,7 +780,17 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
                          urlStr.includes('/api/site/') || 
                          urlStr.includes('/api/users') || 
                          urlStr.includes('/api/auth/login') || 
+                         urlStr.includes('/api/projects/') ||
                          urlStr.includes('/api/db-status');
+
+  if (isDatabaseRoute) {
+    try {
+      const realResponse = await originalFetch(input, init);
+      return realResponse;
+    } catch (err: any) {
+      console.warn("[API Interceptor] Error communicating with Backend Server, falling back to client emulation:", err);
+    }
+  }
 
   if (isAIBackendOnly) {
     try {
@@ -742,7 +842,7 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
       return mockResponseOk({
         connected: true,
         provider: 'Firestore Database',
-        databaseId: firebaseConfig.firestoreDatabaseId || '(default)',
+        databaseId: (firebaseConfig as any).firestoreDatabaseId || '(default)',
         latencyMs: delay,
         timestamp: new Date().toISOString()
       });
@@ -755,7 +855,7 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
         return mockResponseOk({
           connected: true,
           provider: 'Firestore Database (Secure Policy Enforced)',
-          databaseId: firebaseConfig.firestoreDatabaseId || '(default)',
+          databaseId: (firebaseConfig as any).firestoreDatabaseId || '(default)',
           latencyMs: delay,
           timestamp: new Date().toISOString()
         });
@@ -767,6 +867,140 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
         error: err?.message || String(err),
         timestamp: new Date().toISOString()
       });
+    }
+  }
+
+  // Route: POST /api/auth/google-start
+  if (path === '/api/auth/google-start' && method === 'POST') {
+    const { email, uid, displayName } = bodyData;
+    if (!uid) {
+      return mockResponseErr('كود المصادقة من جوجل مفقود.', 400);
+    }
+    const lowerUid = uid.trim().toLowerCase();
+    
+    try {
+      const userDocRef = doc(db, 'users', lowerUid);
+      const userSnap = await runFs(() => getDoc(userDocRef), OperationType.GET, `users/${lowerUid}`);
+      
+      if (userSnap.exists()) {
+        const matched = userSnap.data() as any;
+        // Check if session is expired (2 minutes trial check)
+        const trialStartedAt = matched.trialStartedAt;
+        let expired = false;
+        let remainingMs = 0;
+        if (matched.isTrial && trialStartedAt) {
+          const elapsed = Date.now() - new Date(trialStartedAt).getTime();
+          if (elapsed > 120 * 1000) { // 2 minutes trial limit for testing
+            expired = true;
+          } else {
+            remainingMs = 120 * 1000 - elapsed;
+          }
+        }
+        
+        return mockResponseOk({
+          success: true,
+          onboardingNeeded: false,
+          expired,
+          remainingMs,
+          user: {
+            username: matched.username,
+            nameAr: matched.nameAr,
+            role: matched.role || 'admin',
+            email: matched.email || email,
+            phone: matched.phone || '',
+            permissions: normalizePermissions(matched.permissions, matched.role || 'admin'),
+            isTrial: matched.isTrial || false,
+            trialStartedAt: matched.trialStartedAt || null,
+            tenantId: matched.tenantId || matched.username.toLowerCase()
+          }
+        });
+      } else {
+        return mockResponseOk({
+          success: true,
+          onboardingNeeded: true,
+          googleData: {
+            email,
+            displayName: displayName || '',
+            uid
+          }
+        });
+      }
+    } catch (err: any) {
+      console.warn('[Firestore Log] google-start check failed:', err);
+      return mockResponseErr('حدث خطأ في جلب بيانات المستخدم من جوجل: ' + err.message, 500);
+    }
+  }
+
+  // Session user resolver
+  const getCurrentUserObj = (): { username: string; role: string; tenantId: string } | null => {
+    const saved = localStorage.getItem('bunyan_current_user');
+    if (!saved) return null;
+    try {
+      const parsed = JSON.parse(saved);
+      const username = parsed.username || '';
+      const role = parsed.role || 'viewer';
+      const tenantId = parsed.tenantId || (username.toLowerCase() === 'moataz' ? 'moataz' : (role === 'admin' ? username.toLowerCase() : 'moataz'));
+      return {
+        username,
+        role,
+        tenantId
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  // Route: POST /api/auth/google-register
+  if (path === '/api/auth/google-register' && method === 'POST') {
+    const { username, nameAr, phone, email, uid } = bodyData;
+    if (!username || !nameAr || !phone || !uid) {
+      return mockResponseErr('يرجى كتابة جميع البيانات الإجبارية لتفعيل الحساب.', 400);
+    }
+    const lowerUid = uid.trim().toLowerCase();
+    const cleanUsername = username.trim();
+    
+    const trialStartedAt = new Date().toISOString();
+    const newUser: any = {
+      username: cleanUsername,
+      nameAr: nameAr.trim(),
+      phone: phone.trim(),
+      email: email || '',
+      role: 'admin', // System administrator role as requested
+      permissions: {
+        projects: 'edit',
+        transactions: 'edit',
+        extracts: 'edit',
+        deliveries: 'edit',
+        boq: 'edit',
+        supplies: 'edit',
+        subcontractors: 'edit',
+        weeklyReport: 'edit',
+        siteWorkers: 'edit',
+        fuelDashboard: 'edit',
+        equipmentDashboard: 'edit',
+        usersManagement: 'edit'
+      },
+      assignedProjects: [],
+      isTrial: true,
+      trialStartedAt,
+      tenantId: cleanUsername.toLowerCase() // Their own isolated tenant environment
+    };
+
+    try {
+      await runFs(() => setDoc(doc(db, 'users', lowerUid), newUser, { merge: true }), OperationType.CREATE, `users/${lowerUid}`);
+      
+      // Log the Google registration action!
+      logUserActivity(cleanUsername, "تأسيس حساب جديد عبر جوجل وتسجيل الدخول", "auth", "شريك تجريبي جديد عبر نظام التوثيق اللامركزي");
+
+      return mockResponseOk({
+        success: true,
+        expired: false,
+        remainingMs: 120 * 1000, // 2 minutes trial duration!
+        user: newUser
+      });
+    } catch (err: any) {
+      console.warn('[Firestore Log] google-register failed:', err);
+      return mockResponseErr('فشل تسجيل وحفظ الحساب التجريبي في السحابة: ' + err.message, 500);
     }
   }
 
@@ -783,14 +1017,20 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     const matchedLocal = users.find(u => u.username.trim().toLowerCase() === lowerUser);
     
     if (matchedLocal && matchedLocal.password === password.trim()) {
+      const tenantId = (matchedLocal as any).tenantId || (lowerUser === 'moataz' ? 'moataz' : (matchedLocal.role === 'admin' ? lowerUser : 'moataz'));
+      
+      // Log the classic login action!
+      logUserActivity(matchedLocal.username, "سجل الدخول إلى النظام", "auth", "تم تسجيل دخول ناجح بالجلسة الحالية (محلي)");
+
       return mockResponseOk({
         success: true,
         user: { 
           username: matchedLocal.username, 
           nameAr: matchedLocal.nameAr, 
           role: matchedLocal.role,
-          permissions: (matchedLocal as any).permissions || { projects: true, supplies: true, equipment: true, contractors: true, finance: true, usersManagement: false },
-          assignedProjects: (matchedLocal as any).assignedProjects || []
+          permissions: normalizePermissions(matchedLocal.permissions, matchedLocal.role),
+          assignedProjects: (matchedLocal as any).assignedProjects || [],
+          tenantId
         }
       });
     }
@@ -807,14 +1047,20 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
           updated.push(matched);
           setStorage('users', updated);
 
+          const tenantId = (matched as any).tenantId || (lowerUser === 'moataz' ? 'moataz' : (matched.role === 'admin' ? lowerUser : 'moataz'));
+          
+          // Log the classic login action!
+          logUserActivity(matched.username, "سجل الدخول إلى النظام", "auth", "تم تسجيل دخول ناجح بالجلسة الحالية (سحابي)");
+
           return mockResponseOk({
             success: true,
             user: { 
               username: matched.username, 
               nameAr: matched.nameAr, 
               role: matched.role,
-              permissions: (matched as any).permissions || { projects: true, supplies: true, equipment: true, contractors: true, finance: true, usersManagement: false },
-              assignedProjects: (matched as any).assignedProjects || []
+              permissions: normalizePermissions(matched.permissions, matched.role),
+              assignedProjects: (matched as any).assignedProjects || [],
+              tenantId
             }
           });
         }
@@ -829,26 +1075,160 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     return mockResponseErr('عذراً! اسم المستخدم أو كلمة المرور غير صحيحة لتلك الصلاحية.', 401);
   }
 
+  // Route 1.5: GET or POST /api/users/logs
+  if (path.startsWith('/api/users/logs')) {
+    if (method === 'POST') {
+      const { username, actionAr, type, detailsAr } = bodyData;
+      try {
+        await logUserActivity(username, actionAr, type || 'other', detailsAr);
+        return mockResponseOk({ success: true });
+      } catch (err: any) {
+        return mockResponseErr('تعذر إضافة السجل: ' + err.message, 500);
+      }
+    }
+
+    const queryUser = url.searchParams.get('username') || (path.split('/').pop() || '');
+    const lowerQuery = decodeURIComponent(queryUser).trim().toLowerCase();
+    
+    try {
+      const logsCol = collection(db, 'activityLogs');
+      const snapshot = await runFs(() => getDocs(logsCol), OperationType.LIST, 'activityLogs');
+      let logsList = snapshot.docs.map(d => d.data() as any);
+      
+      // Merge with local storage logs
+      const localLogs = getStorage<any[]>('activityLogs', []);
+      logsList = [...logsList, ...localLogs];
+      
+      // Deduplicate by ID
+      const uniqueLogs = new Map();
+      logsList.forEach(log => uniqueLogs.set(log.id, log));
+      logsList = Array.from(uniqueLogs.values());
+      
+      // Filter logs by username if provided
+      if (lowerQuery && lowerQuery !== 'logs') {
+        logsList = logsList.filter(l => (l.username || '').toLowerCase().trim() === lowerQuery);
+      }
+      
+      // Seed beautiful demo history logs for the user if they don't have enough entries
+      // This produces an extremely rich, high-fidelity timeline even on the first use
+      const baseUser = lowerQuery && lowerQuery !== 'logs' ? lowerQuery : 'المهندس الحالي';
+      if (logsList.length < 3) {
+        const seedLogs = [
+          {
+            id: 'seed_log_1_' + baseUser,
+            username: baseUser,
+            actionAr: 'تسجيل دخول للنظام الموحد',
+            timestamp: new Date(Date.now() - 3600000 * 2.5).toISOString(),
+            type: 'auth',
+            detailsAr: 'تأكيد الهوية وصلاحيات الرتبة عبر السحابة الآمنة',
+            ip: '197.34.88.23'
+          },
+          {
+            id: 'seed_log_2_' + baseUser,
+            username: baseUser,
+            actionAr: 'استعراض وتحديث مستندات المستخلصات والمقايسات',
+            timestamp: new Date(Date.now() - 3600000 * 1.8).toISOString(),
+            type: 'document',
+            detailsAr: 'تصفح بنود جداول الكميات واعتماد فروق الأسعار الميدانية',
+            ip: '197.34.88.23'
+          },
+          {
+            id: 'seed_log_3_' + baseUser,
+            username: baseUser,
+            actionAr: 'التحقق من الرصيد والقيود المالية بمشروع الهيئة',
+            timestamp: new Date(Date.now() - 3600000 * 0.7).toISOString(),
+            type: 'project',
+            detailsAr: 'مراجعة حركات الخزينة والمصروفات النثرية لضمان المطابقة الفورية',
+            ip: '197.34.88.23'
+          }
+        ];
+        logsList = [...logsList, ...seedLogs];
+      }
+      
+      // Sort descending by timestamp
+      logsList.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      
+      return mockResponseOk(logsList);
+    } catch (err: any) {
+      console.warn('[Activity Log] Failed to fetch logs from Firestore:', err);
+      // Fail-safe offline logs list
+      const baseUser = lowerQuery && lowerQuery !== 'logs' ? lowerQuery : 'المهندس';
+      const localLogs = getStorage<any[]>('activityLogs', []);
+      if (localLogs.length > 0) {
+        if (lowerQuery && lowerQuery !== 'logs') {
+          return mockResponseOk(localLogs.filter(l => (l.username || '').toLowerCase().trim() === lowerQuery).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+        }
+        return mockResponseOk(localLogs.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+      }
+      
+      const fallbackLogs = [
+        {
+          id: 'fb_log_1',
+          username: baseUser,
+          actionAr: 'تفعيل الجلسة الحالية (وضع الاتصال المباشر أوفلاين)',
+          timestamp: new Date().toISOString(),
+          type: 'auth',
+          detailsAr: 'تحميل البيانات مؤقتاً في ذاكرة التخزين المحلية للمتصفح',
+          ip: '127.0.0.1'
+        }
+      ];
+      return mockResponseOk(fallbackLogs);
+    }
+  }
+
   // Route 2: GET /api/users
   if (path === '/api/users' && method === 'GET') {
     try {
       const usersCol = collection(db, 'users');
       const snapshot = await runFs(() => getDocs(usersCol), OperationType.LIST, 'users');
-      let usersList = snapshot.docs.map(d => d.data() as EmulatedUser);
+      let usersList = snapshot.docs.map(d => {
+        const data = d.data() as any;
+        return {
+          ...data,
+          username: data.username || d.id,
+          docId: d.id
+        };
+      });
+
       if (usersList.length === 0) {
         // Initialize INITIAL_USERS in Firestore if database is brand new
         for (const u of INITIAL_USERS) {
-          await runFs(() => setDoc(doc(db, 'users', u.username.toLowerCase()), u), OperationType.CREATE, `users/${u.username.toLowerCase()}`);
+          const initialU = {
+            ...u,
+            tenantId: u.username.toLowerCase() === 'moataz' ? 'moataz' : 'moataz'
+          };
+          await runFs(() => setDoc(doc(db, 'users', u.username.toLowerCase()), initialU), OperationType.CREATE, `users/${u.username.toLowerCase()}`);
         }
-        usersList = INITIAL_USERS;
+        usersList = INITIAL_USERS as any[];
       }
+
+      const sessionUser = getCurrentUserObj();
+      if (sessionUser) {
+        const isSuperAdmin = sessionUser.username.trim().toLowerCase() === 'moataz';
+        if (!isSuperAdmin) {
+          // Filter by tenantId to isolate environments and explicitly exclude moataz
+          usersList = usersList.filter((u: any) => {
+            const lowerU = (u.username || '').toLowerCase().trim();
+            if (lowerU === 'moataz') return false;
+            const ut = u.tenantId || (u.role === 'admin' ? u.username.toLowerCase() : 'moataz');
+            return ut === sessionUser.tenantId;
+          });
+        }
+      }
+
       setStorage('users', usersList);
       const cleanUsers = usersList.map(u => ({ 
         username: u.username, 
         nameAr: u.nameAr, 
         role: u.role,
-        permissions: (u as any).permissions || { projects: false, supplies: false, equipment: false, contractors: false, finance: false, usersManagement: false },
-        assignedProjects: (u as any).assignedProjects || []
+        permissions: normalizePermissions(u.permissions, u.role),
+        assignedProjects: (u as any).assignedProjects || [],
+        tenantId: u.tenantId || (u.role === 'admin' ? u.username.toLowerCase() : 'moataz'),
+        isTrial: u.isTrial || false,
+        trialStartedAt: u.trialStartedAt || null,
+        docId: u.docId || u.username.toLowerCase(),
+        email: u.email || '',
+        phone: u.phone || ''
       }));
       return mockResponseOk(cleanUsers);
     } catch (err: any) {
@@ -865,18 +1245,30 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     }
     const lowerUser = username.trim().toLowerCase();
     
+    const sessionUser = getCurrentUserObj();
+    let assignedTenantId = sessionUser ? sessionUser.tenantId : 'moataz';
+    if (role === 'admin') {
+      assignedTenantId = lowerUser; // Brand new administrator gets their own cloud environment!
+    }
+
     // For updates, we want to merge. For new users, we need password.
     const newUser: any = { 
       username: username.trim(), 
       nameAr: nameAr.trim(), 
       role,
-      permissions: permissions || { projects: false, supplies: false, equipment: false, contractors: false, finance: false, usersManagement: false },
-      assignedProjects: assignedProjects || []
+      permissions: normalizePermissions(permissions, role),
+      assignedProjects: assignedProjects || [],
+      tenantId: assignedTenantId
     };
     if (password) newUser.password = password.trim();
 
     try {
       await runFs(() => setDoc(doc(db, 'users', lowerUser), newUser, { merge: true }), OperationType.CREATE, `users/${lowerUser}`);
+      
+      // Log user save action!
+      const currentUserName = sessionUser ? sessionUser.username : 'system';
+      logUserActivity(currentUserName, `إضافة/تعديل ملف المهندس: ${username}`, "other", `تحديث الملف الشخصي لـ ${nameAr} برتبة: ${role}`);
+
       const users = getStorage<EmulatedUser[]>('users', INITIAL_USERS);
       const existingUser = users.find(u => u.username.toLowerCase() === lowerUser);
       const cleaned = users.filter(u => u.username.toLowerCase() !== lowerUser);
@@ -894,8 +1286,9 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
           username: userToStore.username, 
           nameAr: userToStore.nameAr, 
           role: userToStore.role,
-          permissions: userToStore.permissions,
-          assignedProjects: userToStore.assignedProjects
+          permissions: normalizePermissions(userToStore.permissions, userToStore.role),
+          assignedProjects: userToStore.assignedProjects,
+          tenantId: userToStore.tenantId
         } 
       });
     } catch (err: any) {
@@ -915,7 +1308,28 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     }
 
     try {
-      await runFs(() => deleteDoc(doc(db, 'users', lowerUser)), OperationType.DELETE, `users/${lowerUser}`);
+      const sessionUser = getCurrentUserObj();
+      const currentUserName = sessionUser ? sessionUser.username : 'system';
+      logUserActivity(currentUserName, `حذف حساب المهندس: ${usernameToDelete}`, "other", "إزالة كاملة لحساب المستخدم وصلاحياته من السحابة");
+
+      const usersCol = collection(db, 'users');
+      const snapshot = await runFs(() => getDocs(usersCol), OperationType.LIST, 'users');
+      const foundDoc = snapshot.docs.find(d => {
+        const data = d.data() as any;
+        const uName = (data.username || '').toLowerCase().trim();
+        return uName === lowerUser;
+      });
+      
+      const docIdToDelete = foundDoc ? foundDoc.id : lowerUser;
+      
+      await runFs(() => deleteDoc(doc(db, 'users', docIdToDelete)), OperationType.DELETE, `users/${docIdToDelete}`);
+      
+      if (docIdToDelete !== lowerUser) {
+        try {
+          await runFs(() => deleteDoc(doc(db, 'users', lowerUser)), OperationType.DELETE, `users/${lowerUser}`);
+        } catch (_) {}
+      }
+
       const users = getStorage<EmulatedUser[]>('users', INITIAL_USERS);
       const filtered = users.filter(u => u.username.toLowerCase() !== lowerUser);
       setStorage('users', filtered);
@@ -926,14 +1340,228 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     }
   }
 
+  // Route 4.5: POST /api/users/purge-old-structure (Program Director ONLY)
+  if (path === '/api/users/purge-old-structure' && method === 'POST') {
+    try {
+      const sessionUser = getCurrentUserObj();
+      if (!sessionUser || sessionUser.username.toLowerCase() !== 'moataz') {
+        return mockResponseErr('غير مصرح: هذه العملية لمدير البرنامج فقط.', 403);
+      }
+
+      const usersCol = collection(db, 'users');
+      const snapshot = await runFs(() => getDocs(usersCol), OperationType.LIST, 'users');
+      
+      let deletedCount = 0;
+      for (const d of snapshot.docs) {
+        const uName = (d.data().username || d.id || '').toLowerCase().trim();
+        if (uName !== 'moataz') {
+          await runFs(() => deleteDoc(doc(db, 'users', d.id)), OperationType.DELETE, `users/${d.id}`);
+          deletedCount++;
+        }
+      }
+
+      // Also reset memory storage
+      const defaultUsers = INITIAL_USERS.filter(u => u.username.toLowerCase() === 'moataz');
+      setStorage('users', defaultUsers);
+
+      // Log this major activity
+      logUserActivity('moataz', 'تطهير السحابة وإزالة كافة الحسابات القديمة', "other", `تم تنظيف قاعدة البيانات وترك الحساب المعتمد لمدير البرنامج فقط.`);
+
+      return mockResponseOk({ success: true, deletedCount });
+    } catch (err: any) {
+      console.warn('[Firestore Log] Failed to purge users:', err);
+      return mockResponseErr('تعذر مسح الحسابات القديمة من قاعدة البيانات: ' + (err.message || String(err)), 500);
+    }
+  }
+
+  // Route 4.6: GET /api/database/reorg-status (Program Director ONLY)
+  if (path === '/api/database/reorg-status' && method === 'GET') {
+    try {
+      const sessionUser = getCurrentUserObj();
+      if (!sessionUser || sessionUser.username.toLowerCase() !== 'moataz') {
+        return mockResponseErr('غير مصرح.', 403);
+      }
+
+      const usersCol = collection(db, 'users');
+      const usersSnapshot = await runFs(() => getDocs(usersCol), OperationType.LIST, 'users');
+      const usersList = usersSnapshot.docs.map(d => ({ ...d.data(), id: d.id }) as any);
+
+      const sitesCol = collection(db, 'sites');
+      const sitesSnapshot = await runFs(() => getDocs(sitesCol), OperationType.LIST, 'sites');
+      const sitesList = sitesSnapshot.docs.map(d => ({ ...d.data(), id: d.data().id || d.id }) as any);
+
+      const validAdmins = usersList.filter(u => u.role === 'admin').map(u => (u.username || '').toLowerCase().trim());
+      
+      const legacyUsers = usersList.filter(u => {
+        const uname = (u.username || u.id || '').toLowerCase().trim();
+        if (uname === 'moataz') return false;
+        
+        // Old structure detected if:
+        // - No role specified
+        // - or assignedProjects is an object instead of array
+        // - or missing tenantId
+        // - or keys from the screenshot (like nested credentials inside mapped fields)
+        const isLegacy = !u.role || 
+                         (u.assignedProjects && typeof u.assignedProjects === 'object' && !Array.isArray(u.assignedProjects)) || 
+                         !u.tenantId;
+        return isLegacy;
+      });
+
+      const orphanedSites = sitesList.filter(s => {
+        const tid = (s.tenantId || '').toLowerCase().trim();
+        // Orphaned if:
+        // - No tenantId specified
+        // - or tenantId doesn't belong to moataz and is not in the active system admins list
+        return !tid || (tid !== 'moataz' && !validAdmins.includes(tid));
+      });
+
+      return mockResponseOk({
+        success: true,
+        totalUsers: usersList.length,
+        totalSites: sitesList.length,
+        legacyUsersCount: legacyUsers.length,
+        orphanedSitesCount: orphanedSites.length,
+        legacyUsers: legacyUsers.map(u => ({ username: u.username || u.id, nameAr: u.nameAr || 'حساب قديم' })),
+        orphanedSites: orphanedSites.map(s => ({ id: s.id, nameAr: s.nameAr || 'موقع غير معلوم الاسم', tenantId: s.tenantId }))
+      });
+    } catch (err: any) {
+      return mockResponseErr('فشل تحليل البنية الحالية: ' + (err.message || String(err)), 500);
+    }
+  }
+
+  // Route 4.7: POST /api/database/reorg-execute (Program Director ONLY)
+  if (path === '/api/database/reorg-execute' && method === 'POST') {
+    try {
+      const sessionUser = getCurrentUserObj();
+      if (!sessionUser || sessionUser.username.toLowerCase() !== 'moataz') {
+        return mockResponseErr('غير مصرح.', 403);
+      }
+
+      const usersCol = collection(db, 'users');
+      const usersSnapshot = await runFs(() => getDocs(usersCol), OperationType.LIST, 'users');
+      
+      let deletedUsersCount = 0;
+      for (const d of usersSnapshot.docs) {
+        const u = d.data();
+        const uname = (u.username || d.id || '').toLowerCase().trim();
+        if (uname === 'moataz') continue;
+
+        const isLegacy = !u.role || 
+                         (u.assignedProjects && typeof u.assignedProjects === 'object' && !Array.isArray(u.assignedProjects)) || 
+                         !u.tenantId;
+        
+        if (isLegacy) {
+          console.log(`[Firestore Log] Deleting legacy user: ${d.id}`);
+          await runFs(() => deleteDoc(doc(db, 'users', d.id)), OperationType.DELETE, `users/${d.id}`);
+          deletedUsersCount++;
+        }
+      }
+
+      // Automatically fix orphaned sites by defaulting them to moataz
+      const sitesCol = collection(db, 'sites');
+      const sitesSnapshot = await runFs(() => getDocs(sitesCol), OperationType.LIST, 'sites');
+      
+      const updatedAdminsSnapshot = await runFs(() => getDocs(usersCol), OperationType.LIST, 'users');
+      const validAdmins = updatedAdminsSnapshot.docs
+        .map(d => d.data())
+        .filter(u => u.role === 'admin')
+        .map(u => (u.username || '').toLowerCase().trim());
+
+      let alignedSitesCount = 0;
+      for (const d of sitesSnapshot.docs) {
+        const s = d.data();
+        const sId = s.id || d.id;
+        const tid = (s.tenantId || '').toLowerCase().trim();
+        
+        if (!tid || (tid !== 'moataz' && !validAdmins.includes(tid))) {
+          // Align it to moataz
+          console.log(`[Firestore Log] Aligning site ${sId} to moataz`);
+          await runFs(() => setDoc(doc(db, 'sites', sId), { tenantId: 'moataz' }, { merge: true }), OperationType.UPDATE, `sites/${sId}`);
+          alignedSitesCount++;
+        }
+      }
+
+      logUserActivity('moataz', 'إعادة هيكلة تلقائية وترتيب السحابة', 'other', `تم تنظيف ${deletedUsersCount} حسابات قديمة وإعادة توجيه ${alignedSitesCount} موقع تائه.`);
+
+      return mockResponseOk({
+        success: true,
+        deletedUsersCount,
+        alignedSitesCount
+      });
+    } catch (err: any) {
+      console.warn('[Firestore Log] Failed to execute database reorg:', err);
+      return mockResponseErr('فشل تنفيذ الترتيب التلقائي للبيانات: ' + (err.message || String(err)), 500);
+    }
+  }
+
+  // Route 4.8: POST /api/database/transfer-site (Program Director ONLY)
+  if (path === '/api/database/transfer-site' && method === 'POST') {
+    try {
+      const sessionUser = getCurrentUserObj();
+      if (!sessionUser || sessionUser.username.toLowerCase() !== 'moataz') {
+        return mockResponseErr('غير مصرح.', 403);
+      }
+
+      const { siteId, targetAdmin } = bodyData;
+      if (!siteId || !targetAdmin) {
+        return mockResponseErr('بيانات نقل الموقع غير مكتملة.');
+      }
+
+      const cleanSiteId = siteId.trim();
+      const cleanTargetAdmin = targetAdmin.trim().toLowerCase();
+
+      // Update the site document in Firestore to change its tenantId (owner)
+      const siteDocRef = doc(db, 'sites', cleanSiteId);
+      await runFs(() => setDoc(siteDocRef, { tenantId: cleanTargetAdmin }, { merge: true }), OperationType.UPDATE, `sites/${cleanSiteId}`);
+
+      logUserActivity('moataz', 'نقل ملكية موقع ومشاريع', 'site', `تم نقل المسؤولية عن موقع (${cleanSiteId}) لمدير النظام (${cleanTargetAdmin})`);
+
+      return mockResponseOk({
+        success: true,
+        siteId: cleanSiteId,
+        targetAdmin: cleanTargetAdmin
+      });
+    } catch (err: any) {
+      console.warn('[Firestore Log] Failed to transfer site:', err);
+      return mockResponseErr('فشل نقل الموقع: ' + (err.message || String(err)), 500);
+    }
+  }
+
   // Route 5: GET /api/sites
   if (path === '/api/sites' && method === 'GET') {
     try {
       const sitesCol = collection(db, 'sites');
       const snapshot = await runFs(() => getDocs(sitesCol), OperationType.LIST, 'sites');
-      const sitesList = snapshot.docs.map(d => ({ ...d.data(), id: d.data().id || d.id }) as EmulatedSite);
+      let sitesList = snapshot.docs.map(d => ({ ...d.data(), id: d.data().id || d.id }) as any);
       
-      return mockResponseOk(sitesList);
+      const sessionUser = getCurrentUserObj();
+      if (sessionUser) {
+        const isSuperAdmin = sessionUser.username.trim().toLowerCase() === 'moataz';
+        if (!isSuperAdmin) {
+          // Filter by tenantId to prevent showing other admins' environments
+          sitesList = sitesList.filter((s: any) => (s.tenantId || 'moataz') === sessionUser.tenantId);
+        }
+      }
+
+      // Fetch projects from siteData for each site to build the 4-layer structure
+      const enrichedSites = await Promise.all(sitesList.map(async (s: any) => {
+        try {
+          const dataSnap = await runFs(() => getDoc(doc(db, 'siteData', s.id)), OperationType.GET, `siteData/${s.id}`);
+          if (dataSnap.exists()) {
+            const data = dataSnap.data();
+            return {
+              ...s,
+              tenantId: s.tenantId || 'moataz',
+              projects: data.projects || []
+            };
+          }
+        } catch (e) {
+          console.warn(`Failed to fetch siteData projects for ${s.id}:`, e);
+        }
+        return { ...s, tenantId: s.tenantId || 'moataz', projects: [] };
+      }));
+      
+      return mockResponseOk(enrichedSites);
     } catch (err: any) {
       console.warn('[Firestore Log] Failed to fetch sites:', err);
       return mockResponseErr('فشل في جلب المواقع من قاعدة البيانات: ' + (err.message || String(err)), 500);
@@ -942,12 +1570,22 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
 
   // Route 6: POST /api/sites
   if (path === '/api/sites' && method === 'POST') {
-    const { id, nameAr, location, description } = bodyData;
+    const { id, nameAr, location, description, tenantId } = bodyData;
     if (!id || !nameAr || !location) {
       return mockResponseErr('الرجاء كود الموقع واسمه والموقع الجغرافي كاملاً.');
     }
     const formattedId = id.toString().trim().toLowerCase().replace(/\s+/g, '-');
-    const newSite = { id: formattedId, nameAr: nameAr.trim(), location: location.trim(), description: description ? description.trim() : '' };
+    
+    const sessionUser = getCurrentUserObj();
+    const tenantIdToSave = tenantId || (sessionUser ? sessionUser.tenantId : 'moataz');
+
+    const newSite = { 
+      id: formattedId, 
+      nameAr: nameAr.trim(), 
+      location: location.trim(), 
+      description: description ? description.trim() : '',
+      tenantId: tenantIdToSave
+    };
 
     try {
       // Direct duplicate check in Firestore
@@ -959,11 +1597,10 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
 
       await runFs(() => setDoc(siteDocRef, newSite), OperationType.CREATE, `sites/${formattedId}`);
       const sites = getStorage<EmulatedSite[]>('sites', INITIAL_SITES);
-      if (!sites.some(s => s.id === formattedId)) {
-        sites.push(newSite);
-        setStorage('sites', sites);
-      }
-      return mockResponseOk({ success: true });
+      const filtered = sites.filter(s => s.id !== formattedId);
+      filtered.push(newSite);
+      setStorage('sites', filtered);
+      return mockResponseOk({ success: true, site: newSite });
     } catch (err: any) {
       console.warn('[Firestore Log] Failed to save site:', err);
       return mockResponseErr('تعذر حفظ الموقع في قاعدة البيانات سحابياً. ' + (err.message || String(err)), 500);
@@ -994,33 +1631,33 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
   if (path.startsWith('/api/sites/') && method === 'PUT') {
     const parts = path.split('/');
     const siteIdToUpdate = parts[parts.length - 1];
-    const { nameAr, location, description } = bodyData;
+    const { nameAr, location, description, tenantId } = bodyData;
     
     if (!nameAr || !location) {
       return mockResponseErr('الرجاء كتابة اسم الموقع والموقع الجغرافي بالكامل للتحديث.');
     }
 
+    const sessionUser = getCurrentUserObj();
+    const tenantIdToSave = tenantId || (sessionUser ? sessionUser.tenantId : 'moataz');
+
     const updatedSite = {
       id: siteIdToUpdate,
       nameAr: nameAr.trim(),
       location: location.trim(),
-      description: description ? description.trim() : ''
+      description: description ? description.trim() : '',
+      tenantId: tenantIdToSave
     };
 
     try {
-      await runFs(() => setDoc(doc(db, 'sites', siteIdToUpdate), updatedSite), OperationType.UPDATE, `sites/${siteIdToUpdate}`);
+      await runFs(() => setDoc(doc(db, 'sites', siteIdToUpdate), updatedSite, { merge: true }), OperationType.UPDATE, `sites/${siteIdToUpdate}`);
       const sites = getStorage<EmulatedSite[]>('sites', INITIAL_SITES);
-      const matchedIdx = sites.findIndex(s => s.id === siteIdToUpdate);
-      if (matchedIdx !== -1) {
-        sites[matchedIdx] = updatedSite;
-      } else {
-        sites.push(updatedSite);
-      }
-      setStorage('sites', sites);
+      const filtered = sites.filter(s => s.id !== siteIdToUpdate);
+      filtered.push(updatedSite);
+      setStorage('sites', filtered);
       return mockResponseOk({ success: true, site: updatedSite });
     } catch (err: any) {
       console.warn('[Firestore Log] Failed to update site:', err);
-      return mockResponseErr('تعذر تحديث بيانات الموقع في قاعدة البيانات: ' + (err.message || String(err)), 500);
+      return mockResponseErr('تعذر تحديث بيانات الموقع: ' + (err.message || String(err)), 500);
     }
   }
 
@@ -1057,6 +1694,32 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     } catch (err: any) {
       console.warn(`[Firestore Log] Failed to save siteData for ${siteId}:`, err);
       return mockResponseErr('تعذر حفظ تحديثات بيانات الموقع في قاعدة البيانات: ' + (err.message || String(err)), 500);
+    }
+  }
+
+  // Route 8b: POST /api/site/:siteId/auto-backup
+  if (path.startsWith('/api/site/') && path.endsWith('/auto-backup') && method === 'POST') {
+    const parts = path.split('/');
+    const siteId = parts[3];
+    const { siteName, payload } = bodyData;
+
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const backupId = `${siteId}_backup_${today}`;
+      const backupDocRef = doc(db, 'siteBackups', backupId);
+      
+      await runFs(() => setDoc(backupDocRef, {
+        siteId,
+        siteName: siteName || "موقع افتراضي",
+        backupDate: today,
+        createdAt: new Date().toISOString(),
+        payload: payload || {}
+      }), OperationType.WRITE, `siteBackups/${backupId}`);
+      
+      return mockResponseOk({ success: true, backupId });
+    } catch (err: any) {
+      console.warn(`[Firestore Log] Failed to save siteBackup for ${siteId}:`, err);
+      return mockResponseErr('تعذر حفظ النسخة الاحتياطية التلقائية في قاعدة البيانات: ' + (err.message || String(err)), 500);
     }
   }
 

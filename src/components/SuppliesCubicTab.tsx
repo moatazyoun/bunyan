@@ -21,6 +21,7 @@ import {
 import { CubicCertificate, SupplyRecord, SupplyItem, SiteWorker } from '../types';
 
 import ConfirmationDialog from './ConfirmationDialog';
+import GenericInputModal from './GenericInputModal';
 
 interface SuppliesCubicTabProps {
   certificates: CubicCertificate[];
@@ -32,6 +33,8 @@ interface SuppliesCubicTabProps {
   setContractorsReport: React.Dispatch<React.SetStateAction<any[]>>;
   supplyItems: SupplyItem[];
   workers: SiteWorker[];
+  userRole?: string;
+  addAuditLog: (action: string, module: string, details: string) => void;
 }
 
 export default function SuppliesCubicTab({
@@ -43,13 +46,16 @@ export default function SuppliesCubicTab({
   setContractorsReport,
   supplyItems,
   workers,
-  onUpdateCertificate
+  onUpdateCertificate,
+  userRole,
+  addAuditLog
 }: SuppliesCubicTabProps) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [newCert, setNewCert] = useState({
     id: '', // تكويد المحضر
+    referenceNo: '', // رقم مرجعي
     title: '',
     date: new Date().toISOString().split('T')[0],
     supplierName: '',
@@ -156,8 +162,10 @@ export default function SuppliesCubicTab({
   const handleOpenAdd = () => {
     setEditingId(null);
     const nextCode = `CERT-${certificates.length + 1}-${Date.now().toString().slice(-4)}`;
+    const refNo = `CUB-${Date.now().toString().slice(-6)}`;
     setNewCert({
       id: nextCode,
+      referenceNo: refNo,
       title: '',
       date: new Date().toISOString().split('T')[0],
       supplierName: suppliers[0]?.name || '',
@@ -165,8 +173,8 @@ export default function SuppliesCubicTab({
       dumperCubic: '',
       trailerCubic: '',
       discounts: '0',
-      personPerformingMeasurement: workers[0]?.name || '',
-      approverOfMeasurement: workers[1]?.name || workers[0]?.name || '',
+      personPerformingMeasurement: workers.find(w => w.jobTitle.includes('مشرف') || w.jobTitle.includes('مهندس'))?.name || (workers[0]?.name || ''),
+      approverOfMeasurement: workers.find(w => w.jobTitle.includes('مدير'))?.name || (workers[1]?.name || workers[0]?.name || ''),
       engineerName: '',
       notes: '',
       startDate: '',
@@ -182,6 +190,7 @@ export default function SuppliesCubicTab({
     setEditingId(cert.id);
     setNewCert({
       id: cert.id,
+      referenceNo: cert.referenceNo || `CUB-${Date.now().toString().slice(-6)}`,
       title: cert.title,
       date: cert.date,
       supplierName: supplyRecords.find(r => r.cubicCertificateId === cert.id)?.supplierName || '',
@@ -225,7 +234,7 @@ export default function SuppliesCubicTab({
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Saving certificate:", newCert);
+    if (userRole === 'viewer') return;
     
     if (!newCert.id.trim()) {
       alert("الرجاء إدخال كود المحضر.");
@@ -242,16 +251,15 @@ export default function SuppliesCubicTab({
       return;
     }
 
-    if (activePreviousCert && !newCert.oldCertIdToTerminate) {
-      // If there's an active previous certificate, we must ensure oldCertTerminationDate and oldCertIdToTerminate are linked
+    if (activePreviousCert && !newCert.oldCertIdToTerminate && !newCert.oldCertTerminationDate) {
       alert("يرجى تحديد تاريخ نهاية العمل بالمحضر القديم لتسجيل هذا المحضر الجديد بنظام فترات.");
       return;
     }
 
     try {
-      // "Clean" data object: only include requested fields, remove anything else
       const finalCert: CubicCertificate = {
         id: newCert.id.trim(),
+        referenceNo: newCert.referenceNo,
         title: newCert.title || (editingId ? `محضر تكعيب معدل رقم #${newCert.id}` : `محضر تكعيب معتمد رقم #${certificates.length + 1}`),
         date: newCert.date,
         attachedTicketIds: selectedTicketIds,
@@ -276,18 +284,16 @@ export default function SuppliesCubicTab({
         notes: newCert.notes || `تم تسوية بونات التوريد عدد (${selectedTicketIds.length}) بنجاح.`
       };
 
-      console.log("Final Cert to save:", finalCert);
-      
       if (editingId) {
         onUpdateCertificate(editingId, finalCert, selectedTicketIds);
+        addAuditLog('تعديل محضر تكعيب', 'التوريدات', `تم تعديل محضر تكعيب مرجع: ${finalCert.referenceNo} للمورد: ${newCert.supplierName}`);
       } else {
         onAddCertificate(finalCert, selectedTicketIds);
+        addAuditLog('إصدار محضر تكعيب', 'التوريدات', `تم إصدار محضر تكعيب جديد مرجع: ${finalCert.referenceNo} للمورد: ${newCert.supplierName} بقيمة صافية: ${finalCert.netCubic} م٣`);
       }
 
-      // Update the dumper in suppliers data
       setContractorsReport(prev => prev.map(supplier => {
         if (!supplier.deliveryMethods) return supplier;
-        
         const hasDumper = supplier.deliveryMethods.some((dm: any) => dm.id === finalCert.dumperId);
         if (!hasDumper) return supplier;
 
@@ -298,7 +304,7 @@ export default function SuppliesCubicTab({
               return {
                 ...dm,
                 cubicRecordId: finalCert.id,
-                cubicCapacity: finalCert.netCubic?.toString() // Update the capacity from net cubic
+                cubicCapacity: finalCert.netCubic?.toString()
               };
             }
             return dm;
@@ -319,6 +325,7 @@ export default function SuppliesCubicTab({
   };
 
   const confirmDelete = () => {
+    if (userRole === 'viewer') return;
     if (deleteConfirmId) {
       onDeleteCertificate(deleteConfirmId);
       setDeleteConfirmId(null);
@@ -330,7 +337,6 @@ export default function SuppliesCubicTab({
       
       {/* Intro section & Action Button */}
       <div className="bg-indigo-600 p-6 rounded-3xl border border-indigo-400/20 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl shadow-indigo-100 relative overflow-hidden">
-        {/* Subtle decorative element */}
         <div className="absolute -right-4 -top-8 w-32 h-32 bg-white/5 rounded-full blur-3xl pointer-events-none" />
         
         <div className="relative z-10">
@@ -345,19 +351,24 @@ export default function SuppliesCubicTab({
           </p>
         </div>
         <button 
-          onClick={handleOpenAdd}
-          className="relative z-10 bg-white hover:bg-slate-50 text-indigo-600 font-black text-xs py-3 px-6 rounded-2xl flex items-center gap-2 transition-all shadow-lg active:scale-95 group"
+          onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية إصدار محاضر جديدة') : handleOpenAdd}
+          disabled={userRole === 'viewer'}
+          className={`relative z-10 font-black text-xs py-3 px-6 rounded-2xl flex items-center gap-2 transition-all shadow-lg active:scale-95 group ${
+            userRole === 'viewer'
+              ? 'bg-slate-300 text-slate-100 cursor-not-allowed shadow-none'
+              : 'bg-white hover:bg-slate-50 text-indigo-600'
+          }`}
         >
-          <span className="text-base group-hover:scale-110 transition-transform">+</span>
+          <Plus className="h-4 w-4" />
           إصدار محضر تكعيب جديد
         </button>
       </div>
 
       {/* List of certificates */}
       {certificates.length === 0 ? (
-        <div className="bg-white p-12 rounded-3xl border border-slate-200 text-center text-slate-400 flex flex-col items-center justify-center gap-2 shadow-sm">
+        <div className="bg-white p-12 rounded-3xl border border-slate-200 text-center text-slate-400 flex flex-col items-center justify-center gap-2 shadow-sm font-bold">
           <FileCheck className="h-12 w-12 text-slate-300 mb-2" />
-          <p className="text-sm font-bold text-slate-500">لا توجد محاضر تكعيب مسجلة حالياً.</p>
+          <p className="text-sm">لا توجد محاضر تكعيب مسجلة حالياً.</p>
           <p className="text-xs text-slate-400">انقر فوق "إصدار محضر تكعيب جديد" لتجميع بونات التوريدات لكل مورد في مستند تسوية رسمي ومطابق هندسياً.</p>
         </div>
       ) : (
@@ -373,32 +384,33 @@ export default function SuppliesCubicTab({
                 key={c.id} 
                 className="bg-white rounded-3xl border border-slate-200 p-6 flex flex-col justify-between hover:border-indigo-500/30 hover:shadow-xl hover:shadow-slate-100/40 transition-all duration-300 relative overflow-hidden"
               >
-                {/* Visual top highlight bar to indicate status */}
                 <div className={`absolute top-0 right-0 left-0 h-1.5 ${hasDeficit ? 'bg-red-500' : 'bg-emerald-500'}`} />
 
                 <div className="space-y-5">
-                  {/* Card Header Info */}
                   <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-                    <span className="bg-indigo-50/60 hover:bg-indigo-50 text-indigo-700 text-[10px] font-black font-mono px-3 py-1.5 rounded-xl border border-indigo-150 transition-colors flex items-center gap-1.5 shadow-sm">
-                      <Hash className="h-3 w-3 text-indigo-500" />
-                      محضر #{c.id}
-                    </span>
-                    <span className="text-[11px] text-slate-500 font-bold font-sans flex items-center gap-1.5">
+                    <div className="flex flex-col gap-1">
+                      <span className="bg-indigo-50/60 text-indigo-700 text-[10px] font-black font-mono px-3 py-1.5 rounded-xl border border-indigo-150 flex items-center gap-1.5 ">
+                        <Hash className="h-3 w-3 text-indigo-500" />
+                        ID: {c.id}
+                      </span>
+                      {c.referenceNo && (
+                        <span className="text-[9px] text-slate-400 font-mono font-bold mr-2">REF: {c.referenceNo}</span>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-slate-500 font-bold flex items-center gap-1.5">
                       <Calendar className="h-3.5 w-3.5 text-slate-400" />
                       {c.date}
                     </span>
                   </div>
 
-                  {/* Validity Period Badge */}
                   <div className="flex items-center gap-2 text-[10.5px] bg-indigo-50/30 text-indigo-950 px-3 py-1.5 rounded-2xl w-fit font-black border border-indigo-100">
                     <Calendar className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
                     <span>فترة السريان:</span>
-                    <span className="font-sans text-[10px] text-indigo-600 font-black">
+                    <span className="text-[10px] text-indigo-600 font-black">
                       من {c.startDate || 'بداية العمل'} إلى {c.endDate || 'الآن (نشط مستمر)'}
                     </span>
                   </div>
 
-                  {/* Main Subject Information */}
                   <div>
                     <h4 className="text-base font-black text-slate-900 leading-snug tracking-tight mb-2.5 flex items-center gap-2">
                       <div className="h-2 w-2 rounded-full bg-indigo-600 animate-pulse shrink-0" />
@@ -409,9 +421,7 @@ export default function SuppliesCubicTab({
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 bg-slate-50/70 rounded-xl p-3 border border-slate-100">
                       <div className="flex items-center gap-2 min-w-0">
-                        <div className="p-1.5 bg-slate-200/50 rounded-lg shrink-0">
-                          <Users className="h-3.5 w-3.5 text-slate-600" />
-                        </div>
+                        <Users className="h-3.5 w-3.5 text-slate-400" />
                         <div className="min-w-0">
                           <p className="text-[9px] text-slate-400 font-bold block uppercase">المقاول المورد</p>
                           <p className="text-xs text-slate-700 font-black truncate">
@@ -422,9 +432,7 @@ export default function SuppliesCubicTab({
                       
                       {dumper?.driverName && (
                         <div className="flex items-center gap-2 min-w-0">
-                          <div className="p-1.5 bg-slate-200/50 rounded-lg shrink-0">
-                            <User className="h-3.5 w-3.5 text-slate-600" />
-                          </div>
+                          <User className="h-3.5 w-3.5 text-slate-400" />
                           <div>
                             <p className="text-[9px] text-slate-400 font-bold block uppercase">سائق الشاحنة</p>
                             <p className="text-xs text-slate-700 font-black truncate">{dumper.driverName}</p>
@@ -434,72 +442,64 @@ export default function SuppliesCubicTab({
                     </div>
                   </div>
 
-                  {/* Physical Vehicle Dimensions Breakdown */}
-                  <div className="grid grid-cols-3 gap-2.5 bg-slate-50 border border-slate-100 p-2.5 rounded-2xl shadow-inner-sm">
+                  <div className="grid grid-cols-3 gap-2.5 bg-slate-50 border border-slate-100 p-2.5 rounded-2xl shadow-inner">
                     <div className="text-center bg-white p-2 rounded-xl border border-slate-100 shadow-sm">
                       <p className="text-[9px] font-black text-slate-400 mb-1">حمولة القلاب</p>
                       <p className="text-xs font-mono font-black text-slate-800 tracking-wide">
-                        {c.dumperCubic?.toFixed(2) || '0.00'}<span className="text-[9px] font-sans text-slate-400 mr-0.5">م٣</span>
+                        {c.dumperCubic?.toFixed(2) || '0.00'}<span className="text-[9px] text-slate-400 mr-0.5">م٣</span>
                       </p>
                     </div>
                     <div className="text-center bg-white p-2 rounded-xl border border-slate-100 shadow-sm">
                       <p className="text-[9px] font-black text-slate-400 mb-1">المقطورة</p>
                       <p className="text-xs font-mono font-black text-slate-800 tracking-wide">
-                        {c.trailerCubic?.toFixed(2) || '0.00'}<span className="text-[9px] font-sans text-slate-400 mr-0.5">م٣</span>
+                        {c.trailerCubic?.toFixed(2) || '0.00'}<span className="text-[9px] text-slate-400 mr-0.5">م٣</span>
                       </p>
                     </div>
-                    <div className="text-center bg-white p-2 rounded-xl border border-slate-100 shadow-sm">
+                    <div className="text-center bg-white p-2 rounded-xl border border-slate-100 shadow-sm font-bold">
                       <p className="text-[9px] font-black text-red-400 mb-1">الخصم المعتمد</p>
                       <p className="text-xs font-mono font-black text-red-600 tracking-wide">
-                        -{c.discounts?.toFixed(2) || '0.00'}<span className="text-[9px] font-sans text-red-400 mr-0.5">م٣</span>
+                        -{c.discounts?.toFixed(2) || '0.00'}<span className="text-[9px] text-red-400 mr-0.5">م٣</span>
                       </p>
                     </div>
                   </div>
 
-                  {/* Volumetric Reconciliation Audit Section */}
                   <div className="grid grid-cols-2 gap-3.5">
                     <div className="bg-slate-50/40 border border-slate-200/80 p-3.5 rounded-2xl text-center flex flex-col justify-center">
                       <p className="text-[10px] text-slate-400 font-black mb-1">إجمالي التكعيب بالبونات</p>
                       <p className="text-base font-black text-slate-800 font-mono tracking-tight">
-                        {c.calculatedVolume.toFixed(2)} <span className="text-xs font-sans text-slate-500">م٣</span>
+                        {c.calculatedVolume.toFixed(2)} <span className="text-xs text-slate-500">م٣</span>
                       </p>
                     </div>
                     
                     <div className="bg-emerald-50/40 border border-emerald-200/60 p-3.5 rounded-2xl text-center flex flex-col justify-center ring-2 ring-emerald-500/5">
                       <p className="text-[10px] text-emerald-700/80 font-black mb-1">التكعيب الفعلي المعتمد</p>
                       <p className="text-base font-black text-emerald-600 font-mono tracking-tight">
-                        {(c.netCubic ?? c.approvedVolume).toFixed(2)} <span className="text-xs font-sans text-emerald-500">م٣</span>
+                        {(c.netCubic ?? c.approvedVolume).toFixed(2)} <span className="text-xs text-emerald-500">م٣</span>
                       </p>
                     </div>
                   </div>
 
-                  {/* Sign-off Stamps */}
                   <div className="grid grid-cols-2 gap-4 px-1.5 py-1.5 border-y border-dashed border-slate-200/80 my-1">
                     <div className="flex flex-col">
                       <span className="text-[9px] text-slate-400 font-bold">القائم بالتكعيب والقياس</span>
-                      <span className="text-xs font-black text-slate-700 mt-1 italic font-serif tracking-wide">{c.personPerformingMeasurement || 'مشرف الموقع المعتمد'}</span>
+                      <span className="text-xs font-black text-slate-700 mt-1 italic tracking-wide">{c.personPerformingMeasurement || 'مشرف الموقع المعتمد'}</span>
                     </div>
                     <div className="flex flex-col text-left items-end">
                       <span className="text-[9px] text-slate-400 font-bold">المراجعة والاعتمادات</span>
-                      <span className="text-xs font-black text-slate-700 mt-1 italic font-serif tracking-wide">{c.approverOfMeasurement || 'مدير عام المشروع'}</span>
+                      <span className="text-xs font-black text-slate-700 mt-1 italic tracking-wide">{c.approverOfMeasurement || 'مدير عام المشروع'}</span>
                     </div>
                   </div>
 
-                  {/* Modern Difference Evaluation Badge */}
                   <div className={`p-3 rounded-2xl text-xs font-bold flex items-center justify-between font-mono ${
                     hasDeficit 
                       ? 'bg-rose-50 text-rose-700 border border-rose-100/80 hover:bg-rose-100/30 transition-colors' 
                       : 'bg-emerald-50 text-emerald-700 border border-emerald-100/80 hover:bg-emerald-100/30 transition-colors'
                   }`}>
-                    <span className="flex items-center gap-2 font-sans font-black text-[11px]">
+                    <span className="flex items-center gap-2 font-black text-[11px]">
                       {hasDeficit ? (
-                        <div className="p-1 bg-rose-100 text-rose-700 rounded-lg">
-                          <TrendingDown size={14} className="stroke-[2.5]" />
-                        </div>
+                        <TrendingDown size={14} className="stroke-[2.5] text-rose-600" />
                       ) : (
-                        <div className="p-1 bg-emerald-100 text-emerald-700 rounded-lg">
-                          <Award size={14} className="stroke-[2.5]" />
-                        </div>
+                        <Award size={14} className="stroke-[2.5] text-emerald-600" />
                       )}
                       {hasDeficit ? 'عجز قياس (فروقات عجز للمورد):' : 'تطابق أو زيادة قياس هندسي:'}
                     </span>
@@ -510,7 +510,6 @@ export default function SuppliesCubicTab({
                     </span>
                   </div>
 
-                  {/* Custom Note Indicator if available */}
                   {c.notes && (
                     <div className="bg-amber-50/40 border border-amber-100/70 rounded-2xl p-3 text-[11px] text-amber-800 font-medium leading-relaxed flex gap-2">
                       <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
@@ -519,7 +518,6 @@ export default function SuppliesCubicTab({
                   )}
                 </div>
 
-                {/* Card Action footer and statistics */}
                 <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 mt-5 pt-4 border-t border-slate-100">
                   <div className="flex items-center gap-2 bg-indigo-50/50 rounded-xl px-3 py-1.5 border border-indigo-100/40 w-fit">
                     <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-ping" />
@@ -529,16 +527,25 @@ export default function SuppliesCubicTab({
                   </div>
                   <div className="flex gap-2 justify-end">
                     <button
-                      onClick={() => handleOpenEdit(c)}
-                      className="flex-1 sm:flex-initial p-2 px-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                      onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية التعديل') : () => handleOpenEdit(c)}
+                      className={`flex-1 sm:flex-initial p-2 px-4 border rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer ${
+                        userRole === 'viewer'
+                          ? 'bg-slate-50 text-slate-200 border-slate-100 cursor-not-allowed shadow-none'
+                          : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
+                      }`}
                       title="تعديل المحضر"
                     >
-                      <Calculator className="h-4 w-4 text-slate-500" />
+                      <Calculator className="h-4 w-4" />
                       تعديل
                     </button>
                     <button
-                      onClick={() => handleDelete(c.id)}
-                      className="p-2 px-3 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                      onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية الحذف') : () => handleDelete(c.id)}
+                      disabled={userRole === 'viewer'}
+                      className={`p-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer ${
+                        userRole === 'viewer'
+                          ? 'bg-slate-50 text-slate-200 cursor-not-allowed shadow-none border-transparent'
+                          : 'bg-rose-50 hover:bg-rose-100 text-rose-600 border-transparent'
+                      }`}
                       title="إلغاء وفك المحضر"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -552,389 +559,334 @@ export default function SuppliesCubicTab({
         </div>
       )}
 
-      {/* Issuing New Certificate Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-2xl p-0 shadow-2xl relative overflow-hidden my-8">
-            
-            <div className="flex justify-between items-center bg-slate-50 px-6 py-4 border-b border-slate-100">
-              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                <FileText className="h-5 w-5 text-indigo-600" />
-                {editingId ? `تعديل محضر تكعيب هندسي وتسويه رقم #${editingId}` : 'إصدار محضر تكعيب هندسي وتسويه جديد'}
-              </h3>
-              <button 
-                onClick={() => {
-                  setShowAddModal(false);
-                  setEditingId(null);
-                }} 
-                className="text-slate-400 hover:text-slate-900 transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
+      {/* Issuing/Editing Certificate Modal */}
+      <GenericInputModal 
+        isOpen={showAddModal} 
+        onClose={() => {
+          setShowAddModal(false);
+          setEditingId(null);
+        }} 
+        title={editingId ? `تعديل محضر تكعيب هندسي رقم #${editingId}` : 'إصدار محضر تكعيب هندسي جديد'}
+        sidebarTitle="إصدار محضر تكعيب"
+        sidebarDesc="نظام تكييف ومطابقة البيانات الهندسية للموردين والمقاولين بالموقع لضمان دقة التنفيذ المالي."
+      >
+        <form onSubmit={handleSave} className="p-2 space-y-6">
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* ID Coding */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1 flex items-center gap-1">
+                <Hash className="h-3 w-3 text-indigo-500" />
+                تكويد المحضر *
+              </label>
+              <input
+                type="text"
+                required
+                value={newCert.id}
+                onChange={(e) => setNewCert({...newCert, id: e.target.value})}
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-right text-sm font-black text-indigo-600 focus:ring-4 focus:ring-indigo-500/10 outline-none focus:border-indigo-500 transition-all shadow-sm"
+              />
             </div>
 
-            <form onSubmit={handleSave} className="p-6 space-y-4">
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* ID Coding */}
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-slate-600 mr-1 flex items-center gap-1">
-                    <Hash className="h-3 w-3 text-indigo-500" />
-                    تكويد المحضر *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newCert.id}
-                    onChange={(e) => setNewCert({...newCert, id: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-right text-xs font-bold text-indigo-600 focus:outline-none focus:border-indigo-500 shadow-sm"
-                  />
-                </div>
+            {/* Reporting Date */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1 flex items-center gap-1">
+                <Calendar className="h-3 w-3 text-indigo-500" />
+                تاريخ المحضر
+              </label>
+              <input
+                type="date"
+                required
+                value={newCert.date}
+                onChange={(e) => setNewCert({...newCert, date: e.target.value})}
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-right text-sm font-bold text-slate-700 focus:ring-4 focus:ring-indigo-500/10 outline-none focus:border-indigo-500 transition-all shadow-sm"
+              />
+            </div>
+          </div>
 
-                {/* Reporting Date */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Supplier Selection */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1 flex items-center gap-1">
+                <Award className="h-3 w-3 text-indigo-500" />
+                مقاول التوريد المعتمد *
+              </label>
+              <select
+                required
+                value={newCert.supplierName}
+                onChange={(e) => setNewCert({...newCert, supplierName: e.target.value, dumperId: ''})}
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-right text-sm font-bold text-slate-700 focus:ring-4 focus:ring-indigo-500/10 outline-none focus:border-indigo-500 transition-all shadow-sm appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_1rem_center] bg-no-repeat"
+              >
+                <option value="" disabled>اختر مورد...</option>
+                {suppliers.map(s => {
+                  const isDuplicate = suppliers.filter(sup => sup.name === s.name).length > 1;
+                  const materialName = supplyItems.find(i => i.code === s.materialCode)?.name || s.materialCode;
+                  const displayName = isDuplicate ? `${s.name} (${materialName})` : s.name;
+                  return <option key={s.id} value={s.name}>{displayName}</option>;
+                })}
+              </select>
+            </div>
+
+            {/* Dumper Selection */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1 flex items-center gap-1">
+                <Truck className="h-3 w-3 text-indigo-500" />
+                رقم القلاب المربوط *
+              </label>
+              <select
+                required
+                disabled={!newCert.supplierName}
+                value={newCert.dumperId}
+                onChange={(e) => setNewCert({...newCert, dumperId: e.target.value})}
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-right text-sm font-bold text-slate-700 focus:ring-4 focus:ring-indigo-500/10 outline-none focus:border-indigo-500 transition-all disabled:opacity-40 shadow-sm appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_1rem_center] bg-no-repeat"
+              >
+                <option value="" disabled>اختر القلاب/المقطورة...</option>
+                {deliveryMethods.filter((dm: any) => dm.type === 'قلاب').map((dm: any) => (
+                  <option key={dm.id} value={dm.id}>
+                    {dm.dumperNumber} - {dm.truckNumber === 'بدون' ? 'بدون مقطورة' : `مقطورة: ${dm.truckNumber}`} - {dm.driverName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Period Selection */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1 flex items-center gap-1">
+                <Calendar className="h-3 w-3 text-emerald-500" />
+                بداية سريان المحضر
+              </label>
+              <input
+                type="date"
+                value={newCert.startDate}
+                onChange={(e) => setNewCert({...newCert, startDate: e.target.value})}
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-right text-sm font-bold text-slate-700 focus:ring-4 focus:ring-indigo-500/10 outline-none focus:border-indigo-500 transition-all shadow-sm"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1 flex items-center gap-1">
+                <Calendar className="h-3 w-3 text-rose-500" />
+                نهاية سريان المحضر (اختياري)
+              </label>
+              <input
+                type="date"
+                value={newCert.endDate}
+                onChange={(e) => setNewCert({...newCert, endDate: e.target.value})}
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-right text-sm font-bold text-slate-700 focus:ring-4 focus:ring-indigo-500/10 outline-none focus:border-indigo-500 transition-all shadow-sm"
+              />
+            </div>
+          </div>
+
+          {/* Overlapping alert box */}
+          {activePreviousCert && (
+            <div className="bg-amber-50/70 border border-amber-200 rounded-[2rem] p-5 space-y-4 shadow-sm animate-fadeIn">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <label className="block text-xs font-bold text-slate-600 mr-1 flex items-center gap-1">
-                    <Calendar className="h-3 w-3 text-indigo-500" />
-                    تاريخ المحضر
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={newCert.date}
-                    onChange={(e) => setNewCert({...newCert, date: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-right text-xs font-bold text-slate-700 focus:outline-none shadow-sm"
-                  />
+                  <h4 className="text-xs font-black text-amber-950">تنبيه: محضر تكعيب نشط سابقاً ({activePreviousCert.id})</h4>
+                  <p className="text-[10.5px] font-bold text-amber-800 leading-relaxed">
+                    لاحظنا وجود محضر تكعيب هندسي قائم مسبقاً لهذا القلاب بتكعيب معتمد قدره <span className="font-mono font-black">{activePreviousCert.netCubic} م٣</span>. لتسجيل المحضر الجديد بفترة سريانية تالية، يرجى تحديد تاريخ إنهاء العمل بالمحضر القديم أدناه.
+                  </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Supplier Selection */}
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-slate-600 mr-1 flex items-center gap-1">
-                    <Award className="h-3 w-3 text-indigo-500" />
-                    مقاول التوريد المعتمد *
-                  </label>
-                  <select
-                    required
-                    value={newCert.supplierName}
-                    onChange={(e) => setNewCert({...newCert, supplierName: e.target.value, dumperId: ''})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-right text-xs font-bold text-slate-700 focus:outline-none shadow-sm appearance-none"
-                  >
-                    <option value="" disabled>اختر مورد...</option>
-                    {suppliers.map(s => {
-                      const isDuplicate = suppliers.filter(sup => sup.name === s.name).length > 1;
-                      const materialName = supplyItems.find(i => i.code === s.materialCode)?.name || s.materialCode;
-                      const displayName = isDuplicate ? `${s.name} (${materialName})` : s.name;
-                      return <option key={s.id} value={s.name}>{displayName}</option>;
-                    })}
-                  </select>
-                </div>
-
-                {/* Dumper Selection */}
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-slate-600 mr-1 flex items-center gap-1">
-                    <Truck className="h-3 w-3 text-indigo-500" />
-                    رقم القلاب المربوط *
-                  </label>
-                  <select
-                    required
-                    disabled={!newCert.supplierName}
-                    value={newCert.dumperId}
-                    onChange={(e) => setNewCert({...newCert, dumperId: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-right text-xs font-bold text-slate-700 focus:outline-none disabled:opacity-40 shadow-sm appearance-none"
-                  >
-                    <option value="" disabled>اختر القلاب/المقطورة...</option>
-                    {deliveryMethods.filter((dm: any) => dm.type === 'قلاب').map((dm: any) => (
-                      <option key={dm.id} value={dm.id}>
-                        {dm.dumperNumber} - {dm.truckNumber === 'بدون' ? 'بدون مقطورة' : `مقطورة: ${dm.truckNumber}`} - {dm.driverName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Start and End Validity Period Inputs */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Validity Start Date */}
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-slate-600 mr-1 flex items-center gap-1">
-                    <Calendar className="h-3 w-3 text-emerald-500" />
-                    تاريخ بدء سريان المحضر
-                  </label>
-                  <input
-                    type="date"
-                    value={newCert.startDate}
-                    onChange={(e) => setNewCert({...newCert, startDate: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-right text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500 shadow-sm"
-                  />
-                  <p className="text-[10px] text-slate-400 mr-2 font-medium">مهم لربط بونات التوريد التي تبدأ من هذا التاريخ (تلقائي إن تُرك فارغاً)</p>
-                </div>
-
-                {/* Validity End Date */}
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-slate-600 mr-1 flex items-center gap-1">
-                    <Calendar className="h-3 w-3 text-rose-500" />
-                    تاريخ نهاية سريان المحضر (اختياري)
-                  </label>
-                  <input
-                    type="date"
-                    value={newCert.endDate}
-                    onChange={(e) => setNewCert({...newCert, endDate: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-right text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500 shadow-sm"
-                  />
-                  <p className="text-[10px] text-slate-400 mr-2 font-medium">اتركه فارغاً للسريان الدائم المستمر والمفتوح بدون حد أقصى</p>
-                </div>
-              </div>
-
-              {/* Overlapping Cert Periods Helper */}
-              {activePreviousCert && (
-                <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 space-y-3 shadow-sm animate-fadeIn">
-                  <div className="flex items-start gap-2.5">
-                    <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-                    <div className="space-y-1">
-                      <h4 className="text-xs font-black text-amber-950">تنبيه: محضر تكعيب نشط سابقاً ({activePreviousCert.id})</h4>
-                      <p className="text-[10px] font-bold text-amber-800 leading-relaxed">
-                        لاحظنا وجود محضر تكعيب هندسي قائم مسبقاً لهذا القلاب بتكعيب معتمد قدره <span className="font-mono font-black">{activePreviousCert.netCubic} م٣</span>. لتسجيل المحضر الجديد بفترة سريانية تالية، يرجى تحديد تاريخ إنهاء العمل بالمحضر القديم أدناه.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="pt-2.5 border-t border-amber-200/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <label className="block text-xs font-bold text-amber-900">
-                      تاريخ نهاية العمل بالمحضر القديم ({activePreviousCert.id}) *
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={newCert.oldCertTerminationDate}
-                      onChange={(e) => {
-                        const endingDate = e.target.value;
-                        setNewCert({
-                          ...newCert,
-                          oldCertIdToTerminate: activePreviousCert.id,
-                          oldCertTerminationDate: endingDate
-                        });
-                      }}
-                      className="bg-white border border-amber-300 text-amber-950 text-xs font-bold font-mono rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-amber-500/20"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Box for Cubic Calculations */}
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-5 shadow-inner">
-                <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
-                  <Calculator className="h-4 w-4 text-indigo-600" />
-                  <span className="text-sm font-black text-slate-700">بيانات التكعيب الهندسية وصافي القياس</span>
-                </div>
-
-                {/* Desktop: Logical Horizontal Flow | Mobile: Stacked */}
-                <div className="flex flex-col lg:flex-row lg:items-end gap-3 lg:gap-2 justify-between">
-                  
-                  {/* Dumper Input */}
-                  <div className="w-full lg:w-40">
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1.5 text-center">تكعيب القلاب (م٣)</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="0.00"
-                      required
-                      value={newCert.dumperCubic}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/[^0-9.,٠-٩٫]/g, '');
-                        setNewCert({...newCert, dumperCubic: val});
-                      }}
-                      className="w-full bg-white border border-slate-300 rounded-xl p-3 text-center text-sm font-mono font-black text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-sm"
-                    />
-                  </div>
-
-                  {/* Math Operator: + */}
-                  <div className="hidden lg:flex items-center justify-center font-black text-slate-300 pointer-events-none pb-3">
-                    +
-                  </div>
-
-                  {/* Trailer Input */}
-                  <div className="w-full lg:w-40">
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1.5 text-center">تكعيب المقطورة (م٣)</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      required={selectedDumper?.truckNumber !== 'بدون'}
-                      disabled={selectedDumper?.truckNumber === 'بدون'}
-                      placeholder="0.00"
-                      value={newCert.trailerCubic}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/[^0-9.,٠-٩٫]/g, '');
-                        setNewCert({...newCert, trailerCubic: val});
-                      }}
-                      className="w-full bg-white border border-slate-300 rounded-xl p-3 text-center text-sm font-mono font-black text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-40 disabled:bg-slate-100 shadow-sm transition-all"
-                    />
-                  </div>
-
-                  {/* Math Operator: = */}
-                  <div className="hidden lg:flex items-center justify-center font-black text-slate-300 pointer-events-none pb-3">
-                    =
-                  </div>
-
-                  {/* Total Cubic (Read-Only) */}
-                  <div className="w-full lg:w-40">
-                    <label className="block text-[11px] font-bold text-slate-500 mb-1.5 text-center">التكعيب الكلي (م٣)</label>
-                    <div className="w-full bg-slate-200 border border-slate-300 rounded-xl p-3 text-center text-sm font-mono font-black text-slate-700 shadow-inner">
-                      {calculations.total.toFixed(2)}
-                    </div>
-                  </div>
-
-                  {/* Math Operator: - */}
-                  <div className="hidden lg:flex items-center justify-center font-black text-red-300 pointer-events-none pb-3">
-                    -
-                  </div>
-
-                  {/* Discounts Input */}
-                  <div className="w-full lg:w-40">
-                    <label className="block text-[11px] font-bold text-red-600 mb-1.5 text-center">خصومات (م٣ / طن)</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="0.00"
-                      value={newCert.discounts}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/[^0-9.,٠-٩٫]/g, '');
-                        setNewCert({...newCert, discounts: val});
-                      }}
-                      className="w-full bg-red-50/30 border border-red-200 rounded-xl p-3 text-center text-sm font-mono font-black text-red-600 focus:border-red-500 focus:ring-1 focus:ring-red-500 shadow-sm"
-                    />
-                  </div>
-
-                  {/* Math Operator: = */}
-                  <div className="hidden lg:flex items-center justify-center font-black text-emerald-400 pointer-events-none pb-3">
-                    =
-                  </div>
-
-                  {/* Net Cubic (Final Result) */}
-                  <div className="w-full lg:w-48 lg:flex-shrink-0">
-                    <label className="block text-[12px] font-black text-emerald-700 mb-1.5 text-center">الصافي المعتمد (م٣)</label>
-                    <div className="w-full bg-emerald-600 border border-emerald-700 rounded-xl p-3 text-center text-lg font-mono font-black text-white shadow-lg shadow-emerald-900/20 transform hover:scale-[1.02] transition-transform">
-                      {calculations.net.toFixed(2)}
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-
-              {/* Personnel */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-slate-600 mr-1 flex items-center gap-1">
-                    <User className="h-3 w-3 text-indigo-500" />
-                    القائم بالتكعيب *
-                  </label>
-                  <select
-                    required
-                    value={newCert.personPerformingMeasurement}
-                    onChange={(e) => setNewCert({...newCert, personPerformingMeasurement: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-right text-xs font-bold text-slate-700 focus:outline-none shadow-sm appearance-none"
-                  >
-                    <option value="" disabled>اختر موظف...</option>
-                    {workers.map(w => (
-                      <option key={w.id} value={w.name}>{w.name} ({w.jobTitle})</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-slate-600 mr-1 flex items-center gap-1">
-                    <Users className="h-3 w-3 text-indigo-500" />
-                    معتمد التكعيب *
-                  </label>
-                  <select
-                    required
-                    value={newCert.approverOfMeasurement}
-                    onChange={(e) => setNewCert({...newCert, approverOfMeasurement: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-right text-xs font-bold text-slate-700 focus:outline-none shadow-sm appearance-none"
-                  >
-                    <option value="" disabled>اختر المسؤول المعتمِد...</option>
-                    {workers.map(w => (
-                      <option key={w.id} value={w.name}>{w.name} ({w.jobTitle})</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Tickets sub-selection */}
-              {newCert.supplierName && (
-                <div className="space-y-2 pt-2">
-                  <div className="flex justify-between items-center text-xs font-bold">
-                    <span className="text-slate-600">ربط بونات التوريد ({availableTickets.length} بون متاح):</span>
-                    <button 
-                      type="button"
-                      onClick={handleToggleSelectAll}
-                      className="text-indigo-600 hover:text-indigo-700 font-black transition-all text-[11px]"
-                    >
-                      {selectedTicketIds.length === availableTickets.length ? 'إلغاء تحديد الكل' : 'تحديد الكل'}
-                    </button>
-                  </div>
-
-                  <div className="max-h-[140px] overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-white">
-                    {availableTickets.length === 0 ? (
-                      <div className="p-4 text-center text-[10px] text-slate-400 italic font-sans">لا توجد بونات توريد حرة لهذا المورد</div>
-                    ) : (
-                      availableTickets.map(t => {
-                        const isChecked = selectedTicketIds.includes(t.id);
-                        return (
-                          <div 
-                            key={t.id} 
-                            onClick={() => handleToggleTicket(t.id)}
-                            className={`p-2.5 flex items-center justify-between text-[11px] cursor-pointer transition-colors ${isChecked ? 'bg-indigo-50/50' : 'hover:bg-slate-50'}`}
-                          >
-                            <div className="flex items-center gap-2">
-                              {isChecked ? <CheckSquare className="h-3.5 w-3.5 text-indigo-600" /> : <Square className="h-3.5 w-3.5 text-slate-300" />}
-                              <span className="font-bold text-slate-700 underline decoration-indigo-200 underline-offset-2">بون #{t.ticketNo}</span>
-                              <span className="text-slate-400">• {t.date}</span>
-                            </div>
-                            <div className="font-mono font-black text-indigo-600">
-                              {t.netQuantity.toLocaleString()} م٣
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-slate-600 mr-1">مذكرات القياس والمطابقة الهندسية</label>
-                <textarea
-                  placeholder="ملاحظات اختيارية عن محضر التكعيب..."
-                  value={newCert.notes}
-                  onChange={(e) => setNewCert({...newCert, notes: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-right text-xs text-slate-700 h-16 focus:outline-none focus:border-indigo-500 shadow-sm"
+              <div className="pt-3 border-t border-amber-200/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <label className="block text-xs font-black text-amber-900">
+                  تاريخ نهاية العمل بالمحضر القديم ({activePreviousCert.id}) *
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={newCert.oldCertTerminationDate}
+                  onChange={(e) => {
+                    const endingDate = e.target.value;
+                    setNewCert({
+                      ...newCert,
+                      oldCertIdToTerminate: activePreviousCert.id,
+                      oldCertTerminationDate: endingDate
+                    });
+                  }}
+                  className="bg-white border border-amber-300 text-amber-950 text-xs font-black font-mono rounded-xl p-3 outline-none focus:ring-4 focus:ring-amber-500/10 transition-all"
                 />
               </div>
+            </div>
+          )}
 
-              <div className="flex gap-3 pt-4 border-t border-slate-100">
-                <button
-                  type="submit"
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm py-3 rounded-2xl transition-all shadow-lg shadow-indigo-100 active:scale-[0.98]"
-                >
-                  {editingId ? 'حفظ التعديلات' : 'حفظ واعتماد محضر التكعيب'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAddModal(false);
-                    setEditingId(null);
+          {/* Calculations Box */}
+          <div className="bg-white border border-slate-200 rounded-[2rem] p-6 space-y-6 shadow-sm border-dashed">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-4">
+              <Calculator className="h-4 w-4 text-indigo-600" />
+              <span className="text-sm font-black text-slate-800">بيانات التكعيب الهندسية وصافي القياس</span>
+            </div>
+
+            <div className="flex flex-col lg:flex-row lg:items-end gap-3 justify-between">
+              <div className="flex-1">
+                <label className="block text-[11px] font-black text-slate-400 mb-2 text-center uppercase">تكعيب القلاب (م٣)</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  required
+                  value={newCert.dumperCubic}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9.,٠-٩٫]/g, '');
+                    setNewCert({...newCert, dumperCubic: val});
                   }}
-                  className="px-8 bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold text-sm py-3 rounded-2xl transition-all"
-                >
-                  إلغاء الأمر
-                </button>
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center text-sm font-mono font-black text-slate-800 focus:ring-4 focus:ring-indigo-500/10 outline-none shadow-sm"
+                />
               </div>
-
-            </form>
-
+              <div className="hidden lg:flex pb-4 text-slate-300 font-black">+</div>
+              <div className="flex-1">
+                <label className="block text-[11px] font-black text-slate-400 mb-2 text-center uppercase">تكعيب المقطورة (م٣)</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  disabled={selectedDumper?.truckNumber === 'بدون'}
+                  value={newCert.trailerCubic}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9.,٠-٩٫]/g, '');
+                    setNewCert({...newCert, trailerCubic: val});
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center text-sm font-mono font-black text-slate-800 focus:ring-4 focus:ring-indigo-500/10 outline-none disabled:opacity-40 shadow-sm"
+                />
+              </div>
+              <div className="hidden lg:flex pb-4 text-slate-300 font-black">=</div>
+              <div className="flex-1">
+                <label className="block text-[11px] font-black text-slate-400 mb-2 text-center uppercase">التكعيب الكلي</label>
+                <div className="w-full bg-slate-100 border border-slate-200 rounded-2xl p-4 text-center text-sm font-mono font-black text-slate-700">
+                  {calculations.total.toFixed(2)}
+                </div>
+              </div>
+              <div className="hidden lg:flex pb-4 text-rose-300 font-black">-</div>
+              <div className="flex-1">
+                <label className="block text-[11px] font-black text-rose-400 mb-2 text-center uppercase">الخصومات (م٣)</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={newCert.discounts}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9.,٠-٩٫]/g, '');
+                    setNewCert({...newCert, discounts: val});
+                  }}
+                  className="w-full bg-rose-50/30 border border-rose-200 rounded-2xl p-4 text-center text-sm font-mono font-black text-rose-600 focus:ring-4 focus:ring-rose-500/10 outline-none shadow-sm"
+                />
+              </div>
+              <div className="hidden lg:flex pb-4 text-emerald-400 font-black">=</div>
+              <div className="flex-1 min-w-[120px]">
+                <label className="block text-[12px] font-black text-emerald-700 mb-2 text-center uppercase">الصافي המعتمد</label>
+                <div className="w-full bg-emerald-600 rounded-2xl p-4 text-center text-xl font-mono font-black text-white shadow-lg">
+                  {calculations.net.toFixed(2)}
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+
+          {/* Personnel */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1 flex items-center gap-1">
+                <Users className="h-3 w-3 text-indigo-500" />
+                القائم بالتكعيب *
+              </label>
+              <select
+                required
+                value={newCert.personPerformingMeasurement}
+                onChange={(e) => setNewCert({...newCert, personPerformingMeasurement: e.target.value})}
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-right text-sm font-bold text-slate-700 focus:ring-4 focus:ring-indigo-500/10 outline-none shadow-sm appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_1rem_center] bg-no-repeat"
+              >
+                <option value="" disabled>اختر موظف...</option>
+                {workers.map(w => (
+                  <option key={w.id} value={w.name}>{w.name} ({w.jobTitle})</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1 flex items-center gap-1">
+                <Award className="h-3 w-3 text-indigo-500" />
+                معتمد التكعيب *
+              </label>
+              <select
+                required
+                value={newCert.approverOfMeasurement}
+                onChange={(e) => setNewCert({...newCert, approverOfMeasurement: e.target.value})}
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-right text-sm font-bold text-slate-700 focus:ring-4 focus:ring-indigo-500/10 outline-none shadow-sm appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_1rem_center] bg-no-repeat"
+              >
+                <option value="" disabled>اختر المسؤول المعتمد...</option>
+                {workers.map(w => (
+                  <option key={w.id} value={w.name}>{w.name} ({w.jobTitle})</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Tickets List */}
+          <div className="space-y-3">
+             <div className="flex justify-between items-center px-1">
+              <label className="text-sm font-black text-slate-700">ربط بونات التوريد ({availableTickets.length} بون متاح):</label>
+              <button 
+                type="button"
+                onClick={handleToggleSelectAll}
+                className="text-[11px] font-black text-indigo-600 hover:text-indigo-800 transition-colors"
+              >
+                {selectedTicketIds.length === availableTickets.length ? 'إلغاء تحديد الكل' : 'تحديد الكل'}
+              </button>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-[2rem] p-5 max-h-48 overflow-y-auto custom-scrollbar">
+              {availableTickets.length === 0 ? (
+                <p className="text-center text-[11px] text-slate-400 py-6 font-bold">لا توجد بونات توريد حرة لهذا المورد</p>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                   {availableTickets.map(ticket => (
+                    <div 
+                      key={ticket.id}
+                      onClick={() => handleToggleTicket(ticket.id)}
+                      className={`flex items-center gap-2 p-3 rounded-2xl cursor-pointer transition-all border ${
+                        selectedTicketIds.includes(ticket.id)
+                          ? 'bg-indigo-100/50 border-indigo-500 text-indigo-700'
+                          : 'bg-white border-slate-100 text-slate-500 hover:border-slate-300'
+                      }`}
+                    >
+                      {selectedTicketIds.includes(ticket.id) ? (
+                        <CheckSquare className="h-4 w-4 bg-indigo-600 text-white rounded-md shrink-0" />
+                      ) : (
+                        <Square className="h-4 w-4 shrink-0 text-slate-300" />
+                      )}
+                      <div className="flex flex-col truncate min-w-0">
+                        <span className="text-[11px] font-black font-mono">#{ticket.ticketNo}</span>
+                        <span className="text-[9px] opacity-70 font-bold">{ticket.date}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">ملاحظات التكعيب</label>
+            <textarea
+              placeholder="أي ملاحظات إضافية..."
+              value={newCert.notes}
+              onChange={(e) => setNewCert({...newCert, notes: e.target.value})}
+              className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs font-bold text-slate-700 focus:ring-4 focus:ring-indigo-500/10 outline-none h-24 shadow-sm"
+            />
+          </div>
+
+          {/* Footer Submit */}
+          <div className="pt-2">
+            <button 
+              type="submit"
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black text-base py-4 rounded-3xl transition-all shadow-xl shadow-emerald-200 flex items-center justify-center gap-3 active:scale-[0.98]"
+            >
+              <FileCheck className="h-6 w-6" />
+              {editingId ? 'حفظ تعديلات المحضر' : 'إصدار واعتماد المحضر'}
+            </button>
+          </div>
+        </form>
+      </GenericInputModal>
 
       <ConfirmationDialog
         isOpen={deleteConfirmId !== null}

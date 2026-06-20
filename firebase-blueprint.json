@@ -67,6 +67,19 @@
       "properties": {
         "ping": { "type": "string" }
       }
+    },
+    "SiteBackup": {
+      "title": "SiteBackup",
+      "description": "Structured daily backup archives of a given site's data ledger",
+      "type": "object",
+      "properties": {
+        "siteId": { "type": "string" },
+        "siteName": { "type": "string" },
+        "backupDate": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "payload": { "type": "object" }
+      },
+      "required": ["siteId", "backupDate", "createdAt", "payload"]
     }
   },
   "firestore": {
@@ -89,6 +102,10 @@
     "/system/{docId}": {
       "schema": "SystemPing",
       "description": "Network latency status check database references"
+    },
+    "/siteBackups/{backupId}": {
+      "schema": "SiteBackup",
+      "description": "Backups of active sites structured data"
     }
   }
 }

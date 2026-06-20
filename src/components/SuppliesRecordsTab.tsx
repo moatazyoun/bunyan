@@ -31,6 +31,8 @@ interface SuppliesRecordsTabProps {
   onDeleteRecord: (id: string) => void;
   supplyItems: SupplyItem[];
   suppliers: any[];
+  userRole?: string;
+  addAuditLog: (action: string, module: string, details: string) => void;
 }
 
 export default function SuppliesRecordsTab({
@@ -39,7 +41,9 @@ export default function SuppliesRecordsTab({
   onUpdateRecord,
   onDeleteRecord,
   supplyItems,
-  suppliers
+  suppliers,
+  userRole,
+  addAuditLog
 }: SuppliesRecordsTabProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterSupplier, setFilterSupplier] = useState('all');
@@ -221,6 +225,7 @@ export default function SuppliesRecordsTab({
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    if (userRole === 'viewer') return;
     const raw = parseFloat(formState.rawQuantity);
     const price = parseFloat(formState.unitPrice);
 
@@ -228,9 +233,11 @@ export default function SuppliesRecordsTab({
     if (isNaN(price) || price < 0) return alert("الرجاء إدخال سعر صحيح.");
 
     const itemObj = supplyItems.find(i => i.code === formState.itemCode);
+    const refNo = editingId ? (supplyRecords.find(r => r.id === editingId)?.referenceNo || `REC-${Date.now().toString().slice(-6)}`) : `REC-${Date.now().toString().slice(-6)}`;
 
     const recordData: SupplyRecord = {
       id: editingId || `sup-ticket-${Date.now()}`,
+      referenceNo: refNo,
       date: formState.date,
       ticketNo: formState.ticketNo,
       truckPlate: formState.truckPlate,
@@ -256,8 +263,10 @@ export default function SuppliesRecordsTab({
 
     if (editingId) {
       onUpdateRecord(editingId, recordData);
+      addAuditLog('تعديل بون توريد', 'التوريدات', `تم تعديل بون توريد ورقي رقم: ${recordData.ticketNo} مرجع: ${refNo} للمورد: ${recordData.supplierName}`);
     } else {
       onAddRecord(recordData);
+      addAuditLog('تسجيل بون توريد', 'التوريدات', `تم تسجيل بون توريد جديد ورقي رقم: ${recordData.ticketNo} مرجع: ${refNo} للمورد: ${recordData.supplierName} (كمية: ${recordData.netQuantity} ${recordData.unit})`);
       localStorage.setItem('lastSupplyItemCode', formState.itemCode);
       localStorage.setItem('lastSupplySupplierName', formState.supplierName);
     }
@@ -266,6 +275,7 @@ export default function SuppliesRecordsTab({
   };
 
   const confirmDelete = () => {
+    if (userRole === 'viewer') return;
     if (deleteConfirmId) {
       onDeleteRecord(deleteConfirmId);
       setDeleteConfirmId(null);
@@ -289,8 +299,13 @@ export default function SuppliesRecordsTab({
           </div>
           
           <button 
-            onClick={handleOpenAdd}
-            className="group bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm py-4 px-8 rounded-2xl flex items-center gap-3 transition-all shadow-lg shadow-indigo-600/20 active:scale-95"
+            onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية تسجيل توريدات جديدة') : handleOpenAdd}
+            disabled={userRole === 'viewer'}
+            className={`group font-black text-sm py-4 px-8 rounded-2xl flex items-center gap-3 transition-all shadow-lg active:scale-95 ${
+              userRole === 'viewer'
+                ? 'bg-slate-300 text-slate-100 cursor-not-allowed shadow-none'
+                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/20'
+            }`}
           >
             <Plus className="h-4 w-4" />
             إضافة بون جديد
@@ -370,56 +385,71 @@ export default function SuppliesRecordsTab({
                 const dayOfWeek = getArabicDayName(rec.date);
 
                 return (
-                  <tr key={rec.id} className="group hover:bg-indigo-50/20 transition-all duration-200">
-                    <td className="py-2 px-3 text-center">
-                      <span className="inline-block bg-slate-100 text-slate-700 text-[10px] font-black font-mono px-2 py-1 rounded-lg border border-slate-200">
-                        #{rec.ticketNo}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3 text-center">
-                      <div className="text-slate-800 font-extrabold font-mono text-[11px] whitespace-nowrap">
-                        <span className="text-[9px] text-slate-400 font-sans font-bold">{dayOfWeek}</span> {rec.date}
+                  <tr key={rec.id} className="group hover:bg-slate-200/50 transition-all duration-200 even:bg-slate-50/40">
+                    <td className="py-3 px-3 text-center bg-blue-50/20 group-hover:bg-blue-100/30">
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="inline-block bg-white text-blue-700 text-[10px] font-black font-mono px-2 py-1 rounded-lg border border-blue-100 shadow-sm">
+                          #{rec.ticketNo}
+                        </span>
+                        {rec.referenceNo && (
+                          <span className="text-[8px] text-blue-400 font-mono font-bold tracking-tight">{rec.referenceNo}</span>
+                        )}
                       </div>
                     </td>
-                    <td className="py-2 px-3 font-black text-slate-800 text-[11px] text-center whitespace-nowrap">{rec.supplierName}</td>
-                    <td className="py-2 px-3 text-center">
-                      <span className="inline-block bg-indigo-50/50 text-indigo-700 text-[11px] font-black px-2 py-1 rounded-lg whitespace-nowrap">
+                    <td className="py-3 px-3 text-center bg-slate-50/20 group-hover:bg-slate-100/30 border-r border-slate-100/50">
+                      <div className="text-slate-800 font-extrabold font-mono text-[11px] whitespace-nowrap">
+                        <span className="text-[9px] text-slate-400 font-sans font-bold block">{dayOfWeek}</span> {rec.date}
+                      </div>
+                    </td>
+                    <td className="py-3 px-3 font-black text-slate-800 text-[11px] text-center whitespace-nowrap bg-indigo-50/20 group-hover:bg-indigo-100/30 border-r border-indigo-100/30">
+                      {rec.supplierName}
+                    </td>
+                    <td className="py-3 px-3 text-center bg-emerald-50/20 group-hover:bg-emerald-100/30 border-r border-emerald-100/30">
+                      <span className="inline-block bg-white text-emerald-700 text-[11px] font-black px-2 py-1 rounded-lg whitespace-nowrap border border-emerald-100 shadow-sm">
                         {supplyItems.find(i => i.code === rec.itemCode)?.name || rec.itemCode}
                       </span>
                     </td>
-                    <td className="py-2 px-3 font-mono font-black text-slate-850 text-[11px] text-center whitespace-nowrap">
+                    <td className="py-3 px-3 font-mono font-black text-slate-850 text-[11px] text-center whitespace-nowrap bg-amber-50/20 group-hover:bg-amber-100/30 border-r border-amber-100/30">
                       {rec.truckPlate} {rec.trailerPlate && <span className="text-slate-300">/</span>} {rec.trailerPlate}
                     </td>
-                    <td className="py-2 px-3 font-mono text-center font-black text-slate-850 text-[12px]">
+                    <td className="py-3 px-3 font-mono text-center font-black text-slate-850 text-[12px] bg-sky-50/20 group-hover:bg-sky-100/30 border-r border-sky-100/30">
                       {((rec.netQuantity || 0)).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                      <span className="text-[9px] font-sans font-black text-slate-400 mr-1">م٣</span>
+                      <span className="text-[9px] font-sans font-black text-sky-400 mr-1">م٣</span>
                     </td>
-                    <td className="py-2 px-3 font-mono text-center text-[11px]">
+                    <td className="py-3 px-3 font-mono text-center text-[11px] bg-rose-50/20 group-hover:bg-rose-100/30 border-r border-rose-100/30">
                       {totalDisc > 0 ? (
                         <span className="text-rose-600 font-black">-{totalDisc.toLocaleString()}</span>
                       ) : (
                         <span className="text-slate-300 font-bold">---</span>
                       )}
                     </td>
-                    <td className="py-2 px-3 font-mono text-center text-[12px]">
-                      <span className="font-mono font-black text-emerald-600">
+                    <td className="py-3 px-3 font-mono text-center text-[12px] bg-emerald-50/30 group-hover:bg-emerald-100/40 border-r border-emerald-200/30">
+                      <span className="font-mono font-black text-emerald-700">
                         {((rec.totalCost || 0)).toLocaleString()}
                         <span className="text-[9px] font-sans font-black text-emerald-500 mr-1">ج.م</span>
                       </span>
                     </td>
-                    <td className="py-2 px-3 text-center">
+                    <td className="py-3 px-3 text-center bg-slate-50/40 group-hover:bg-slate-100/50">
                       <div className="flex items-center gap-1 justify-center opacity-0 group-hover:opacity-100 transition-all duration-150">
                         <button 
-                          onClick={() => handleOpenEdit(rec)} 
-                          className="h-6 w-6 flex items-center justify-center text-slate-500 hover:text-indigo-600 bg-slate-100 rounded-lg transition-all"
+                          onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية تعديل السجلات') : () => handleOpenEdit(rec)} 
+                          className={`h-6 w-6 flex items-center justify-center rounded-lg transition-all ${
+                            userRole === 'viewer'
+                              ? 'text-slate-300 bg-slate-50 cursor-not-allowed'
+                              : 'text-slate-500 hover:text-indigo-600 bg-slate-100'
+                          }`}
                           title="تعديل"
                         >
                           <Edit className="h-3 w-3" />
                         </button>
                         <button 
-                          onClick={() => handleDelete(rec.id)} 
-                          disabled={!!rec.cubicCertificateId} 
-                          className="h-6 w-6 flex items-center justify-center text-slate-400 hover:text-rose-600 disabled:opacity-20 bg-slate-100 rounded-lg transition-all"
+                          onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية حذف السجلات') : () => handleDelete(rec.id)} 
+                          disabled={userRole === 'viewer' || !!rec.cubicCertificateId} 
+                          className={`h-6 w-6 flex items-center justify-center rounded-lg transition-all ${
+                            userRole === 'viewer'
+                              ? 'text-slate-200 bg-slate-50 cursor-not-allowed'
+                              : 'text-slate-400 hover:text-rose-600 bg-slate-100 disabled:opacity-20'
+                          }`}
                           title="حذف"
                         >
                           <Trash2 className="h-3 w-3" />

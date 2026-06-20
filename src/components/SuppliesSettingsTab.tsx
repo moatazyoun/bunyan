@@ -9,6 +9,8 @@ interface SuppliesSettingsTabProps {
   supplyItems: SupplyItem[];
   setSupplyItems: React.Dispatch<React.SetStateAction<SupplyItem[]>>;
   cubicCertificates?: CubicCertificate[];
+  userRole?: string;
+  addAuditLog: (action: string, module: string, details: string) => void;
 }
 
 export default function SuppliesSettingsTab({ 
@@ -16,7 +18,9 @@ export default function SuppliesSettingsTab({
   setContractorsReport, 
   supplyItems, 
   setSupplyItems,
-  cubicCertificates = []
+  cubicCertificates = [],
+  userRole,
+  addAuditLog
 }: SuppliesSettingsTabProps) {
   // --- Materials State ---
   const [activeMaterialCode, setActiveMaterialCode] = useState<string | null>(null);
@@ -126,6 +130,7 @@ export default function SuppliesSettingsTab({
   };
 
   const addDeliveryMethod = () => {
+    if (userRole === 'viewer') return;
     const errors = {
       truckNumber: (deliveryType === 'عربية') && !truckNumber.trim(),
       dumperNumber: (deliveryType === 'قلاب') && !dumperNumber.trim(),
@@ -140,8 +145,10 @@ export default function SuppliesSettingsTab({
       return;
     }
     
+    const refNo = editingDeliveryMethod?.referenceNo || `DEL-${Date.now().toString().slice(-6)}`;
     const newMethod = { 
       id: editingDeliveryMethod ? editingDeliveryMethod.id : `dm-${Date.now()}`,
+      referenceNo: refNo,
       type: deliveryType,
       truckNumber: ['قلاب', 'عربية'].includes(deliveryType) ? truckNumber : '',
       dumperNumber: deliveryType === 'قلاب' ? dumperNumber : '',
@@ -158,6 +165,13 @@ export default function SuppliesSettingsTab({
       : [...(activeSupplier.deliveryMethods || []), newMethod];
     
     updateActiveSupplierSpecs('deliveryMethods', updatedMethods);
+    
+    if (editingDeliveryMethod) {
+      addAuditLog('تعديل وسيلة توريد', 'إعدادات التوريدات', `تم تعديل وسيلة توريد مرجع: ${refNo} للمورد: ${activeSupplier.name}`);
+    } else {
+      addAuditLog('إضافة وسيلة توريد', 'إعدادات التوريدات', `تم إضافة وسيلة توريد جديدة مرجع: ${refNo} للمورد: ${activeSupplier.name} (نوع: ${deliveryType})`);
+    }
+    
     alert(editingDeliveryMethod ? "تم تعديل طريقة التوريد بنجاح" : "تم إضافة طريقة التوريد بنجاح");
     
     // Reset fields
@@ -177,6 +191,7 @@ export default function SuppliesSettingsTab({
   };
 
   const deleteDeliveryMethod = (methodId: string) => {
+    if (userRole === 'viewer') return;
     if (!activeSupplier) return;
     customConfirm(
       'حذف طريقة التوريد',
@@ -223,6 +238,7 @@ export default function SuppliesSettingsTab({
     }));
   };
   const addSupplyItem = () => {
+    if (userRole === 'viewer') return;
     const newErrors = {
       code: !newItemCode.trim(),
       name: !newItemName.trim(),
@@ -232,7 +248,10 @@ export default function SuppliesSettingsTab({
     if (newErrors.code || newErrors.name || newErrors.price) {
       return;
     }
+    const refNo = `MAT-${Date.now().toString().slice(-6)}`;
     const newItem: SupplyItem = {
+      id: `mi-${Date.now()}`,
+      referenceNo: refNo,
       code: newItemCode.trim(),
       name: newItemName.trim(),
       unit: newItemUnit,
@@ -240,6 +259,7 @@ export default function SuppliesSettingsTab({
     };
     
     updateItems(prev => [...(prev || []), newItem]);
+    addAuditLog('إضافة خام جديد', 'إعدادات التوريدات', `تم إضافة خامة جديدة: ${newItem.name} (كود: ${newItem.code}) برقم مرجعي: ${refNo}`);
     alert("تم إضافة المادة الجديدة بنجاح");
     setNewItemName('');
     setNewItemCode('');
@@ -261,6 +281,7 @@ export default function SuppliesSettingsTab({
   };
 
   const saveEditItem = () => {
+    if (userRole === 'viewer') return;
     if (!editItemData.name?.trim() || !editItemData.code?.trim() || !editItemData.defaultPrice) return;
     updateItems(prev => (prev || []).map(i => i.code === editingItemCode ? editItemData as SupplyItem : i));
     alert("تم تعديل المادة بنجاح");
@@ -270,6 +291,7 @@ export default function SuppliesSettingsTab({
 
   const deleteSupplyItem = (e: React.MouseEvent, code: string) => {
     e.stopPropagation();
+    if (userRole === 'viewer') return;
     customConfirm(
       'حذف المادة',
       'هل أنت متأكد من حذف هذه المادة؟ سيؤدي ذلك لحذفها من قائمة المواد الموردة.',
@@ -290,6 +312,7 @@ export default function SuppliesSettingsTab({
   };
 
   const addSupplier = () => {
+    if (userRole === 'viewer') return;
     if (!newSupplierName.trim()) return;
     if (!activeMaterialCode) {
       alert("يرجى اختيار مادة من القائمة الجانبية أولاً لتحديد نوع التوريد لهذا المورد");
@@ -308,8 +331,10 @@ export default function SuppliesSettingsTab({
     // Check if supplier name exists for OTHER materials to copy basic info
     const existingHuman = (suppliers || []).find(s => s.name === trimmedName);
     
+    const refNo = existingHuman?.referenceNo || `SUP-${Date.now().toString().slice(-6)}`;
     const newSupplier = {
       id: `sup-${Date.now()}`,
+      referenceNo: refNo,
       name: trimmedName,
       materialCode: activeMaterialCode,
       phone: existingHuman ? (existingHuman.phone || '') : newSupplierPhone,
@@ -319,6 +344,7 @@ export default function SuppliesSettingsTab({
     };
     
     updateSuppliers(prev => [...(prev || []), newSupplier]);
+    addAuditLog('إضافة مورد/مقاول', 'إعدادات التوريدات', `تم تسجيل المورد: ${trimmedName} برقم مرجعي: ${refNo} تحت مادة: ${activeMaterialCode}`);
     alert("تم إضافة المورد بنجاح");
     setNewSupplierName('');
     setNewSupplierPhone('');
@@ -335,6 +361,7 @@ export default function SuppliesSettingsTab({
   };
 
   const saveEditSupplier = () => {
+    if (userRole === 'viewer') return;
     if (!editSupplierName.trim() || !editingSupplier) return;
     updateSuppliers(prev => (prev || []).map(s => s.id === editingSupplier.id ? { 
       ...s, 
@@ -348,6 +375,7 @@ export default function SuppliesSettingsTab({
   };
 
   const deleteSupplier = (id: string) => {
+    if (userRole === 'viewer') return;
     const supplierToDelete = suppliers.find(s => s.id === id);
     if (!supplierToDelete) return;
 
@@ -379,22 +407,6 @@ export default function SuppliesSettingsTab({
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">إعداد الموردين والخامات</h2>
           <p className="text-slate-500 text-sm mt-1">إدارة قائمة الخامات الأساسية وربط المقاولين بمعدات التوريد</p>
         </div>
-        <div className="flex items-center gap-2">
-           <button 
-             onClick={() => setIsMaterialModalOpen(true)}
-             className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-sm"
-           >
-             <Plus className="h-4 w-4" />
-             إضافة مادة
-           </button>
-           <button 
-             onClick={() => setIsSupplierModalOpen(true)}
-             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-sm"
-           >
-             <Plus className="h-4 w-4" />
-             إضافة مورد
-           </button>
-        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
@@ -411,6 +423,14 @@ export default function SuppliesSettingsTab({
                 <p className="text-[10px] text-slate-400 font-medium tracking-wide uppercase">Materials Catalog</p>
               </div>
             </div>
+            <button 
+              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية إضافة مواد جديدة') : () => setIsMaterialModalOpen(true)}
+              disabled={userRole === 'viewer'}
+              className="p-2.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-xl transition-all border border-emerald-200/50"
+              title="إضافة مادة"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
           </div>
           
           <div className="space-y-3 flex-1 overflow-y-auto max-h-[500px] pr-1 custom-scrollbar">
@@ -435,15 +455,20 @@ export default function SuppliesSettingsTab({
                       <div className={`font-black text-sm transition-colors ${activeMaterialCode === item.code ? 'text-emerald-900' : 'text-slate-800'}`}>
                         {item.name}
                       </div>
-                      <span className="inline-block mt-1 bg-slate-100 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-slate-200/50 uppercase tracking-tighter">
-                        {item.code}
-                      </span>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="inline-block bg-slate-100 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-slate-200/50 uppercase tracking-tighter">
+                          {item.code}
+                        </span>
+                        {item.referenceNo && (
+                          <span className="text-[8px] text-emerald-500 font-mono font-bold">{item.referenceNo}</span>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                        <button onClick={(e) => startEditItem(e, item)} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-100 rounded-xl transition-colors">
+                        <button onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية التعديل') : (e) => startEditItem(e, item)} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-100 rounded-xl transition-colors">
                           <Edit2 className="h-3.5 w-3.5" />
                         </button>
-                        <button onClick={(e) => deleteSupplyItem(e, item.code)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors">
+                        <button onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية الحذف') : (e) => deleteSupplyItem(e, item.code)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                     </div>
@@ -474,15 +499,25 @@ export default function SuppliesSettingsTab({
                 <p className="text-[10px] text-slate-400 font-medium tracking-wide uppercase">Contractors Hub</p>
               </div>
             </div>
-            {activeMaterialCode && (
+            <div className="flex items-center gap-1">
+              {activeMaterialCode && (
+                <button 
+                  onClick={() => setActiveMaterialCode(null)}
+                  className="text-[9px] font-black text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-full transition-all border border-indigo-100/50 flex items-center gap-1.5"
+                >
+                  <X className="h-3 w-3" />
+                  الكل
+                </button>
+              )}
               <button 
-                onClick={() => setActiveMaterialCode(null)}
-                className="text-[9px] font-black text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-full transition-all border border-indigo-100/50 flex items-center gap-1.5"
+                onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية إضافة موردين') : () => setIsSupplierModalOpen(true)}
+                disabled={userRole === 'viewer'}
+                className="p-2.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-xl transition-all border border-indigo-200/50"
+                title="إضافة مورد"
               >
-                <X className="h-3 w-3" />
-                الكل
+                <Plus className="h-4 w-4" />
               </button>
-            )}
+            </div>
           </div>
           
           <div className="space-y-4 flex-1 overflow-y-auto max-h-[500px] pr-1 custom-scrollbar">
@@ -514,6 +549,11 @@ export default function SuppliesSettingsTab({
                       <div className="flex-1">
                         <div className={`font-black text-sm transition-colors flex items-center gap-2 ${isActive ? 'text-indigo-900' : 'text-slate-800'}`}>
                           {group.name}
+                          {group.referenceNo && (
+                            <span className="bg-slate-100 text-slate-400 text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border border-slate-200/60">
+                              REF: {group.referenceNo}
+                            </span>
+                          )}
                           {isActive && <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-sm shadow-indigo-200"></span>}
                         </div>
                         {group.phone && (
@@ -521,10 +561,10 @@ export default function SuppliesSettingsTab({
                         )}
                       </div>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                        <button onClick={() => startEditSupplier(group)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl transition-colors shadow-sm">
+                        <button onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية التعديل') : () => startEditSupplier(group)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl transition-colors shadow-sm">
                           <Edit2 className="h-3.5 w-3.5" />
                         </button>
-                        <button onClick={(e) => { e.stopPropagation(); deleteSupplier(group.id); }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-xl transition-colors shadow-sm">
+                        <button onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية الحذف') : (e) => { e.stopPropagation(); deleteSupplier(group.id); }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-xl transition-colors shadow-sm">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
@@ -570,7 +610,8 @@ export default function SuppliesSettingsTab({
             </div>
             {activeSupplier && (
               <button 
-                onClick={() => setIsDeliveryMethodModalOpen(true)} 
+                onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية إضافة طرق توريد') : () => setIsDeliveryMethodModalOpen(true)}
+                disabled={userRole === 'viewer'} 
                 className="p-2 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-xl transition-all border border-amber-200/50"
               >
                 <Plus className="h-4 w-4" />
@@ -621,15 +662,18 @@ export default function SuppliesSettingsTab({
                               <div className="p-2 bg-slate-50 rounded-xl group-hover:bg-amber-50">
                                 <Truck className="h-4 w-4 text-slate-400 group-hover:text-amber-600" />
                               </div>
-                              <span className="text-sm font-black text-slate-800">
+                              <span className="text-sm font-black text-slate-800 flex items-center gap-2">
                                 {dm.type === 'قلاب' ? `قلاب: ${dm.dumperNumber}` : 
                                 dm.type === 'عربية' ? `عربية: ${dm.truckNumber}` : 
                                 dm.personInCharge || dm.type}
+                                {dm.referenceNo && (
+                                  <span className="text-[8px] text-slate-400 font-mono font-bold">#{dm.referenceNo}</span>
+                                )}
                               </span>
                             </div>
                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={() => startEditDeliveryMethod(dm)} className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-xl"><Edit2 className="h-3.5 w-3.5" /></button>
-                              <button onClick={() => deleteDeliveryMethod(dm.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-xl"><Trash2 className="h-3.5 w-3.5" /></button>
+                              <button onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية التعديل') : () => startEditDeliveryMethod(dm)} className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-xl"><Edit2 className="h-3.5 w-3.5" /></button>
+                              <button onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية الحذف') : () => deleteDeliveryMethod(dm.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-xl"><Trash2 className="h-3.5 w-3.5" /></button>
                             </div>
                           </div>
 

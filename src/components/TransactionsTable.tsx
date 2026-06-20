@@ -68,12 +68,12 @@ export default function TransactionsTable({ transactions, onAddClick, onDeleteTr
 
   const getCategoryBadgeClass = (cat: string) => {
     switch (cat) {
-      case 'supplies': return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'equipment': return 'bg-purple-50 text-purple-700 border-purple-200';
-      case 'contractors': return 'bg-amber-50 text-amber-700 border-amber-200';
-      case 'fuel': return 'bg-red-50 text-red-700 border-red-200';
-      case 'custody': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      default: return 'bg-slate-50 text-slate-700 border-slate-200';
+      case 'supplies': return 'bg-blue-50/80 text-blue-700 border-blue-200/60 shadow-sm';
+      case 'equipment': return 'bg-purple-50/80 text-purple-700 border-purple-200/60 shadow-sm';
+      case 'contractors': return 'bg-amber-50/80 text-amber-750 border-amber-200/60 shadow-sm';
+      case 'fuel': return 'bg-rose-50/80 text-rose-700 border-rose-200/60 shadow-sm';
+      case 'custody': return 'bg-emerald-50/80 text-emerald-750 border-emerald-200/60 shadow-sm';
+      default: return 'bg-slate-50/80 text-slate-700 border-slate-200/60 shadow-sm';
     }
   };
 
@@ -205,8 +205,8 @@ export default function TransactionsTable({ transactions, onAddClick, onDeleteTr
               id="custody-filter"
             >
               <option value="all">جميع مصادر الصرف (العهد والشركات)</option>
-              <option value="custody">حركات المنصرف من العهدة 💼</option>
-              <option value="outside">معاملات من خارج العهدة 🏛️</option>
+              <option value="custody">عهدة الموقع</option>
+              <option value="outside">المكتب الرئيسي</option>
             </select>
           </div>
 
@@ -221,22 +221,22 @@ export default function TransactionsTable({ transactions, onAddClick, onDeleteTr
       </div>
 
       {/* Main Table View */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-right border-collapse">
+      <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <table className="w-full text-right border-collapse bg-white">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 tracking-wider">
               <th className="p-4 w-12 text-center"></th>
               <th className="p-4">بيان الحركة والوصف</th>
-              <th className="p-4">المستفيد / الجهة</th>
-              <th className="p-4">البند</th>
-              <th className="p-4">المبلغ الفعلي</th>
+              <th className="p-4 text-center">المستفيد / الجهة</th>
+              <th className="p-4 text-center">البند</th>
+              <th className="p-4 text-center">المبلغ الفعلي</th>
               <th className="p-4 text-center">الإجراءات</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-xs">
             {filteredTransactions.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-10 text-center text-slate-400">
+                <td colSpan={6} className="p-10 text-center text-slate-400">
                   <p className="font-bold text-sm">لا توجد حركات مالية مطابقة للبحث</p>
                   <p className="text-xs text-slate-400 mt-1">تأكد من تعديل الفلاتر أو إضافة حركات جديدة.</p>
                 </td>
@@ -309,8 +309,19 @@ export default function TransactionsTable({ transactions, onAddClick, onDeleteTr
                                 onChange={(e) => setEditForm(prev => ({ ...prev, nature: e.target.value as TransactionNature }))}
                                 className="w-full p-1.5 bg-white border border-slate-300 rounded font-bold text-[10px]"
                               >
-                                <option value="inside_custody">داخل العهدة 💼</option>
-                                <option value="outside_custody">خارج العهدة 🏛️</option>
+                                <option value="inside_custody">عهدة الموقع</option>
+                                <option value="outside_custody">المكتب الرئيسي</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[9px] text-slate-400 font-bold mb-1">نوع القيد:</label>
+                              <select
+                                value={editForm.type || 'spent'}
+                                onChange={(e) => setEditForm(prev => ({ ...prev, type: e.target.value as TransactionType }))}
+                                className="w-full p-1.5 bg-white border border-slate-300 rounded font-bold text-[10px]"
+                              >
+                                <option value="spent">منصرف مالي</option>
+                                <option value="income">وارد / تمويل</option>
                               </select>
                             </div>
                             <div>
@@ -359,62 +370,87 @@ export default function TransactionsTable({ transactions, onAddClick, onDeleteTr
                       </tr>
                     ) : (
                       <tr 
-                        className={`hover:bg-slate-50/80 transition-colors duration-150 ${isExpanded ? 'bg-slate-50/50' : ''}`}
+                        className={`hover:bg-slate-50/60 transition-all duration-200 group ${isExpanded ? 'bg-indigo-50/20 shadow-sm border-y border-indigo-100' : ''}`}
                         id={`tx-row-${tx.id}`}
                       >
-                        <td className="p-4 text-center">
+                        <td className="p-4 text-center align-middle">
                           <button 
                             onClick={() => toggleRow(tx.id)}
-                            className="p-1 rounded-md text-slate-400 hover:bg-slate-150 hover:text-slate-600 transition"
+                            className={`p-1.5 rounded-md transition-colors ${isExpanded ? 'text-indigo-600 bg-indigo-50' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}
                           >
                             {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                           </button>
                         </td>
-                        <td className="p-4 max-w-sm">
-                          <div className="font-bold text-slate-900 truncate flex items-center gap-1.5" title={tx.description}>
-                            {tx.nature === 'inside_custody' ? (
-                              <span className="inline-flex items-center px-1.5 py-0.5 bg-emerald-50 text-emerald-800 rounded font-black text-[9.5px] border border-emerald-100/60 shrink-0 select-none">
-                                داخل العهدة 💼
+                        <td className="p-4 max-w-sm align-middle">
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center gap-2">
+                              {tx.nature === 'inside_custody' ? (
+                                <span className="inline-flex items-center px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md font-bold text-[10px] border border-emerald-100 shadow-sm shrink-0 whitespace-nowrap">
+                                  عهدة الموقع
+                                </span>
+                               ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md font-bold text-[10px] border border-slate-200 shadow-sm shrink-0 whitespace-nowrap">
+                                  المكتب الرئيسي
+                                </span>
+                               )}
+                              <span className="font-bold text-slate-900 truncate leading-snug" title={tx.description}>
+                                {tx.description}
                               </span>
-                            ) : (
-                              <span className="inline-flex items-center px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded font-bold text-[9.5px] border border-slate-200 shrink-0 select-none">
-                                خارج العهدة 🏛️
-                              </span>
-                            )}
-                            <span className="truncate">{tx.description}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mt-1">
-                            <Calendar size={12} />
-                            <span className="font-mono">{tx.date}</span>
-                            {tx.referenceNo && (
-                              <>
-                                <span className="text-slate-200">•</span>
-                                <span className="font-mono">مرجع: {tx.referenceNo}</span>
-                              </>
-                            )}
+                            </div>
+                            <div className="flex items-center gap-2.5 text-[10.5px]">
+                              <div className="flex items-center gap-1.5 text-slate-500">
+                                <Calendar size={13} className="text-slate-400 shrink-0" />
+                                <span className="font-mono font-medium tracking-tight text-slate-600">{tx.date}</span>
+                              </div>
+                              <span className="text-slate-200">|</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] text-slate-400 font-medium">كود الإرسال:</span>
+                                <span className="font-mono text-[10px] bg-slate-50 text-slate-600 px-1.5 py-0.5 rounded border border-slate-150 select-all shrink-0">
+                                  ...{tx.id.substring(tx.id.length - 8)}
+                                </span>
+                              </div>
+                              {tx.referenceNo && (
+                                <>
+                                  <span className="text-slate-200">|</span>
+                                  <span className="font-mono text-[10px] font-medium text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full shadow-sm shrink-0">
+                                    سند ورقي: <span className="text-slate-700 font-bold">{tx.referenceNo}</span>
+                                  </span>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </td>
-                        <td className="p-4 font-semibold text-slate-700">
-                          {tx.recipient}
+                        <td className="p-4 align-middle text-center">
+                          <span className="font-semibold text-slate-700 max-w-[150px] truncate inline-block">
+                            {tx.recipient}
+                          </span>
                         </td>
-                        <td className="p-4">
-                          <span className={`inline-flex items-center px-2 py-1 text-[10.5px] rounded-lg font-semibold border ${getCategoryBadgeClass(tx.category)}`}>
+                        <td className="p-4 align-middle text-center">
+                          <span className={`inline-flex items-center px-2.5 py-1 text-[10.5px] rounded border font-semibold shadow-sm ${getCategoryBadgeClass(tx.category)}`}>
                             {getCategoryNameAr(tx.category)}
                           </span>
                         </td>
-                        <td className="p-4 font-extrabold text-slate-950 font-mono text-sm">
-                          {formatCurrency(tx.amount)}
+                        <td className="p-4 align-middle text-center">
+                          {tx.type === 'income' ? (
+                            <span className="font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded inline-block font-mono text-[15px] tracking-tight border border-emerald-100 shadow-sm">
+                              + {formatCurrency(tx.amount)}
+                            </span>
+                          ) : (
+                            <span className="font-black text-slate-900 font-mono text-[15px] tracking-tight">
+                              {formatCurrency(tx.amount)}
+                            </span>
+                          )}
                         </td>
-                        <td className="p-4 text-center">
-                          <div className="flex items-center justify-center gap-1">
+                        <td className="p-4 align-middle text-center">
+                          <div className="flex items-center justify-center gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                             {userRole !== 'viewer' && (
                               <button
                                 onClick={() => startEdit(tx)}
-                                className="p-1.5 text-indigo-650 rounded-lg hover:bg-indigo-50 hover:text-indigo-800 transition"
+                                className="p-1.5 text-slate-400 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
                                 title="تعديل القيد"
                                 id={`tx-edit-${tx.id}`}
                               >
-                                <Edit2 size={13} />
+                                <Edit2 size={16} />
                               </button>
                             )}
                             {userRole !== 'viewer' && userRole !== 'engineer' && (
@@ -427,15 +463,17 @@ export default function TransactionsTable({ transactions, onAddClick, onDeleteTr
                                     onConfirm: () => onDeleteTransaction(tx.id)
                                   });
                                 }}
-                                className="p-1.5 text-rose-500 rounded-lg hover:bg-rose-50 hover:text-rose-700 transition"
+                                className="p-1.5 text-slate-400 rounded-lg hover:bg-rose-50 hover:text-rose-600 transition-colors"
                                 title="حذف القيد"
                                 id={`tx-delete-${tx.id}`}
                               >
-                                <Trash2 size={14} />
+                                <Trash2 size={16} />
                               </button>
                             )}
                             {(userRole === 'viewer' || (userRole === 'engineer' && tx.category === 'custody')) && (
-                              <span className="text-[10px] text-slate-400 font-medium px-1.5">اتصال آمن</span>
+                              <div className="p-1.5 text-emerald-500 rounded-lg flex items-center justify-center pt-2" title="اتصال آمن">
+                                <Check size={16} />
+                              </div>
                             )}
                           </div>
                         </td>
@@ -444,20 +482,20 @@ export default function TransactionsTable({ transactions, onAddClick, onDeleteTr
                     
                     {/* Collapsible Details Row */}
                     {isExpanded && (
-                      <tr className="bg-slate-50/30">
-                        <td colSpan={6} className="p-4 border-t border-slate-150">
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-right text-slate-600 leading-relaxed max-w-5xl mx-auto">
-                            <div>
-                              <span className="block text-[10px] text-slate-400 font-bold">طريقة الدفع المسجلة:</span>
-                              <span className="text-xs font-semibold text-slate-800">{tx.paymentMethod || 'مستند إثبات أعمال (بلا دفع كاش مباشر)'}</span>
+                      <tr className="bg-indigo-50/10">
+                        <td colSpan={6} className="p-5">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-right max-w-5xl mx-auto bg-white p-5 rounded-xl border border-indigo-100 shadow-sm">
+                            <div className="space-y-1">
+                              <span className="block text-[10.5px] text-slate-500 font-bold uppercase tracking-wide">طريقة الدفع المسجلة</span>
+                              <span className="block text-xs font-bold text-slate-900 bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-lg w-fit">{tx.paymentMethod || 'مستند إثبات أعمال'}</span>
                             </div>
-                            <div>
-                              <span className="block text-[10px] text-slate-400 font-bold">الرقم المرجعي / السجل:</span>
-                              <span className="text-xs font-semibold text-slate-800 font-mono">{tx.referenceNo || 'غير مسجل'}</span>
+                            <div className="space-y-1">
+                              <span className="block text-[10.5px] text-slate-500 font-bold uppercase tracking-wide">الرقم المرجعي / السجل</span>
+                              <span className="block text-xs font-bold text-slate-900 font-mono bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-lg w-fit">{tx.referenceNo || 'غير مسجل'}</span>
                             </div>
-                            <div className="lg:col-span-2">
-                              <span className="block text-[10px] text-slate-400 font-bold">الوصف والتفاصيل الميدانية الكاملة:</span>
-                              <p className="text-xs font-semibold text-slate-800 mt-1 leading-normal">{tx.description}</p>
+                            <div className="lg:col-span-2 space-y-1">
+                              <span className="block text-[10.5px] text-slate-500 font-bold uppercase tracking-wide">الوصف والنوتة التفصيلية</span>
+                              <p className="text-[13px] font-medium text-slate-700 bg-slate-50 border border-slate-100 px-4 py-2 rounded-lg leading-relaxed">{tx.notes || tx.description}</p>
                             </div>
                           </div>
                         </td>

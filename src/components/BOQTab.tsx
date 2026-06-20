@@ -29,9 +29,10 @@ interface BOQTabProps {
   setProjects?: (projects: Project[]) => void;
   boqItems: BOQItem[];
   setBoqItems: (items: BOQItem[]) => void;
+  userRole?: string;
 }
 
-export default function BOQTab({ projectId, projects, setProjects, boqItems, setBoqItems }: BOQTabProps) {
+export default function BOQTab({ projectId, projects, setProjects, boqItems, setBoqItems, userRole }: BOQTabProps) {
   const [selectedProjectId, setSelectedProjectId] = useState<string>(projects[0]?.id || '');
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -318,12 +319,13 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
               />
             </div>
             <button 
-              onClick={() => {
+              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية إضافة بنود') : () => {
                 setShowAddForm(!showAddForm);
                 setShowAiUploader(false);
               }}
+              disabled={userRole === 'viewer'}
               className={`p-2.5 rounded-2xl transition-all shadow-lg flex items-center gap-2 text-xs font-black
-                ${showAddForm ? 'bg-rose-50 text-rose-600 border border-rose-200' : 'bg-indigo-600 text-white hover:bg-indigo-700'}
+                ${userRole === 'viewer' ? 'bg-slate-300 text-slate-100 cursor-not-allowed shadow-none' : (showAddForm ? 'bg-rose-50 text-rose-600 border border-rose-200' : 'bg-indigo-600 text-white hover:bg-indigo-700')}
               `}
             >
               {showAddForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
@@ -331,12 +333,13 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
             </button>
 
             <button 
-              onClick={() => {
+              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية استخدام الذكاء الاصطناعي') : () => {
                 setShowAiUploader(!showAiUploader);
                 setShowAddForm(false);
               }}
+              disabled={userRole === 'viewer'}
               className={`p-2.5 rounded-2xl transition-all shadow-lg flex items-center gap-2 text-xs font-black
-                ${showAiUploader ? 'bg-purple-100 text-purple-700 border border-purple-300' : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:opacity-95'}
+                ${userRole === 'viewer' ? 'bg-slate-300 text-slate-100 cursor-not-allowed shadow-none' : (showAiUploader ? 'bg-purple-100 text-purple-700 border border-purple-300' : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:opacity-95')}
               `}
             >
               {showAiUploader ? <X className="w-4 h-4" /> : <Sparkles className="w-4 h-4 animate-pulse" />}
@@ -407,8 +410,13 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
                     <span>✦ تم استخراج ({extractedItems.length}) بنداً بنجاح! يرجى مراجعة البنود أدناه لإجراء أي تعديلات قبل الحفظ النهائي.</span>
                     <div className="flex gap-2 shrink-0">
                       <button 
-                        onClick={handleSaveExtractedItems}
-                        className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white rounded-xl px-6 py-2.5 font-black flex items-center gap-2 text-xs shadow-lg shadow-emerald-500/20 transition-all cursor-pointer whitespace-nowrap border border-emerald-500/10"
+                        onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية اعتماد البنود') : handleSaveExtractedItems}
+                        disabled={userRole === 'viewer'}
+                        className={`rounded-xl px-6 py-2.5 font-black flex items-center gap-2 text-xs transition-all whitespace-nowrap border border-emerald-500/10 shadow-lg ${
+                          userRole === 'viewer'
+                            ? 'bg-slate-300 text-slate-100 cursor-not-allowed shadow-none'
+                            : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white shadow-emerald-500/20 cursor-pointer'
+                        }`}
                       >
                         <CheckCircle2 className="w-4 h-4" />
                         اعتماد البنود وإدخالها للمقايسة
@@ -591,8 +599,12 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
               </div>
             </div>
             <button 
-              onClick={handleAddItem}
-              className="md:col-start-5 bg-indigo-600 text-white rounded-xl font-bold text-xs hover:bg-indigo-700 transition h-11"
+              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية حفظ البنود') : handleAddItem}
+              className={`md:col-start-5 text-white rounded-xl font-bold text-xs transition h-11 ${
+                userRole === 'viewer'
+                  ? 'bg-slate-300 text-slate-100 cursor-not-allowed'
+                  : 'bg-indigo-600 hover:bg-indigo-700'
+              }`}
             >
               حفظ البند في المقايسة
             </button>
@@ -683,11 +695,25 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
                           <CheckCircle2 className="w-4 h-4" />
                         </button>
                       ) : (
-                        <button onClick={() => setEditingId(item.id)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg">
+                        <button 
+                          onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية التعديل') : () => setEditingId(item.id)} 
+                          className={`p-1.5 rounded-lg transition ${
+                            userRole === 'viewer'
+                              ? 'text-slate-200 cursor-not-allowed'
+                              : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 cursor-pointer'
+                          }`}
+                        >
                           <Edit3 className="w-4 h-4" />
                         </button>
                       )}
-                      <button onClick={() => handleDeleteItem(item.id)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg">
+                      <button 
+                        onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية الحذف') : () => handleDeleteItem(item.id)} 
+                        className={`p-1.5 rounded-lg transition ${
+                          userRole === 'viewer'
+                            ? 'text-slate-200 cursor-not-allowed'
+                            : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer'
+                        }`}
+                      >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>

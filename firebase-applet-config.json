@@ -1,10 +1,10 @@
 {
-  "projectId": "promising-fort-cdzcr",
-  "appId": "1:918497987999:web:238d3663799673d45081aa",
-  "apiKey": "AIzaSyBs0Z3NJ7frMl-8WC4FJgpgwlwHudY926k",
-  "authDomain": "promising-fort-cdzcr.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-91ee1d14-4844-44ec-889d-5ba25a8239ba",
-  "storageBucket": "promising-fort-cdzcr.firebasestorage.app",
-  "messagingSenderId": "918497987999",
-  "measurementId": ""
+  "projectId": "boreal-trail-h6ppv",
+  "appId": "1:779246676764:web:b2b9a2081dd240c34ca8d9",
+  "apiKey": "AIzaSyCqxNnSulVuQ3J-Js-mWau-wS0EJ8uNClE",
+  "authDomain": "boreal-trail-h6ppv.firebaseapp.com",
+  "storageBucket": "boreal-trail-h6ppv.firebasestorage.app",
+  "messagingSenderId": "779246676764",
+  "measurementId": "",
+  "firestoreDatabaseId": "ai-studio-3bce2f14-bd14-4a4a-af99-1f0a4f8cc667"
 }
