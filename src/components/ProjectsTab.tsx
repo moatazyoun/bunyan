@@ -568,8 +568,12 @@ export default function ProjectsTab({ projects, setProjects, boqItems, currentUs
                       alert('رقم اختيار غير صحيح.');
                     }
                   }
-                } catch (err) {
-                  alert('حدث خطأ أثناء الاتصال بجوجل والتجول عبر الملفات.');
+                } catch (err: any) {
+                  if (err && err.code === 'auth/popup-closed-by-user') {
+                    alert('تنبيه بيئة المعاينة (Iframe): تم إغلاق نافذة المصادقة. نظراً لقيود المتصفح الأمنية داخل الإطار، يُرجى فتح الحساب في نافذة جديدة (Open in new tab) من الأعلى للتوافق الكامل مع مصادقة Google.');
+                  } else {
+                    alert('حدث خطأ أثناء الاتصال بجوجل والتجول عبر الملفات.');
+                  }
                 }
               }}
               className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black hover:bg-slate-800 transition"

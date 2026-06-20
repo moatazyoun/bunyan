@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building, MapPin, Plus, ArrowRight, Loader2, Sparkles, FolderPlus, Compass, Edit, Trash2, Wifi, WifiOff, Database, AlertTriangle, UserCheck, Shield, ChevronLeft, Layers, Landmark, Briefcase, Download } from 'lucide-react';
+import { Building, MapPin, Plus, ArrowRight, Loader2, Sparkles, FolderPlus, Compass, Edit, Trash2, Wifi, WifiOff, Database, AlertTriangle, UserCheck, Shield, ChevronLeft, Layers, Landmark, Briefcase, Download, Search, Calendar, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import BunyanLogo from './BunyanLogo';
 
@@ -56,15 +56,20 @@ export default function SiteSelectionScreen({
     user?.username.toLowerCase() === 'moataz' ? 'hierarchy' : 'grid'
   );
   const [adminsList, setAdminsList] = useState<any[]>([]);
-  const [selectedAdminUsername, setSelectedAdminUsername] = useState<string>('moataz');
+  const [selectedAdminUsername, setSelectedAdminUsername] = useState<string>(user?.tenantId || user?.username.toLowerCase() || 'moataz');
   const [selectedSiteIdForHierarchy, setSelectedSiteIdForHierarchy] = useState<string>('');
+  
+  // Hierarchy search and filter states
+  const [adminSearchQuery, setAdminSearchQuery] = useState<string>('');
+  const [siteSearchQuery, setSiteSearchQuery] = useState<string>('');
+  const [projectSearchQuery, setProjectSearchQuery] = useState<string>('');
 
   // Form State
   const [newSiteId, setNewSiteId] = useState('');
   const [newSiteName, setNewSiteName] = useState('');
   const [newSiteLoc, setNewSiteLoc] = useState('');
   const [newSiteDesc, setNewSiteDesc] = useState('');
-  const [newSiteTenantId, setNewSiteTenantId] = useState('moataz');
+  const [newSiteTenantId, setNewSiteTenantId] = useState(user?.tenantId || user?.username.toLowerCase() || 'moataz');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Edit Mode state
@@ -197,7 +202,8 @@ export default function SiteSelectionScreen({
             siteWorkers: 'edit',
             fuelDashboard: 'edit',
             equipmentDashboard: 'edit',
-            usersManagement: 'edit'
+            usersManagement: 'edit',
+            notifications: 'edit'
           }
         })
       });
@@ -261,10 +267,10 @@ export default function SiteSelectionScreen({
         setSites(data);
         
         // Setup initial selected admin & site for hierarchy explorer view
-        const currentLowerUser = user?.username.toLowerCase() || 'moataz';
-        const isDefaultMoataz = currentLowerUser === 'moataz';
+        const currentTenantId = user?.tenantId || user?.username.toLowerCase() || 'moataz';
+        const isDefaultMoataz = user?.username.toLowerCase() === 'moataz';
         
-        const initialAdmin = isDefaultMoataz ? 'moataz' : currentLowerUser;
+        const initialAdmin = currentTenantId;
         setSelectedAdminUsername(initialAdmin);
 
         const activeSitesOpt = data.filter((s: any) => (s.tenantId || 'moataz') === initialAdmin);
@@ -574,7 +580,7 @@ export default function SiteSelectionScreen({
                     setNewSiteName('');
                     setNewSiteLoc('');
                     setNewSiteDesc('');
-                    setNewSiteTenantId('moataz');
+                    setNewSiteTenantId(user?.tenantId || (user?.username || '').toLowerCase().trim() || 'moataz');
                     setShowAddSiteModal(true);
                   }}
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-lg hover:shadow-indigo-500/20 active:scale-95 transition cursor-pointer font-sans"
@@ -679,77 +685,106 @@ export default function SiteSelectionScreen({
             <p className="text-xs text-slate-500 font-bold font-mono">جاري تأمين وتحميل السجلات الإنشائية من الخادم...</p>
           </div>
         ) : viewMode === 'hierarchy' ? (
-          /* Visual Organization Hierarchy Explorer (RTL Structure) */
+          /* Redesigned Premium Organization Hierarchy Explorer (RTL Structure) */
           <div className="w-full relative z-10 space-y-6 font-sans">
             
             {/* Visual Header Indicator */}
-            <div className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex items-center justify-between text-xs text-indigo-850 font-bold">
-              <div className="flex items-center gap-2">
-                <Sparkles size={14} className="text-indigo-650 animate-pulse" />
-                <span>مستكشف الهيكل التنظيمي الرباعي (مفروز تلقائياً لمنع اختلاط الصلاحيات)</span>
+            <div className="p-4 bg-gradient-to-r from-indigo-50/80 via-white to-blue-50/80 border border-slate-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-600 text-white rounded-xl shadow-md shadow-indigo-600/10">
+                  <Compass size={18} className="animate-spin-slow" />
+                </div>
+                <div className="text-right">
+                  <h3 className="font-black text-slate-900 text-sm md:text-base">مستكشف الهيكل التنظيمي والمشاريع اللامركزي 🌿</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">بنية تحكم رباعية الأبعاد لفصل البيانات وإدارة المسؤولين ومطابقة حسابات المعاوضات</p>
+                </div>
               </div>
-              <span className="font-mono bg-white px-2 py-0.5 rounded border border-indigo-200">مخطط مستويات بنيان</span>
+              <div className="flex items-center gap-2 font-mono text-[10px] bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-xl font-bold text-slate-650 shrink-0 shadow-inner">
+                <span>إجمالي الفروع النشطة: {adminsList.length + 1}</span>
+                <span className="text-slate-300">|</span>
+                <span>المشاريع: {sites.length}</span>
+              </div>
             </div>
 
-            {/* Tree Map Grid Dashboard */}
-            <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 bg-white/45 border border-slate-200 rounded-3xl p-6 shadow-sm overflow-hidden min-h-[500px]">
+            {/* Tree Map Grid Dashboard Redesign */}
+            <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 bg-gradient-to-b from-white/90 to-slate-50/50 border border-slate-200 rounded-3xl p-6 shadow-md overflow-hidden min-h-[580px]">
               
               {/* LEVEL 1: Program Director (مدير البرنامج) */}
-              <div className="space-y-4 border-l border-slate-100 pl-4 text-right">
-                <span className="inline-block px-3 py-1 bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-black rounded-lg">الطبقة الأولى: مدير البرنامج</span>
+              <div className="space-y-4 border-l border-slate-150/70 pl-4 text-right flex flex-col">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-slate-950 text-white text-[10px] font-black flex items-center justify-center font-mono">١</span>
+                    <span className="text-xs font-black text-slate-900">مدير عام البرنامج</span>
+                  </div>
+                  <span className="text-[9px] bg-amber-100/75 border border-amber-200 text-amber-900 px-2.5 py-0.5 rounded-full font-bold">صلاحية مطلقة</span>
+                </div>
                 
-                <div className="bg-gradient-to-br from-slate-900 to-indigo-950 p-5 rounded-2xl text-white shadow-md relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-all duration-500" />
+                <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-5 rounded-2xl text-white shadow-xl relative overflow-hidden group border border-slate-800 flex-1 flex flex-col justify-between">
+                  <div className="absolute -top-12 -right-12 w-36 h-36 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all duration-700" />
+                  <div className="absolute -bottom-10 -left-10 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
                   
-                  <div className="relative space-y-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center text-amber-500 shadow-inner">
-                        <Landmark size={18} />
+                  <div className="relative space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-amber-400 shadow-inner group-hover:scale-105 transition-all">
+                        <Landmark size={20} />
                       </div>
                       <div>
-                        <h4 className="font-black text-sm text-slate-100">معتز يونس (moataz)</h4>
-                        <span className="text-[9px] text-amber-400 font-extrabold uppercase">مدير البرنامج العام</span>
+                        <h4 className="font-extrabold text-sm text-white group-hover:text-amber-300 transition-colors">معتز يونس (moataz)</h4>
+                        <span className="text-[9px] text-amber-400 tracking-wide font-black uppercase mt-0.5 block">Program Director</span>
                       </div>
                     </div>
                     
-                    <p className="text-[10px] text-slate-350 leading-relaxed font-medium">هو المهندس والمطور الرئيسي لبيئة بنيان الذكية، له كامل الصلاحيات المطلقة للإرساء، الفحص والمتابعة الرقابية الشاملة.</p>
+                    <p className="text-[10px] text-slate-350 leading-relaxed font-semibold">
+                      مؤسس والمشرف العام لمنظومة بنيان السحابية. يتمتع بكافة التراخيص الفيدرالية والإرساء المركزي، وله الحق المطلق بفحص الذمم المالية والحسابات ومطابقتها.
+                    </p>
                     
-                    <div className="pt-2 border-t border-white/10 space-y-1 text-[10px] font-semibold text-slate-200">
-                      <div className="flex justify-between">
-                        <span>إجمالي مدراء النظام:</span>
-                        <span className="font-mono text-amber-400 font-bold">{adminsList.length + 1}</span>
+                    <div className="bg-white/[0.03] border border-white/10 p-3 rounded-xl space-y-2 text-[10px] font-bold text-slate-300">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">إجمالي مدراء الفروع:</span>
+                        <span className="font-mono text-amber-300">{adminsList.length + 1}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span>إجمالي مواقع العمل:</span>
-                        <span className="font-mono text-amber-400 font-bold">{sites.length}</span>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">المواقع المعتمدة:</span>
+                        <span className="font-mono text-amber-300">{sites.length}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">حالة الربط السحابي:</span>
+                        <span className="font-mono text-emerald-400 flex items-center gap-1">
+                          <CheckCircle2 size={10} /> نشط وآمن
+                        </span>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                {user?.username.toLowerCase() === 'moataz' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      console.log("[DEBUG] Reorg button clicked");
-                      setShowReorgControlCenter(true);
-                      fetchReorgStatus();
-                    }}
-                    className="w-full py-2.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[10.5px] font-black rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 shadow-sm font-sans"
-                  >
-                    ⚙️ إدارة وهيكلة قاعدة البيانات السحابية
-                  </button>
-                )}
-
-                <div className="p-4 bg-slate-50 border border-slate-150 rounded-xl text-[10.5px] font-semibold text-slate-500 leading-relaxed">
-                  💡 عند اختيار مدير نظام من العمود الأيسر التالي، ستظهر مواقعه التابعة له فقط في العمود الثالث، ومن ثم مشاريعه المعزولة في العمود الرابع لمنع التداخل تماماً.
+                  <div className="mt-5 space-y-2 relative z-10">
+                    {user?.username.toLowerCase() === 'moataz' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          console.log("[DEBUG] Reorg button clicked");
+                          setShowReorgControlCenter(true);
+                          fetchReorgStatus();
+                        }}
+                        className="w-full py-2.5 bg-indigo-650 hover:bg-indigo-600 text-white text-[10.5px] font-black rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md hover:shadow-indigo-500/20 active:scale-95"
+                      >
+                        <span>⚙️ لوحة حوكمة وصيانة البيانات</span>
+                      </button>
+                    )}
+                    
+                    <div className="p-3 bg-white/5 border border-white/10 rounded-xl text-[9px] text-slate-400 leading-normal font-medium text-right">
+                      💡 حدد أيّاً من مدراء النظام بالعمود التالي لفرز مواقعه الخاضعة لرقابته، وتحميل اليوميات ومقايسات BOQ الخاصة بها بالكامل.
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* LEVEL 2: System Admins (مدراء النظام) */}
-              <div className="space-y-4 border-l border-slate-100 pl-4 text-right">
-                <div className="flex justify-between items-center bg-slate-50/50 p-1.5 rounded-xl border border-slate-105/85">
-                  <span className="px-2 py-0.5 bg-indigo-50 text-indigo-800 border border-indigo-200 text-[10px] font-black rounded-lg">الطبقة الثانية: مدراء النظام</span>
+              <div className="space-y-4 border-l border-slate-150/70 pl-4 text-right flex flex-col">
+                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-black flex items-center justify-center font-mono">٢</span>
+                    <span className="text-xs font-black text-slate-900">مدراء الفروع والمكاتب</span>
+                  </div>
                   {user?.username.toLowerCase() === 'moataz' && (
                     <button
                       type="button"
@@ -760,247 +795,417 @@ export default function SiteSelectionScreen({
                         setAdminNameAr('');
                         setShowAddAdminModal(true);
                       }}
-                      className="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[9px] font-black rounded-lg flex items-center gap-1 shadow-sm transition active:scale-95 cursor-pointer font-sans"
+                      className="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[9.5px] font-black rounded-lg flex items-center gap-1 shadow-sm transition active:scale-95 cursor-pointer font-sans"
                     >
                       <Plus size={11} />
-                      إضافة مدير نظام
+                      <span>إضافة مسؤول +</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Search Bar for level 2 Admins */}
+                <div className="relative">
+                  <span className="absolute inset-y-0 right-3 flex items-center text-slate-400 pointer-events-none">
+                    <Search size={13} />
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="ابحث عن مدير نظام..."
+                    value={adminSearchQuery}
+                    onChange={(e) => setAdminSearchQuery(e.target.value)}
+                    className="w-full pl-3 pr-8 py-2 text-[11px] bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white text-right font-semibold text-slate-800 placeholder:text-slate-400"
+                  />
+                  {adminSearchQuery && (
+                    <button 
+                      onClick={() => setAdminSearchQuery('')} 
+                      className="absolute inset-y-0 left-2.5 flex items-center text-[10px] text-slate-400 hover:text-slate-600"
+                    >
+                      ✕
                     </button>
                   )}
                 </div>
                 
-                <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
+                <div className="space-y-2.5 overflow-y-auto pr-1 flex-1 max-h-[460px] scrollbar-thin">
                   
-                  {/* Default main root Admin user moataz also behaves as root admin option */}
-                  <div 
-                    onClick={() => {
-                      setSelectedAdminUsername('moataz');
-                      const defaultAdminSites = sites.filter((s: any) => (s.tenantId || 'moataz') === 'moataz');
-                      if (defaultAdminSites.length > 0) {
-                        setSelectedSiteIdForHierarchy(defaultAdminSites[0].id);
-                      } else {
-                        setSelectedSiteIdForHierarchy('');
-                      }
-                    }}
-                    className={`p-4 rounded-xl border text-right cursor-pointer transition active:scale-98 ${
-                      selectedAdminUsername === 'moataz'
-                        ? 'bg-indigo-600/5 border-indigo-500 text-indigo-950 font-black shadow-sm'
-                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2.5 h-2.5 rounded-full ${selectedAdminUsername === 'moataz' ? 'bg-indigo-600 animate-pulse' : 'bg-slate-300'}`} />
-                      <div>
-                        <h5 className="text-xs font-bold leading-none">مكتب معتز يونس الافتراضي</h5>
-                        <p className="text-[10px] text-slate-500 mt-1">المطور الأساسي للبرنامج • moataz</p>
-                      </div>
-                    </div>
-                  </div>
+                  {/* Filter default main root Admin user moataz also behaves as root admin option */}
+                  {(() => {
+                    const isMoatazVisible = 
+                      'معتز يونس'.includes(adminSearchQuery.trim()) ||
+                      'moataz'.includes(adminSearchQuery.toLowerCase().trim()) ||
+                      'مكتب معتز يونس'.includes(adminSearchQuery.trim()) ||
+                      adminSearchQuery.trim() === '';
+                    
+                    const moatazSitesCount = sites.filter((site: any) => (site.tenantId || 'moataz') === 'moataz').length;
 
-                  {adminsList.map((adm, idx) => (
-                    <div 
-                      key={adm.docId || `${adm.username}_${idx}`}
-                      onClick={() => {
-                        setSelectedAdminUsername(adm.username.toLowerCase());
-                        const adminSites = sites.filter((s: any) => (s.tenantId || 'moataz') === adm.username.toLowerCase());
-                        if (adminSites.length > 0) {
-                          setSelectedSiteIdForHierarchy(adminSites[0].id);
-                        } else {
-                          setSelectedSiteIdForHierarchy('');
-                        }
-                      }}
-                      className={`p-4 rounded-xl border text-right cursor-pointer transition relative group/card active:scale-98 ${
-                        selectedAdminUsername === adm.username.toLowerCase()
-                          ? 'bg-indigo-600/5 border-indigo-500 text-indigo-950 font-black shadow-sm'
-                          : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                      }`}
-                    >
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2.5 h-2.5 rounded-full ${selectedAdminUsername === adm.username.toLowerCase() ? 'bg-indigo-600 animate-pulse' : 'bg-slate-300'}`} />
-                          <div>
-                            <h5 className="text-xs font-bold leading-none">{adm.nameAr}</h5>
-                            <p className="text-[10px] text-slate-500 mt-1">مدير نظام معتمد بمؤسسته • {adm.username}</p>
-                          </div>
-                        </div>
+                    const filteredAdminsList = adminsList.filter((adm: any) => 
+                      adm.nameAr?.includes(adminSearchQuery.trim()) ||
+                      adm.username?.toLowerCase().includes(adminSearchQuery.toLowerCase().trim())
+                    );
 
-                        {/* Actions for Program Director ONLY */}
-                        {user?.username.toLowerCase() === 'moataz' && (
-                          <div className="flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity duration-200">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditAdminClick(adm);
-                              }}
-                              className="p-1 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 transition"
-                              title="تعديل ومراجعة الحساب"
-                            >
-                              <Edit size={12} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteAdmin(adm.username);
-                              }}
-                              className="p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition"
-                              title="حذف وإلغاء صلاحية"
-                            >
-                              <Trash2 size={12} />
-                            </button>
+                    return (
+                      <>
+                        {isMoatazVisible && (
+                          <div 
+                            onClick={() => {
+                              setSelectedAdminUsername('moataz');
+                              const defaultAdminSites = sites.filter((s: any) => (s.tenantId || 'moataz') === 'moataz');
+                              if (defaultAdminSites.length > 0) {
+                                setSelectedSiteIdForHierarchy(defaultAdminSites[0].id);
+                              } else {
+                                setSelectedSiteIdForHierarchy('');
+                              }
+                            }}
+                            className={`p-3.5 rounded-2xl border text-right cursor-pointer transition-all duration-200 active:scale-98 ${
+                              selectedAdminUsername === 'moataz'
+                                ? 'bg-indigo-50 border-indigo-500 text-indigo-950 font-black shadow-md ring-1 ring-indigo-500/20'
+                                : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-350'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${selectedAdminUsername === 'moataz' ? 'bg-indigo-650 animate-pulse' : 'bg-slate-350'}`} />
+                                <div className="text-right min-w-0">
+                                  <h5 className="text-xs font-bold leading-tight text-slate-900 truncate">مكتب معتز يونس الافتراضي</h5>
+                                  <p className="text-[10px] text-slate-500 mt-1 font-mono font-bold">moataz • الإدارة المباشرة</p>
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-bold font-mono px-2 py-0.5 bg-slate-100 text-slate-650 border border-slate-200 rounded-lg shrink-0">
+                                {moatazSitesCount} مواقع
+                              </span>
+                            </div>
                           </div>
                         )}
-                      </div>
-                    </div>
-                  ))}
 
-                  {adminsList.length === 0 && (
-                    <div className="text-center py-8 text-xs text-slate-400 font-sans leading-relaxed">
-                      لا يوجد مدراء نظام آخرين مسجلين حالياً.
-                    </div>
-                  )}
+                        {filteredAdminsList.map((adm, idx) => {
+                          const admSitesCount = sites.filter((s: any) => (s.tenantId || 'moataz') === adm.username.toLowerCase()).length;
+                          const isSelected = selectedAdminUsername === adm.username.toLowerCase();
+                          return (
+                            <div 
+                              key={adm.docId || `${adm.username}_${idx}`}
+                              onClick={() => {
+                                setSelectedAdminUsername(adm.username.toLowerCase());
+                                const adminSites = sites.filter((s: any) => (s.tenantId || 'moataz') === adm.username.toLowerCase());
+                                if (adminSites.length > 0) {
+                                  setSelectedSiteIdForHierarchy(adminSites[0].id);
+                                } else {
+                                  setSelectedSiteIdForHierarchy('');
+                                }
+                              }}
+                              className={`p-3.5 rounded-2xl border text-right cursor-pointer transition-all duration-200 relative group/card active:scale-98 ${
+                                isSelected
+                                  ? 'bg-indigo-50 border-indigo-500 text-indigo-950 font-black shadow-md ring-1 ring-indigo-500/20'
+                                  : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-350'
+                              }`}
+                            >
+                              <div className="flex justify-between items-center gap-2 min-w-0">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isSelected ? 'bg-indigo-650 animate-pulse' : 'bg-slate-350'}`} />
+                                  <div className="text-right min-w-0">
+                                    <h5 className="text-xs font-extrabold leading-tight text-slate-900 truncate">{adm.nameAr}</h5>
+                                    <p className="text-[10px] text-slate-500 mt-1 font-mono">{adm.username} • مدير فرعي</p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="text-[10px] font-bold font-mono px-2 py-0.5 bg-slate-100 text-slate-650 border border-slate-200 rounded-lg">
+                                    {admSitesCount} مواقع
+                                  </span>
+
+                                  {/* Actions for Program Director ONLY */}
+                                  {user?.username.toLowerCase() === 'moataz' && (
+                                    <div className="flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity duration-200">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleEditAdminClick(adm);
+                                        }}
+                                        className="p-1 text-slate-500 hover:text-indigo-600 rounded-md hover:bg-indigo-100/50 transition cursor-pointer"
+                                        title="تعديل الحساب"
+                                      >
+                                        <Edit size={12} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteAdmin(adm.username);
+                                        }}
+                                        className="p-1 text-slate-500 hover:text-rose-600 rounded-md hover:bg-rose-50 transition cursor-pointer"
+                                        title="إلغاء الترخيص"
+                                      >
+                                        <Trash2 size={12} />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {filteredAdminsList.length === 0 && !isMoatazVisible && (
+                          <div className="text-center py-10 text-xs text-slate-400 font-medium leading-relaxed font-sans border border-dashed border-slate-200 rounded-2xl">
+                            لا يوجد نتائج متطابقة للبحث.
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 
               {/* LEVEL 3: Sites (مواقع هذا المدير) */}
-              <div className="space-y-4 border-l border-slate-100 pl-4 text-right">
-                <span className="inline-block px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-black rounded-lg">الطبقة الثالثة: مواقع مدير النظام</span>
-                
-                <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
-                  {sites
-                    .filter((s: any) => (s.tenantId || 'moataz') === selectedAdminUsername)
-                    .map((site, idx) => (
-                      <div 
-                        key={site.id || `site_${idx}`}
-                        onClick={() => setSelectedSiteIdForHierarchy(site.id)}
-                        className={`p-4 rounded-xl border text-right cursor-pointer transition relative group ${
-                          selectedSiteIdForHierarchy === site.id
-                            ? 'bg-emerald-500/5 border-emerald-500 text-emerald-950 font-black shadow-sm'
-                            : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                        }`}
-                      >
-                        <div className="absolute top-2.5 left-2.5">
-                          <span className="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded font-mono text-slate-500 font-bold">
-                            {(site.projects || []).length} مشاريع
-                          </span>
-                        </div>
+              <div className="space-y-4 border-l border-slate-150/70 pl-4 text-right flex flex-col">
+                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center font-mono">٣</span>
+                    <span className="text-xs font-black text-slate-900">مواقع عمل المسؤول المعتمدة</span>
+                  </div>
+                  <span className="text-[9.5px] bg-slate-100 font-mono text-slate-600 px-2 py-0.5 rounded-lg border font-bold">
+                    {sites.filter((s: any) => (s.tenantId || 'moataz') === selectedAdminUsername).length} مسجل
+                  </span>
+                </div>
 
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-1.5 pr-0.5">
-                            <Building size={13} className="text-emerald-650 shrink-0" />
-                            <h5 className="text-xs font-bold truncate max-w-[150px]">{site.nameAr}</h5>
-                          </div>
-                          <p className="text-[10px] text-slate-500 font-semibold flex items-center gap-1">
-                            <MapPin size={10} className="text-emerald-500 shrink-0" />
-                            <span>{site.location}</span>
-                          </p>
-                          <p className="text-[9.5px] text-slate-400 line-clamp-1 leading-normal font-medium">{site.description || 'لا يوجد وصف.'}</p>
-                        </div>
-                      </div>
-                    ))}
-
-                  {sites.filter((s: any) => (s.tenantId || 'moataz') === selectedAdminUsername).length === 0 && (
-                    <div className="text-center py-12 text-xs text-slate-400 font-sans border border-dashed border-slate-200 rounded-2xl leading-relaxed text-right">
-                      <p>لا توجد مواقع ترتبط حالياً بمدير النظام هذا. ⚠️</p>
-                      {user?.role === 'admin' && (
-                        <button
-                          onClick={() => {
-                            setIsEditMode(false);
-                            setNewSiteId('site-default');
-                            setNewSiteName('');
-                            setNewSiteLoc('');
-                            setNewSiteDesc('');
-                            setNewSiteTenantId(selectedAdminUsername);
-                            setShowAddSiteModal(true);
-                          }}
-                          className="block mx-auto mt-4 text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-750 px-3 py-1.5 rounded-lg border border-indigo-200 cursor-pointer font-bold transition"
-                        >
-                          + أنشئ موقعاً لهذا المدير
-                        </button>
-                      )}
-                    </div>
+                {/* Search Bar for level 3 Sites */}
+                <div className="relative">
+                  <span className="absolute inset-y-0 right-3 flex items-center text-slate-400 pointer-events-none">
+                    <Search size={13} />
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="ابحث في مواقع هذا المدير..."
+                    value={siteSearchQuery}
+                    onChange={(e) => setSiteSearchQuery(e.target.value)}
+                    className="w-full pl-3 pr-8 py-2 text-[11px] bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white text-right font-semibold text-slate-800 placeholder:text-slate-400"
+                  />
+                  {siteSearchQuery && (
+                    <button 
+                      onClick={() => setSiteSearchQuery('')} 
+                      className="absolute inset-y-0 left-2.5 flex items-center text-[10px] text-slate-400 hover:text-slate-600"
+                    >
+                      ✕
+                    </button>
                   )}
+                </div>
+                
+                <div className="space-y-2.5 overflow-y-auto pr-1 flex-1 max-h-[460px] scrollbar-thin">
+                  {(() => {
+                    const rawMySites = sites.filter((site: any) => (site.tenantId || 'moataz') === selectedAdminUsername);
+                    const filteredHierarchySites = rawMySites.filter((site: any) => 
+                      site.nameAr?.includes(siteSearchQuery.trim()) ||
+                      site.location?.includes(siteSearchQuery.trim()) ||
+                      site.id?.toLowerCase().includes(siteSearchQuery.toLowerCase().trim())
+                    );
+
+                    return (
+                      <>
+                        {filteredHierarchySites.map((site, idx) => {
+                          const isSelected = selectedSiteIdForHierarchy === site.id;
+                          const projectsCount = (site.projects || []).length;
+                          return (
+                            <div 
+                              key={site.id || `site_${idx}`}
+                              onClick={() => setSelectedSiteIdForHierarchy(site.id)}
+                              className={`p-3.5 rounded-2xl border text-right cursor-pointer transition-all duration-200 relative group/site active:scale-98 flex flex-col justify-between min-h-[92px] ${
+                                isSelected
+                                  ? 'bg-emerald-50 border-emerald-500 text-emerald-950 font-black shadow-md ring-1 ring-emerald-500/20'
+                                  : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-350'
+                              }`}
+                            >
+                              <div className="space-y-1.5 min-w-0">
+                                <div className="flex items-start justify-between gap-1.5">
+                                  <div className="flex items-center gap-2 min-w-0 text-right">
+                                    <Building size={14} className="text-slate-500 group-hover/site:text-emerald-650 transition-colors shrink-0" />
+                                    <h5 className="text-xs font-black truncate text-slate-900">{site.nameAr}</h5>
+                                  </div>
+                                  <span className="text-[9px] font-mono px-2 py-0.5 bg-emerald-100/55 text-emerald-900 border border-emerald-250 rounded-lg shrink-0 font-extrabold">
+                                    {projectsCount} مشاريع
+                                  </span>
+                                </div>
+                                
+                                <p className="text-[10px] text-slate-500 font-bold flex items-center gap-1">
+                                  <MapPin size={11} className="text-slate-400 shrink-0" />
+                                  <span className="truncate">{site.location}</span>
+                                </p>
+                              </div>
+
+                              <div className="pt-2 mt-1 border-t border-slate-100 flex items-center justify-between text-[8px] font-mono font-bold text-slate-400">
+                                <span>كود: {site.id}</span>
+                                <span className="opacity-0 group-hover/site:opacity-100 text-emerald-650 transition-opacity font-bold">تحديد واستعراض 👁️</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {filteredHierarchySites.length === 0 && (
+                          <div className="text-center py-10 text-xs text-slate-400 font-medium leading-relaxed font-sans border border-dashed border-slate-200 rounded-3xl p-5">
+                            <p className="font-extrabold text-slate-500 text-[11px] mb-2">⚠️ لا يوجد مواقع لهذا المدير</p>
+                            <p className="text-[9.5px] leading-relaxed">لم يتم العثور على مواقع مطابقة للبحث أو معززة لهذا الحساب.</p>
+                            {user?.role === 'admin' && (
+                              <button
+                                onClick={() => {
+                                  setIsEditMode(false);
+                                  setNewSiteId('site-default');
+                                  setNewSiteName('');
+                                  setNewSiteLoc('');
+                                  setNewSiteDesc('');
+                                  setNewSiteTenantId(selectedAdminUsername);
+                                  setShowAddSiteModal(true);
+                                }}
+                                className="mt-4 text-[10px] font-black bg-indigo-650 hover:bg-indigo-600 text-white px-4 py-2 rounded-xl transition cursor-pointer shadow-md inline-flex items-center gap-1.5"
+                              >
+                                <span>تأسيس موقع عمل جديد +</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 
               {/* LEVEL 4: Projects of Selected Site (مشاريع هذا الموقع) */}
-              <div className="space-y-4 text-right">
-                <span className="inline-block px-3 py-1 bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-black rounded-lg">الطبقة الرابعة: مشاريع موقع العمل</span>
-                
-                <div className="space-y-3.5 max-h-[420px] overflow-y-auto pr-1">
+              <div className="space-y-4 text-right flex flex-col">
+                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-rose-600 text-white text-[10px] font-black flex items-center justify-center font-mono">٤</span>
+                    <span className="text-xs font-black text-slate-900">المصفوفة المقررة والمشاريع التكميلية</span>
+                  </div>
+                </div>
+
+                <div className="space-y-3.5 overflow-y-auto pr-1 flex-1 max-h-[520px] scrollbar-thin">
                   {(() => {
                     const activeSite = sites.find(s => s.id === selectedSiteIdForHierarchy);
                     const activeProjects = activeSite?.projects || [];
                     
                     if (!selectedSiteIdForHierarchy) {
                       return (
-                        <div className="text-center py-16 text-xs text-slate-400 font-sans leading-relaxed">
-                          يرجى اختيار موقع عمل من العمود الثالث لاستكشاف مصفوفة مشاريعه المعتمدة وتكلفة البنود.
+                        <div className="text-center py-16 text-xs text-slate-400 font-sans leading-relaxed border border-dashed border-slate-200 rounded-3xl p-6 bg-slate-50/50">
+                          <Compass size={28} className="mx-auto text-slate-350 mb-3 animate-pulse" />
+                          <p className="font-extrabold text-slate-600 text-[11px]">بانتظار تحديد موقع العمل 🔍</p>
+                          <p className="text-[9.5px] mt-1.5 leading-relaxed text-slate-450">يرجى اختيار أحد مواقع العمل المتاحة بالعمود الثالث لعرض خطط المشروع، التكاليف، وإبرام الدفاتر اليومية.</p>
                         </div>
                       );
                     }
 
+                    // Filter search inside activeProjects
+                    const filteredHierarchyProjects = activeProjects.filter((p: any) => 
+                      p.name?.includes(projectSearchQuery.trim()) ||
+                      p.id?.toLowerCase().includes(projectSearchQuery.toLowerCase().trim()) ||
+                      p.assignmentNumber?.includes(projectSearchQuery.trim())
+                    );
+
                     return (
-                      <>
-                        <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl space-y-1.5 font-sans text-right">
-                          <p className="text-[11px] font-black text-emerald-850">الموقع النشط المستهدف:</p>
-                          <div className="flex justify-between items-center text-[10.5px]">
-                            <span className="font-extrabold text-slate-800 leading-none">{activeSite?.nameAr}</span>
-                            <button
-                              onClick={() => {
-                                if (activeSite) {
-                                  onSiteSelected(activeSite);
-                                }
-                              }}
-                              className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-[9.5px] rounded-lg transition active:scale-95 cursor-pointer shadow-sm flex items-center gap-1 shrink-0"
-                            >
-                              <span>دخول وإدارة السجلات 📂</span>
-                            </button>
+                      <div className="space-y-4 flex flex-col h-full">
+                        {/* Selected Active Site Header with entering button */}
+                        <div className="p-4 bg-gradient-to-br from-emerald-650 to-teal-700 text-white rounded-2xl space-y-3 shadow-md border border-emerald-600">
+                          <div className="space-y-1">
+                            <span className="text-[9px] uppercase font-black tracking-wide text-emerald-100 bg-white/10 px-2 py-0.5 rounded-md inline-block">الموقع المحدد لإدارة الحسابات</span>
+                            <h4 className="text-sm font-black truncate">{activeSite?.nameAr}</h4>
+                            <p className="text-[10px] text-emerald-100 flex items-center gap-1 font-medium leading-none mt-1">
+                              <MapPin size={10} /> {activeSite?.location}
+                            </p>
                           </div>
+
+                          <button
+                            onClick={() => {
+                              if (activeSite) {
+                                onSiteSelected(activeSite);
+                              }
+                            }}
+                            className="w-full py-2 bg-white hover:bg-slate-50 text-emerald-950 font-black text-[11px] rounded-xl transition-all duration-200 shadow-lg active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 leading-none"
+                          >
+                            <span>دخول لوحة السجلات بالكامل 📂</span>
+                            <ArrowRight size={13} className="rotate-180" />
+                          </button>
                         </div>
 
-                        {activeProjects.map((p: any, idx: number) => (
-                          <div key={p.id || `proj_${idx}`} className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5 relative hover:border-indigo-300 transition text-right">
-                            <div className="flex items-center justify-between">
-                              <span className="inline-block px-2 py-0.5 bg-indigo-500/10 text-indigo-700 text-[9px] font-black rounded">
-                                {p.status || 'نشط'}
-                              </span>
-                              <span className="text-[9px] font-mono text-slate-400">{p.id}</span>
-                            </div>
+                        {/* Search Bar for level 4 Projects */}
+                        <div className="relative">
+                          <span className="absolute inset-y-0 right-3 flex items-center text-slate-400 pointer-events-none">
+                            <Search size={13} />
+                          </span>
+                          <input
+                            type="text"
+                            placeholder="البحث في مشاريع هذا الموقع..."
+                            value={projectSearchQuery}
+                            onChange={(e) => setProjectSearchQuery(e.target.value)}
+                            className="w-full pl-3 pr-8 py-2 text-[11px] bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-rose-500 focus:bg-white text-right font-semibold text-slate-800 placeholder:text-slate-400"
+                          />
+                          {projectSearchQuery && (
+                            <button 
+                              onClick={() => setProjectSearchQuery('')} 
+                              className="absolute inset-y-0 left-2.5 flex items-center text-[10px] text-slate-400 hover:text-slate-600"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
 
-                            <div className="space-y-1 pr-0.5 text-right">
-                              <div className="flex items-center gap-1.5">
-                                <Briefcase size={12} className="text-indigo-650" />
-                                <h6 className="text-[11.5px] font-extrabold text-slate-900 leading-none">{p.name}</h6>
-                              </div>
-                              <p className="text-[10px] text-slate-500 flex items-center gap-1">
-                                <span className="font-semibold">رقم التكليف:</span>
-                                <span className="font-mono font-bold text-slate-700">{p.assignmentNumber}</span>
-                              </p>
-                              {p.description && (
-                                <p className="text-[9.5px] text-slate-400 leading-relaxed mt-1">{p.description}</p>
-                              )}
-                            </div>
+                        {/* List of Projects */}
+                        <div className="space-y-3 pb-4">
+                          {filteredHierarchyProjects.map((p: any, idx: number) => {
+                            const statusLabel = p.status || 'نشط';
+                            const statusColor = statusLabel === 'نشط' 
+                              ? 'bg-emerald-100/70 text-emerald-900 border-emerald-200' 
+                              : statusLabel === 'مكتمل'
+                              ? 'bg-indigo-100/70 text-indigo-900 border-indigo-200'
+                              : 'bg-amber-100/70 text-amber-900 border-amber-200';
 
-                            <div className="pt-2 border-t border-slate-150 grid grid-cols-2 gap-2 text-[9px] font-medium text-slate-600 font-sans text-right">
-                              <div>
-                                <span className="block text-slate-400">تاريخ التكليف:</span>
-                                <span>{p.assignmentDate}</span>
-                              </div>
-                              <div>
-                                <span className="block text-slate-400">تاريخ التسليم:</span>
-                                <span>{p.handoverDate}</span>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                            return (
+                              <div 
+                                key={p.id || `proj_${idx}`} 
+                                className="p-4 bg-white hover:bg-slate-50 border border-slate-200 text-right rounded-2xl space-y-3 relative hover:border-indigo-400 transition-all duration-200 hover:shadow-md"
+                              >
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className={`inline-block px-2.5 py-0.5 border text-[9px] font-black rounded-lg ${statusColor}`}>
+                                    {statusLabel === 'نشط' ? '🟢 نشط' : statusLabel === 'مكتمل' ? '✅ مكتمل' : '⏳ تحت المراجعة'}
+                                  </span>
+                                  <span className="text-[9px] font-mono text-slate-400 font-bold">كود: {p.id}</span>
+                                </div>
 
-                        {activeProjects.length === 0 && (
-                          <div className="text-center py-12 text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl leading-relaxed text-right">
-                            لم يسجل هذا الموقع أي مشروعات حتى الآن. يرجى الدخول لموقع العمل لفرز وتأسيس مشاريعه وبنود مقايسته (BOQ).
-                          </div>
-                        )}
-                      </>
+                                <div className="space-y-1 pr-0.5 text-right">
+                                  <div className="flex items-center gap-1.5">
+                                    <Briefcase size={13} className="text-indigo-650 shrink-0" />
+                                    <h6 className="text-[11.5px] font-extrabold text-slate-950 leading-snug">{p.name}</h6>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                    <p className="text-[9.5px] text-slate-500 font-semibold bg-slate-100 border px-2 py-0.5 rounded-lg flex items-center gap-1">
+                                      <span>رقم التكليف:</span>
+                                      <span className="font-mono font-black text-slate-800">{p.assignmentNumber || 'غير محدد'}</span>
+                                    </p>
+                                  </div>
+                                  
+                                  {p.description && (
+                                    <p className="text-[10px] text-slate-500 leading-relaxed font-semibold mt-2 border-r-2 border-slate-200 pr-2">{p.description}</p>
+                                  )}
+                                </div>
+
+                                <div className="pt-2 border-t border-slate-150 grid grid-cols-2 gap-3 text-[9px] font-semibold text-slate-600 font-sans text-right">
+                                  <div className="space-y-0.5">
+                                    <span className="block text-slate-400 font-bold flex items-center gap-1"><Calendar size={9} /> تاريخ التكليف:</span>
+                                    <span className="text-slate-700 font-bold">{p.assignmentDate || 'مستمر'}</span>
+                                  </div>
+                                  <div className="space-y-0.5">
+                                    <span className="block text-slate-400 font-bold flex items-center gap-1"><Calendar size={9} /> تاريخ التسليم:</span>
+                                    <span className="text-slate-700 font-bold">{p.handoverDate || 'مستمر'}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {filteredHierarchyProjects.length === 0 && (
+                            <div className="text-center py-10 text-xs text-slate-400 border border-dashed border-slate-200 rounded-2xl leading-relaxed text-right p-5 bg-slate-50/50">
+                              <p className="font-extrabold text-slate-500 text-[11px] mb-1">لم يتم العثور على أي مشاريع</p>
+                              <p className="text-[9.5px]">يرجى تعديل مصطلحات البحث أو الدخول لموقع العمل لتعيين مشاريع جديدة.</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     );
                   })()}
                 </div>

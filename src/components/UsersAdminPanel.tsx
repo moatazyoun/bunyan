@@ -32,7 +32,8 @@ const DEFAULT_PERMISSIONS: UserModulePermissions = {
   siteWorkers: 'none',
   fuelDashboard: 'none',
   equipmentDashboard: 'none',
-  usersManagement: 'none'
+  usersManagement: 'none',
+  notifications: 'none'
 };
 
 export default function UsersAdminPanel({ currentUser, auditLogs }: UsersAdminPanelProps) {
@@ -326,6 +327,7 @@ export default function UsersAdminPanel({ currentUser, auditLogs }: UsersAdminPa
             <option value="accountant">محاسب مالي</option>
             <option value="supervisor">مشرف</option>
             <option value="dc">مراقب المخرجات (DC)</option>
+            <option value="viewer">مشاهد / مراقب عام (للقراءة فقط)</option>
           </select>
         </div>
       </div>
@@ -383,7 +385,8 @@ export default function UsersAdminPanel({ currentUser, auditLogs }: UsersAdminPa
                              item.role === 'site_engineer' ? 'مهندس موقع' :
                              item.role === 'accountant' ? 'محاسب مالي' :
                              item.role === 'supervisor' ? 'مشرف ميداني' : 
-                             item.role === 'dc' ? 'مراقب مخرجات DC' : 'مراقب عام'}
+                             item.role === 'dc' ? 'مراقب مخرجات DC' : 
+                             item.role === 'viewer' ? 'مشاهد (لا يملك صلاحيات تعديل)' : 'مراقب عام'}
                           </span>
                         </div>
                       </div>
@@ -416,6 +419,7 @@ export default function UsersAdminPanel({ currentUser, auditLogs }: UsersAdminPa
                           { key: 'fuelDashboard', label: 'المحروقات' },
                           { key: 'equipmentDashboard', label: 'المعدات' },
                           { key: 'usersManagement', label: 'الأعضاء' },
+                          { key: 'notifications', label: 'الإشعارات' },
                         ].map((p) => {
                           const level = item.role === 'admin' ? 'edit' : (item.permissions?.[p.key as keyof UserModulePermissions] || 'none');
                           if (level === 'none') return null;
@@ -741,7 +745,8 @@ export default function UsersAdminPanel({ currentUser, auditLogs }: UsersAdminPa
                       <option value="tech_office">مهندس مكتب فني</option>
                       <option value="accountant">محاسب مالي</option>
                       <option value="supervisor">مشرف</option>
-                      <option value="dc">DC</option>
+                      <option value="dc">مراقب مخرجات DC</option>
+                      <option value="viewer">مشاهد / مراقب عام (للقراءة فقط)</option>
                       <option value="admin">مدير نظام</option>
                     </select>
                   </div>
@@ -831,7 +836,8 @@ export default function UsersAdminPanel({ currentUser, auditLogs }: UsersAdminPa
                       <option value="site_engineer">مهندس موقع</option>
                       <option value="accountant">محاسب مالي</option>
                       <option value="supervisor">مشرف</option>
-                      <option value="dc">DC</option>
+                      <option value="dc">مراقب مخرجات DC</option>
+                      <option value="viewer">مشاهد / مراقب عام (للقراءة فقط)</option>
                     </select>
                   </div>
                   
@@ -851,6 +857,7 @@ export default function UsersAdminPanel({ currentUser, auditLogs }: UsersAdminPa
                         { key: 'fuelDashboard', label: 'حساب المحروقات والسولار', eng: 'Fuel Logs' },
                         { key: 'equipmentDashboard', label: 'بيان المعدات والآلات', eng: 'Equipment Dashboard' },
                         { key: 'usersManagement', label: 'حسابات الأعضاء والصلاحيات', eng: 'Users Admin' },
+                        { key: 'notifications', label: 'إدارة وبث الإشعارات العاجلة', eng: 'Notifications Broadcast' },
                       ].map((item) => {
                         const isAdmin = editingUser.role === 'admin';
                         const perms = isAdmin
@@ -866,7 +873,8 @@ export default function UsersAdminPanel({ currentUser, auditLogs }: UsersAdminPa
                               siteWorkers: 'edit',
                               fuelDashboard: 'edit',
                               equipmentDashboard: 'edit',
-                              usersManagement: 'edit'
+                              usersManagement: 'edit',
+                              notifications: 'edit'
                             }
                           : (editingUser.permissions || DEFAULT_PERMISSIONS);
                         const currentVal = perms[item.key as keyof UserModulePermissions] || 'none';

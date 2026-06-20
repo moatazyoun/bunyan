@@ -5,31 +5,70 @@
  */
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, signInAnonymously } from 'firebase/auth';
-import { initializeFirestore, getFirestore, doc, getDoc, getDocs, setDoc, deleteDoc, collection } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { initializeFirestore, getFirestore, doc, getDoc, getDocs, setDoc, deleteDoc, collection, query, where } from 'firebase/firestore';
+import appletConfig from '../../firebase-applet-config.json';
 import { UserModulePermissions } from '../types';
+
+// Support environments like Vercel with custom environment variable configurations
+let envConfig: any = {};
+const metaEnv = (import.meta as any).env || {};
+try {
+  const envVal = metaEnv.VITE_FIREBASE_CONFIG;
+  if (envVal) {
+    envConfig = JSON.parse(envVal);
+  }
+} catch (e) {
+  console.warn("VITE_FIREBASE_CONFIG JSON parse error in apiInterceptor: fallback to properties", e);
+}
+
+const firebaseConfig = {
+  apiKey: metaEnv.VITE_FIREBASE_API_KEY || envConfig.apiKey || appletConfig.apiKey,
+  authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN || envConfig.authDomain || appletConfig.authDomain,
+  projectId: metaEnv.VITE_FIREBASE_PROJECT_ID || envConfig.projectId || appletConfig.projectId,
+  storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET || envConfig.storageBucket || appletConfig.storageBucket,
+  messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || envConfig.messagingSenderId || appletConfig.messagingSenderId,
+  appId: metaEnv.VITE_FIREBASE_APP_ID || envConfig.appId || appletConfig.appId,
+  measurementId: metaEnv.VITE_FIREBASE_MEASUREMENT_ID || envConfig.measurementId || appletConfig.measurementId,
+  firestoreDatabaseId: metaEnv.VITE_FIREBASE_DATABASE_ID || envConfig.firestoreDatabaseId || (appletConfig as any).firestoreDatabaseId || '(default)'
+};
 
 // Initialize Firebase App & Firestore safely to avoid multi-app errors
 const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 // Authenticate on the client-side helper to satisfy firestore.rules
 const firebaseAuth = getAuth(firebaseApp);
-signInAnonymously(firebaseAuth).catch((err) => {
-  console.warn("[API Interceptor Client Auth] Anonymous sign in failed:", err.message || err);
-});
+let authReadyPromise: Promise<void> | null = null;
+
+const getAuthReady = () => {
+  if (!authReadyPromise) {
+    authReadyPromise = new Promise((resolve) => {
+      const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+        if (!user) {
+          signInAnonymously(firebaseAuth).catch((err) => {
+             console.warn("[API Interceptor Client Auth] Anonymous sign in failed:", err.message || err);
+          });
+        }
+        resolve();
+      });
+    });
+  }
+  return authReadyPromise;
+};
 
 let db: any;
 try {
-  const dbId = ((firebaseConfig as any).firestoreDatabaseId && (firebaseConfig as any).firestoreDatabaseId !== '(default)') 
-    ? (firebaseConfig as any).firestoreDatabaseId 
+  const dbId = (firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)') 
+    ? firebaseConfig.firestoreDatabaseId 
     : undefined;
+  
+  // Use initializeFirestore only if not already initialized
   db = initializeFirestore(firebaseApp, {
     experimentalForceLongPolling: true,
   }, dbId);
 } catch (e: any) {
-  console.warn('[Firestore Log] Error initializing with initializeFirestore/long-polling (might be pre-initialized):', e.message || e);
-  db = getFirestore(firebaseApp);
+  console.log('[Firestore] Interceptor pre-initialized or fallback:', e.message || e);
+  db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
 }
 
 enum OperationType {
@@ -82,6 +121,7 @@ async function runFs<T>(
   operationType: OperationType,
   path: string | null
 ): Promise<T> {
+  await getAuthReady();
   try {
     return await op();
   } catch (err: any) {
@@ -136,7 +176,8 @@ function normalizePermissions(p?: any, role?: string): any {
       siteWorkers: 'edit',
       fuelDashboard: 'edit',
       equipmentDashboard: 'edit',
-      usersManagement: 'edit'
+      usersManagement: 'edit',
+      notifications: 'edit'
     };
   }
   const getVal = (val: any, defaultVal: string = 'none'): string => {
@@ -157,7 +198,8 @@ function normalizePermissions(p?: any, role?: string): any {
     siteWorkers: getVal(p?.siteWorkers !== undefined ? p.siteWorkers : p?.contractors, 'none'),
     fuelDashboard: getVal(p?.fuelDashboard !== undefined ? p.fuelDashboard : p?.equipment, 'none'),
     equipmentDashboard: getVal(p?.equipmentDashboard !== undefined ? p.equipmentDashboard : p?.equipment, 'none'),
-    usersManagement: getVal(p?.usersManagement, 'none')
+    usersManagement: getVal(p?.usersManagement, 'none'),
+    notifications: getVal(p?.notifications, 'none')
   };
 }
 
@@ -180,7 +222,8 @@ const INITIAL_USERS: EmulatedUser[] = [
       siteWorkers: 'edit',
       fuelDashboard: 'edit',
       equipmentDashboard: 'edit',
-      usersManagement: 'edit'
+      usersManagement: 'edit',
+      notifications: 'edit'
     },
     assignedProjects: []
   },
@@ -201,7 +244,8 @@ const INITIAL_USERS: EmulatedUser[] = [
       siteWorkers: 'edit',
       fuelDashboard: 'edit',
       equipmentDashboard: 'edit',
-      usersManagement: 'edit'
+      usersManagement: 'edit',
+      notifications: 'edit'
     },
     assignedProjects: []
   }
@@ -890,10 +934,10 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
         let remainingMs = 0;
         if (matched.isTrial && trialStartedAt) {
           const elapsed = Date.now() - new Date(trialStartedAt).getTime();
-          if (elapsed > 120 * 1000) { // 2 minutes trial limit for testing
+          if (elapsed > 3600 * 1000) { // 1 hour trial limit
             expired = true;
           } else {
-            remainingMs = 120 * 1000 - elapsed;
+            remainingMs = 3600 * 1000 - elapsed;
           }
         }
         
@@ -911,7 +955,8 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
             permissions: normalizePermissions(matched.permissions, matched.role || 'admin'),
             isTrial: matched.isTrial || false,
             trialStartedAt: matched.trialStartedAt || null,
-            tenantId: matched.tenantId || matched.username.toLowerCase()
+            // Force UID as tenantId for Google users to ensure isolation
+            tenantId: (matched.isTrial || matched.username.toLowerCase() !== 'moataz') ? lowerUid : 'moataz'
           }
         });
       } else {
@@ -937,11 +982,23 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     if (!saved) return null;
     try {
       const parsed = JSON.parse(saved);
-      const username = parsed.username || '';
+      const username = (parsed.username || '').toLowerCase().trim();
       const role = parsed.role || 'viewer';
-      const tenantId = parsed.tenantId || (username.toLowerCase() === 'moataz' ? 'moataz' : (role === 'admin' ? username.toLowerCase() : 'moataz'));
+      
+      // Strict Tenant ID Resolution:
+      // 1. Prioritize explicitly stored tenantId
+      // 2. 'moataz' username always stays in 'moataz' tenant
+      // 3. Others default to their own username if tenantId is missing, NEVER 'moataz'
+      // Security FIX: Ensure that if tenantId is missing, it ONLY defaults to 'moataz' if the username matches exactly
+      let tenantId = parsed.tenantId || (username === 'moataz' ? 'moataz' : (username.length > 0 ? username : 'unassigned_tenant'));
+      
+      // EXTRA SECURITY: Prevent non-moataz users from ever being in the moataz tenant
+      if (username !== 'moataz' && tenantId === 'moataz') {
+        tenantId = username || 'isolated_guest';
+      }
+      
       return {
-        username,
+        username: parsed.username || '',
         role,
         tenantId
       };
@@ -958,6 +1015,29 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     }
     const lowerUid = uid.trim().toLowerCase();
     const cleanUsername = username.trim();
+    const lowerUser = cleanUsername.toLowerCase();
+
+    // Prevent taking the program director's name in demo accounts
+    if (lowerUser === 'moataz') {
+      return mockResponseErr('عذراً، هذا الاسم محجوز لمدير البرنامج ولا يمكن استخدامه.', 403);
+    }
+
+    // NEW: Check if username is already taken by another UID
+    try {
+      const usersCol = collection(db, 'users');
+      const q = query(usersCol);
+      const snapshot = await runFs(() => getDocs(q), OperationType.LIST, 'users');
+      const existingUser = snapshot.docs.find(d => {
+        const data = d.data();
+        return (data.username || '').toLowerCase().trim() === lowerUser && d.id !== lowerUid;
+      });
+      
+      if (existingUser) {
+        return mockResponseErr('اسم المستخدم هذا مستخدم بالفعل من قبل شخص آخر.', 400);
+      }
+    } catch (err) {
+      console.warn('[Firestore Log] Username check failed (non-blocking):', err);
+    }
     
     const trialStartedAt = new Date().toISOString();
     const newUser: any = {
@@ -978,12 +1058,13 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
         siteWorkers: 'edit',
         fuelDashboard: 'edit',
         equipmentDashboard: 'edit',
-        usersManagement: 'edit'
+        usersManagement: 'edit',
+        notifications: 'edit'
       },
       assignedProjects: [],
       isTrial: true,
       trialStartedAt,
-      tenantId: cleanUsername.toLowerCase() // Their own isolated tenant environment
+      tenantId: lowerUid // Isolated environment tied to unique Google UID for absolute zero data overlap
     };
 
     try {
@@ -995,7 +1076,7 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
       return mockResponseOk({
         success: true,
         expired: false,
-        remainingMs: 120 * 1000, // 2 minutes trial duration!
+        remainingMs: 3600 * 1000, // 1 hour trial duration!
         user: newUser
       });
     } catch (err: any) {
@@ -1017,7 +1098,7 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     const matchedLocal = users.find(u => u.username.trim().toLowerCase() === lowerUser);
     
     if (matchedLocal && matchedLocal.password === password.trim()) {
-      const tenantId = (matchedLocal as any).tenantId || (lowerUser === 'moataz' ? 'moataz' : (matchedLocal.role === 'admin' ? lowerUser : 'moataz'));
+      const tenantId = (matchedLocal as any).tenantId || (lowerUser === 'moataz' ? 'moataz' : lowerUser);
       
       // Log the classic login action!
       logUserActivity(matchedLocal.username, "سجل الدخول إلى النظام", "auth", "تم تسجيل دخول ناجح بالجلسة الحالية (محلي)");
@@ -1047,7 +1128,7 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
           updated.push(matched);
           setStorage('users', updated);
 
-          const tenantId = (matched as any).tenantId || (lowerUser === 'moataz' ? 'moataz' : (matched.role === 'admin' ? lowerUser : 'moataz'));
+          const tenantId = (matched as any).tenantId || (lowerUser === 'moataz' ? 'moataz' : lowerUser);
           
           // Log the classic login action!
           logUserActivity(matched.username, "سجل الدخول إلى النظام", "auth", "تم تسجيل دخول ناجح بالجلسة الحالية (سحابي)");
@@ -1104,15 +1185,22 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
       logsList.forEach(log => uniqueLogs.set(log.id, log));
       logsList = Array.from(uniqueLogs.values());
       
-      // Filter logs by username if provided
+      // Filter logs by username if provided or restrict to current user if not moataz
+      const sessionUser = getCurrentUserObj();
+      const isSuperAdmin = sessionUser?.username.toLowerCase() === 'moataz';
+      
       if (lowerQuery && lowerQuery !== 'logs') {
         logsList = logsList.filter(l => (l.username || '').toLowerCase().trim() === lowerQuery);
+      } else if (!isSuperAdmin && sessionUser) {
+        // Essential Privacy: Non-admins can only see their own logs
+        logsList = logsList.filter(l => (l.username || '').toLowerCase().trim() === sessionUser.username.toLowerCase());
       }
       
-      // Seed beautiful demo history logs for the user if they don't have enough entries
-      // This produces an extremely rich, high-fidelity timeline even on the first use
+      // Seed beautiful demo history logs for root admin or specific requested user
       const baseUser = lowerQuery && lowerQuery !== 'logs' ? lowerQuery : 'المهندس الحالي';
-      if (logsList.length < 3) {
+      const isTrialUser = sessionUser?.username.toLowerCase().includes('trial') || (sessionUser as any)?.isTrial;
+      
+      if (logsList.length < 3 && !isTrialUser) {
         const seedLogs = [
           {
             id: 'seed_log_1_' + baseUser,
@@ -1178,6 +1266,11 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
 
   // Route 2: GET /api/users
   if (path === '/api/users' && method === 'GET') {
+    const sessionUser = getCurrentUserObj();
+    if (!sessionUser) {
+      return mockResponseErr('عذرا، يجب تسجيل الدخول للوصول لقائمة المستخدمين.', 401);
+    }
+
     try {
       const usersCol = collection(db, 'users');
       const snapshot = await runFs(() => getDocs(usersCol), OperationType.LIST, 'users');
@@ -1195,14 +1288,13 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
         for (const u of INITIAL_USERS) {
           const initialU = {
             ...u,
-            tenantId: u.username.toLowerCase() === 'moataz' ? 'moataz' : 'moataz'
+            tenantId: u.username.toLowerCase() === 'moataz' ? 'moataz' : u.username.toLowerCase()
           };
           await runFs(() => setDoc(doc(db, 'users', u.username.toLowerCase()), initialU), OperationType.CREATE, `users/${u.username.toLowerCase()}`);
         }
         usersList = INITIAL_USERS as any[];
       }
 
-      const sessionUser = getCurrentUserObj();
       if (sessionUser) {
         const isSuperAdmin = sessionUser.username.trim().toLowerCase() === 'moataz';
         if (!isSuperAdmin) {
@@ -1529,18 +1621,21 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
 
   // Route 5: GET /api/sites
   if (path === '/api/sites' && method === 'GET') {
+    const sessionUser = getCurrentUserObj();
+    if (!sessionUser) {
+      return mockResponseErr('عذراً، يجب تسجيل الدخول لاسترداد مواقع العمل.', 401);
+    }
+
     try {
       const sitesCol = collection(db, 'sites');
       const snapshot = await runFs(() => getDocs(sitesCol), OperationType.LIST, 'sites');
       let sitesList = snapshot.docs.map(d => ({ ...d.data(), id: d.data().id || d.id }) as any);
       
-      const sessionUser = getCurrentUserObj();
-      if (sessionUser) {
-        const isSuperAdmin = sessionUser.username.trim().toLowerCase() === 'moataz';
-        if (!isSuperAdmin) {
-          // Filter by tenantId to prevent showing other admins' environments
-          sitesList = sitesList.filter((s: any) => (s.tenantId || 'moataz') === sessionUser.tenantId);
-        }
+      const isSuperAdmin = sessionUser.username.trim().toLowerCase() === 'moataz';
+      if (!isSuperAdmin) {
+        // STRICT FILTERING: Only show sites belonging to user's tenantId
+        // If a site has no tenantId, it belongs to the root admin 'moataz' exclusively
+        sitesList = sitesList.filter((s: any) => (s.tenantId || 'moataz') === sessionUser.tenantId);
       }
 
       // Fetch projects from siteData for each site to build the 4-layer structure
@@ -1570,13 +1665,16 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
 
   // Route 6: POST /api/sites
   if (path === '/api/sites' && method === 'POST') {
+    const sessionUser = getCurrentUserObj();
+    if (sessionUser?.role === 'viewer') {
+      return mockResponseErr('عذراً، لا تملك صلاحية إضافة موقع جديد.', 403);
+    }
     const { id, nameAr, location, description, tenantId } = bodyData;
     if (!id || !nameAr || !location) {
       return mockResponseErr('الرجاء كود الموقع واسمه والموقع الجغرافي كاملاً.');
     }
     const formattedId = id.toString().trim().toLowerCase().replace(/\s+/g, '-');
     
-    const sessionUser = getCurrentUserObj();
     const tenantIdToSave = tenantId || (sessionUser ? sessionUser.tenantId : 'moataz');
 
     const newSite = { 
@@ -1609,6 +1707,10 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
 
   // Route 6b: DELETE /api/sites/:id
   if (path.startsWith('/api/sites/') && method === 'DELETE') {
+    const sessionUser = getCurrentUserObj();
+    if (sessionUser?.role === 'viewer') {
+      return mockResponseErr('عذراً، لا تملك صلاحية حذف المواقع.', 403);
+    }
     const parts = path.split('/');
     const siteIdToDelete = parts[parts.length - 1];
     
@@ -1629,6 +1731,10 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
 
   // Route 6c: PUT /api/sites/:id
   if (path.startsWith('/api/sites/') && method === 'PUT') {
+    const sessionUser = getCurrentUserObj();
+    if (sessionUser?.role === 'viewer') {
+      return mockResponseErr('عذراً، لا تملك صلاحية تعديل المواقع.', 403);
+    }
     const parts = path.split('/');
     const siteIdToUpdate = parts[parts.length - 1];
     const { nameAr, location, description, tenantId } = bodyData;
@@ -1637,7 +1743,6 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
       return mockResponseErr('الرجاء كتابة اسم الموقع والموقع الجغرافي بالكامل للتحديث.');
     }
 
-    const sessionUser = getCurrentUserObj();
     const tenantIdToSave = tenantId || (sessionUser ? sessionUser.tenantId : 'moataz');
 
     const updatedSite = {
@@ -1665,8 +1770,21 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
   if (path.startsWith('/api/site/') && path.endsWith('/data') && method === 'GET') {
     const parts = path.split('/');
     const siteId = parts[3];
+    const sessionUser = getCurrentUserObj();
 
     try {
+      // Security Check: Verify site ownership/tenant match
+      if (sessionUser && sessionUser.username.toLowerCase() !== 'moataz') {
+        const siteDocRef = doc(db, 'sites', siteId);
+        const siteSnap = await runFs(() => getDoc(siteDocRef), OperationType.GET, `sites/${siteId}`);
+        if (siteSnap.exists()) {
+          const sData = siteSnap.data();
+          if ((sData.tenantId || 'moataz') !== sessionUser.tenantId) {
+            return mockResponseErr('غير مصرح لك بنظام بنيان للوصول لبيانات هذا الموقع المنفصلة.', 403);
+          }
+        }
+      }
+
       const siteDataDocRef = doc(db, 'siteData', siteId);
       const docSnap = await runFs(() => getDoc(siteDataDocRef), OperationType.GET, `siteData/${siteId}`);
       if (docSnap.exists()) {
@@ -1682,6 +1800,10 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
 
   // Route 8: POST /api/site/:siteId/save
   if (path.startsWith('/api/site/') && path.endsWith('/save') && method === 'POST') {
+    const sessionUser = getCurrentUserObj();
+    if (sessionUser?.role === 'viewer') {
+      return mockResponseErr('عذراً، لا تملك صلاحية تعديل بيانات الموقع.', 403);
+    }
     const parts = path.split('/');
     const siteId = parts[3];
     const { data } = bodyData;
@@ -1720,6 +1842,92 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     } catch (err: any) {
       console.warn(`[Firestore Log] Failed to save siteBackup for ${siteId}:`, err);
       return mockResponseErr('تعذر حفظ النسخة الاحتياطية التلقائية في قاعدة البيانات: ' + (err.message || String(err)), 500);
+    }
+  }
+
+  // Route 8c: GET /api/site/:siteId/server-backups
+  if (path.startsWith('/api/site/') && path.endsWith('/server-backups') && method === 'GET') {
+    const parts = path.split('/');
+    const siteId = parts[3];
+    try {
+      const querySnap = await runFs(() => getDocs(collection(db, 'siteBackups')), OperationType.LIST, 'siteBackups_all');
+      const backupsList = querySnap.docs
+        .map(docSnapshot => {
+          const d = docSnapshot.data();
+          return {
+            id: docSnapshot.id,
+            name: d.siteName || "موقع افتراضي",
+            createdTime: d.createdAt || d.backupDate || new Date().toISOString(),
+            backupDate: d.backupDate || "",
+            siteId: d.siteId
+          };
+        })
+        .filter(b => b.siteId === siteId);
+      // Sort by createdTime desc
+      backupsList.sort((a, b) => new Date(b.createdTime).getTime() - new Date(a.createdTime).getTime());
+      return mockResponseOk({ success: true, files: backupsList });
+    } catch (err: any) {
+      console.warn(`[Firestore Log] Failed to fetch siteBackups for ${siteId}:`, err);
+      return mockResponseErr('تعذر جلب النسخ الاحتياطية من السحابة: ' + (err.message || String(err)), 500);
+    }
+  }
+
+  // Route 8d: POST /api/site/:siteId/manual-backup
+  if (path.startsWith('/api/site/') && path.endsWith('/manual-backup') && method === 'POST') {
+    const parts = path.split('/');
+    const siteId = parts[3];
+    const { siteName, payload } = bodyData;
+    if (!payload) {
+      return mockResponseErr('بيانات النسخ الاحتياطي غير صالحة.', 400);
+    }
+    try {
+      const timestamp = new Date().toISOString();
+      const backupId = `${siteId}_manual_backup_${Date.now()}`;
+      const backupDocRef = doc(db, 'siteBackups', backupId);
+      
+      await runFs(() => setDoc(backupDocRef, {
+        siteId,
+        siteName: siteName || "موقع افتراضي",
+        backupDate: timestamp.split('T')[0],
+        createdAt: timestamp,
+        payload: payload
+      }), OperationType.WRITE, `siteBackups/${backupId}`);
+      
+      return mockResponseOk({ success: true, backupId });
+    } catch (err: any) {
+      console.warn(`[Firestore Log] Failed manually backing up:`, err);
+      return mockResponseErr('تعذر حفظ النسخة الاحتياطية اليدوية: ' + (err.message || String(err)), 500);
+    }
+  }
+
+  // Route 8e: GET /api/site/:siteId/restore-backup/:backupId
+  if (path.startsWith('/api/site/') && path.includes('/restore-backup/') && method === 'GET') {
+    const parts = path.split('/');
+    const backupId = parts[6] || parts[parts.length - 1];
+    try {
+      const backupDocRef = doc(db, 'siteBackups', backupId);
+      const docSnap = await runFs(() => getDoc(backupDocRef), OperationType.GET, `siteBackups/${backupId}`);
+      if (!docSnap.exists()) {
+        return mockResponseErr('ملف النسخة الاحتياطية المطلوب غير متوفر.', 404);
+      }
+      return mockResponseOk({ success: true, backup: docSnap.data() });
+    } catch (err: any) {
+      console.warn(`[Firestore Log] Failed to retrieve siteBackup ${backupId}:`, err);
+      return mockResponseErr('تعذر استعادة نسخة البيانات المطلوبة: ' + (err.message || String(err)), 500);
+    }
+  }
+
+  // Route 8f: DELETE /api/site/:siteId/backup/:backupId
+  if (path.startsWith('/api/site/') && path.includes('/backup/') && method === 'DELETE') {
+    const parts = path.split('/');
+    const backupId = parts[6] || parts[parts.length - 1];
+    try {
+      const backupDocRef = doc(db, 'siteBackups', backupId);
+      await runFs(() => deleteDoc(backupDocRef), OperationType.DELETE, `siteBackups/${backupId}`);
+      return mockResponseOk({ success: true });
+    } catch (err: any) {
+      console.warn(`[Firestore Log] Failed to delete siteBackup ${backupId}:`, err);
+      return mockResponseErr('تعذر حذف نسخة البيانات من السحابة: ' + (err.message || String(err)), 500);
     }
   }
 

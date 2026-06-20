@@ -67,9 +67,9 @@ export default function EquipmentSummaryTable({
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={() => setShowAddEqModal(true)}
+            onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية الإضافة') : () => setShowAddEqModal(true)}
             disabled={userRole === 'viewer'}
-            className="px-5 py-2.5 bg-indigo-600 hover:bg-slate-900 text-white rounded-2xl text-xs font-black transition-all shadow-lg active:scale-95 flex items-center gap-2 disabled:opacity-50"
+            className={`px-5 py-2.5 ${userRole === 'viewer' ? 'bg-slate-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-slate-900 active:scale-95'} text-white rounded-2xl text-xs font-black transition-all shadow-lg flex items-center gap-2`}
           >
             <Plus size={16} />
             تسجيل معدة جديدة
@@ -161,14 +161,16 @@ export default function EquipmentSummaryTable({
                   <td className="py-4 px-5 text-left" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-2 pr-2">
                        <button
-                         onClick={() => handleStartEditEq(eq)}
-                         className="p-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-xl transition-colors"
+                         onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية التعديل') : () => handleStartEditEq(eq)}
+                         disabled={userRole === 'viewer'}
+                         className={`p-1.5 ${userRole === 'viewer' ? 'bg-slate-100/50 text-slate-400 cursor-not-allowed' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'} rounded-xl transition-colors`}
                        >
                          <span className="text-[10px] font-black italic">✎ تعديل</span>
                        </button>
                        <button
-                         onClick={() => handleDeleteEq(eq.id, eq.name)}
-                         className="p-1.5 bg-rose-50 text-rose-500 hover:bg-rose-100 rounded-xl transition-colors"
+                         onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية الحذف') : () => handleDeleteEq(eq.id, eq.name)}
+                         disabled={userRole === 'viewer'}
+                         className={`p-1.5 ${userRole === 'viewer' ? 'bg-slate-100/50 text-slate-400 cursor-not-allowed' : 'bg-rose-50 text-rose-500 hover:bg-rose-100'} rounded-xl transition-colors`}
                        >
                          <Trash2 size={12} />
                        </button>
@@ -254,14 +256,16 @@ export default function EquipmentSummaryTable({
                   <td className="py-4 px-5 text-left" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-2 pr-2">
                        <button
-                         onClick={() => handleStartEditEq(eq)}
-                         className="p-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-xl transition-colors"
+                         onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية التعديل') : () => handleStartEditEq(eq)}
+                         disabled={userRole === 'viewer'}
+                         className={`p-1.5 ${userRole === 'viewer' ? 'bg-slate-100/50 text-slate-400 cursor-not-allowed' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'} rounded-xl transition-colors`}
                        >
                          <span className="text-[10px] font-black italic">✎ تعديل</span>
                        </button>
                        <button
-                         onClick={() => handleDeleteEq(eq.id, eq.name)}
-                         className="p-1.5 bg-rose-50 text-rose-500 hover:bg-rose-100 rounded-xl transition-colors"
+                         onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية الحذف') : () => handleDeleteEq(eq.id, eq.name)}
+                         disabled={userRole === 'viewer'}
+                         className={`p-1.5 ${userRole === 'viewer' ? 'bg-slate-100/50 text-slate-400 cursor-not-allowed' : 'bg-rose-50 text-rose-500 hover:bg-rose-100'} rounded-xl transition-colors`}
                        >
                          <Trash2 size={12} />
                        </button>

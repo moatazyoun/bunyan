@@ -1,10 +1,10 @@
 {
-  "projectId": "boreal-trail-h6ppv",
-  "appId": "1:779246676764:web:b2b9a2081dd240c34ca8d9",
-  "apiKey": "AIzaSyCqxNnSulVuQ3J-Js-mWau-wS0EJ8uNClE",
-  "authDomain": "boreal-trail-h6ppv.firebaseapp.com",
-  "storageBucket": "boreal-trail-h6ppv.firebasestorage.app",
-  "messagingSenderId": "779246676764",
-  "measurementId": "",
-  "firestoreDatabaseId": "ai-studio-3bce2f14-bd14-4a4a-af99-1f0a4f8cc667"
+  "projectId": "gen-lang-client-0991481159",
+  "appId": "1:378436659547:web:3c82247555fc49e18d127e",
+  "apiKey": "AIzaSyDIud6HtNwHy96oObIjQLYgR3HiKFYippQ",
+  "authDomain": "gen-lang-client-0991481159.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-245171b6-b3cc-4f8f-82b4-2d47f82c4274",
+  "storageBucket": "gen-lang-client-0991481159.firebasestorage.app",
+  "messagingSenderId": "378436659547",
+  "measurementId": ""
 }

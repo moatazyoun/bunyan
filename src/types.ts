@@ -70,6 +70,7 @@ export interface UserModulePermissions {
   fuelDashboard: ModulePermissionType;
   equipmentDashboard: ModulePermissionType;
   usersManagement: ModulePermissionType;
+  notifications: ModulePermissionType;
 }
 
 export interface UserItem {

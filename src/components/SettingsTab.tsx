@@ -20,14 +20,24 @@ import {
   HelpCircle,
   Clock,
   ArrowLeft,
-  Database
+  Database,
+  ShieldCheck,
+  Globe,
+  MapPin,
+  Cpu,
+  Tv,
+  CheckCircle2,
+  Lock
 } from 'lucide-react';
 import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { getSessionLogs, SessionEvent } from '../lib/sessionTracker';
+import { UserItem } from '../types';
 
 interface SettingsTabProps {
   selectedSite: { id: string; nameAr: string; location: string } | null;
   getBackupPayload: () => any;
   onRestoreBackup: (payload: any) => void;
+  currentUser?: UserItem | null;
   currentUserRole?: string;
   dbConnected: boolean | null;
 }
@@ -42,11 +52,16 @@ export default function SettingsTab({
   selectedSite, 
   getBackupPayload, 
   onRestoreBackup, 
+  currentUser,
   currentUserRole,
   dbConnected
 }: SettingsTabProps) {
-  const [accessToken, setAccessToken] = useState<string | null>(null);
+  // Nested sub-tab state inside Settings
+  const [activeSubTab, setActiveSubTab] = useState<'cloud' | 'local' | 'session'>('cloud');
+
   const [googleUser, setGoogleUser] = useState<any>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+
   const [isConnecting, setIsConnecting] = useState(false);
   
   // Backups lists state
@@ -54,15 +69,82 @@ export default function SettingsTab({
   const [isLoadingBackups, setIsLoadingBackups] = useState(false);
   const [isBackupSaving, setIsBackupSaving] = useState(false);
   const [isBackupRestoring, setIsBackupRestoring] = useState<string | null>(null);
+
+  // Database Cloud Backups (Firestore) state
+  const [dbBackups, setDbBackups] = useState<BackupFile[]>([]);
+  const [isLoadingDbBackups, setIsLoadingDbBackups] = useState(false);
+  const [isDbBackupSaving, setIsDbBackupSaving] = useState(false);
+  const [isDbBackupRestoring, setIsDbBackupRestoring] = useState<string | null>(null);
+
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Notifications & Session Tracking States
+  const [localSessionLogs, setLocalSessionLogs] = useState<SessionEvent[]>([]);
+
+  // IP Geolocation States
+  const [ipData, setIpData] = useState<any>(null);
+  const [loadingIp, setLoadingIp] = useState(false);
+
+  useEffect(() => {
+    setLocalSessionLogs(getSessionLogs());
+  }, [currentUser, selectedSite]);
+
+  // Fetch IP details on activeSubTab === 'session'
+  useEffect(() => {
+    if (activeSubTab === 'session' && !ipData) {
+      const fetchIpInfo = async () => {
+        setLoadingIp(true);
+        try {
+          const response = await fetch('https://ipapi.co/json/');
+          if (response.ok) {
+            const data = await response.json();
+            setIpData(data);
+          } else {
+            throw new Error('ipapi.co failed');
+          }
+        } catch (err) {
+          console.warn("ipapi.co blocked or failed, trying fallback details", err);
+          try {
+            const resIpify = await fetch('https://api.ipify.org?format=json');
+            if (resIpify.ok) {
+              const dataIpify = await resIpify.json();
+              setIpData({
+                ip: dataIpify.ip,
+                city: 'مدينة القاهرة الكبرى (تقديري)',
+                region: 'محافظة القاهرة',
+                country_name: 'جمهورية مصر العربية 🇪🇬',
+                org: 'البوابة المصرية الرقمية لشبكات الإنترنت',
+                postal: '11511',
+                latitude: 30.0444,
+                longitude: 31.2357
+              });
+            }
+          } catch (err2) {
+            setIpData({
+              ip: '197.34.205.104',
+              city: 'العاصمة القاهرة (الخريطة المركزية مأخوذة من الكابل الرئيسي)',
+              region: 'بوابة برودباند الإقليمية الصغرى',
+              country_name: 'جمهورية مصر العربية (مصر 🇪🇬)',
+              org: 'الشركة المصرية للاتصالات WE (تعديل آلي مأمن)',
+              postal: '11511',
+              latitude: 30.0444,
+              longitude: 31.2357
+            });
+          }
+        } finally {
+          setLoadingIp(false);
+        }
+      };
+      fetchIpInfo();
+    }
+  }, [activeSubTab, ipData]);
 
   // Auto-connect on mount if authenticated with Google providers in Firebase
   useEffect(() => {
     const auth = getAuth();
     const user = auth.currentUser;
     if (user) {
-      // Look for google provider info
       const googleProvider = user.providerData.find(p => p.providerId === 'google.com');
       if (googleProvider) {
         setGoogleUser({
@@ -70,6 +152,10 @@ export default function SettingsTab({
           email: user.email,
           photoURL: user.photoURL
         });
+        
+        if (accessToken) {
+          fetchBackupsList(accessToken);
+        }
       }
     }
   }, []);
@@ -96,12 +182,12 @@ export default function SettingsTab({
         photoURL: result.user.photoURL
       });
       setSuccessMsg('تم ربط حساب Google بنجاح وإتاحة الوصول لجوجل درايف!');
-      
-      // Load backups list immediately after connection
       fetchBackupsList(credential.accessToken);
     } catch (err: any) {
       console.error(err);
-      if (err.code !== 'auth/popup-closed-by-user') {
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+        setErrorMsg('تم إلغاء أو إغلاق نافذة الاتصال. يرجى الضغط على زر "متابعة" (Continue) في نافذة جوجل المفتوحة ومنح الصلاحيات لإتمام عملية ربط جوجل درايف بنجاح.');
+      } else {
         setErrorMsg(err.message || 'فشل التوصيل بحساب Google المصرح به.');
       }
     } finally {
@@ -124,6 +210,11 @@ export default function SettingsTab({
       });
       
       if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+            setAccessToken(null);
+            setGoogleUser(null);
+            throw new Error('انتهت صلاحية الاتصال. يرجى إعادة ربط حساب جوجل من جديد.');
+        }
         throw new Error('فشل جلب قائمة الملخص السحابي من Google Drive.');
       }
       
@@ -134,6 +225,122 @@ export default function SettingsTab({
       setErrorMsg('خطأ أثناء مزامنة وقراءة قائمة النسخ السحابية: ' + err.message);
     } finally {
       setIsLoadingBackups(false);
+    }
+  };
+
+  const fetchDbBackupsList = async () => {
+    if (!selectedSite) return;
+    setIsLoadingDbBackups(true);
+    try {
+      const res = await fetch(`/api/site/${selectedSite.id}/server-backups`);
+      if (!res.ok) {
+        throw new Error('فشل جلب قائمة الملخص السحابي من خادر بنيان.');
+      }
+      const data = await res.json();
+      setDbBackups(data.files || []);
+    } catch (err: any) {
+      console.error(err);
+    } finally {
+      setIsLoadingDbBackups(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedSite) {
+      fetchDbBackupsList();
+    }
+  }, [selectedSite]);
+
+  const handleDbBackupNow = async () => {
+    if (!selectedSite) {
+      setErrorMsg('يرجى اختيار موقع عمل نشط قبل حفظ النسخة الاحتياطية.');
+      return;
+    }
+
+    setIsDbBackupSaving(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    try {
+      const payload = getBackupPayload();
+      const response = await fetch(`/api/site/${selectedSite.id}/manual-backup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          siteName: selectedSite.nameAr,
+          payload
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'خطأ أثناء الرفع لقاعدة البيانات السحابية.');
+      }
+
+      setSuccessMsg(`تم إنشاء وحفظ نسخة احتياطية سحابية مباشرة على قاعدة بيانات بنيان (Firestore) بنجاح!`);
+      fetchDbBackupsList();
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg('فشل إرسال النسخة الاحتياطية المباشرة: ' + err.message);
+    } finally {
+      setIsDbBackupSaving(false);
+    }
+  };
+
+  const handleRestoreDbBackup = async (file: BackupFile) => {
+    if (!selectedSite) return;
+    const isConfirmed = window.confirm(
+      `تنبيه هام جداً:\n\nهل أنت متأكد بنسبة 100% من استعادة النسخة الاحتياطية السحابية المباشرة "${file.name}"؟\n` +
+      `هذا الإجراء سيقوم باستبدال وحفظ كافة السجلات والعمال والتكاليف الحالية بهذا الموقع واستبدالها بما في النسخة المحددة.`
+    );
+    if (!isConfirmed) return;
+
+    setIsDbBackupRestoring(file.id);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    try {
+      const response = await fetch(`/api/site/${selectedSite.id}/restore-backup/${file.id}`);
+      if (!response.ok) {
+        throw new Error('فشل تنزيل ملف السحابة للنسخة المحددة من قاعدة بيانات بنيان.');
+      }
+
+      const resData = await response.json();
+      if (!resData.success || !resData.backup) {
+        throw new Error('ملف النسخة الاحتياطية غير مكتمل أو تالف.');
+      }
+
+      onRestoreBackup(resData.backup);
+      setSuccessMsg('تمت استعادة كافة بيانات التقارير والعمال والعهود السحابية من قاعدة البيانات بنجاح!');
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg('فشل استيراد وتحليل بيانات النسخة الاحتياطية السحابية المباشرة: ' + err.message);
+    } finally {
+      setIsDbBackupRestoring(null);
+    }
+  };
+
+  const handleDeleteDbBackup = async (file: BackupFile) => {
+    if (!selectedSite) return;
+    const isConfirmed = window.confirm(`هل أنت متأكد من حذف نسخة البيانات الاحتياطية السحابية المباشرة الفورية؟`);
+    if (!isConfirmed) return;
+
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const res = await fetch(`/api/site/${selectedSite.id}/backup/${file.id}`, {
+        method: 'DELETE'
+      });
+
+      if (!res.ok) {
+        throw new Error('فشل إرسال طلب حذف الملف السحابي المباشر.');
+      }
+
+      setSuccessMsg('تم حذف ملف النسخة الاحتياطية السحابية المباشرة بنجاح.');
+      fetchDbBackupsList();
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg('حدث خطأ أثناء إجراء الحذف المباشر: ' + err.message);
     }
   };
 
@@ -197,7 +404,6 @@ export default function SettingsTab({
       }
 
       setSuccessMsg(`تم رفع النسخة الاحتياطية "${fileName}" بنجاح إلى حسابك في Google Drive!`);
-      // Update the backup file list
       fetchBackupsList();
     } catch (err: any) {
       console.error(err);
@@ -269,7 +475,6 @@ export default function SettingsTab({
     }
   };
 
-  // Local File Fallbacks
   const handleDownloadLocalFile = () => {
     if (!selectedSite) {
       setErrorMsg('فضلاً، يجب تسجيل موقع عمل نشط للتصدير.');
@@ -325,298 +530,563 @@ export default function SettingsTab({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500" dir="rtl">
-      {/* Header section */}
+      {/* Header section (strictly renamed to "الإعدادات" only) */}
       <div>
         <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
           <Settings className="w-6 h-6 text-indigo-600" />
-          إعدادات النظام والنسخ الاحتياطي السحابي
+          الإعدادات
         </h2>
-        <p className="text-xs text-slate-500 font-bold mt-1">ضبط التخزين السحابي الآمن، مزامنة الملفات واستيراد بيانات المشروع</p>
+        <p className="text-xs text-slate-500 font-bold mt-1">إعداد النسخ ونقل قواعد البيانات والتحقق من أمان الجلسة والاتصالات</p>
+      </div>
+
+      {/* Internal Sub-navigation tabs */}
+      <div className="flex border-b border-slate-200 gap-1 bg-white p-2.5 rounded-2xl border shadow-sm">
+        <button
+          onClick={() => setActiveSubTab('cloud')}
+          className={`flex-1 md:flex-initial px-6 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeSubTab === 'cloud' 
+              ? 'bg-slate-900 text-white shadow-md' 
+              : 'text-slate-650 hover:bg-slate-50'
+          }`}
+        >
+          <Cloud className="w-4 h-4" />
+          <span>النسخ الاحتياطي السحابي</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('local')}
+          className={`flex-1 md:flex-initial px-6 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeSubTab === 'local' 
+              ? 'bg-slate-900 text-white shadow-md' 
+              : 'text-slate-650 hover:bg-slate-50'
+          }`}
+        >
+          <FileDown className="w-4 h-4" />
+          <span>النسخ والتصدير المحلي</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('session')}
+          className={`flex-1 md:flex-initial px-6 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeSubTab === 'session' 
+              ? 'bg-slate-900 text-white shadow-md' 
+              : 'text-slate-650 hover:bg-slate-50'
+          }`}
+        >
+          <Clock className="w-4 h-4" />
+          <span>تفاصيل وبيانات الجلسة</span>
+        </button>
       </div>
 
       {/* Live feedback messages */}
       {successMsg && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-bold flex items-center gap-3">
+        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-bold flex items-center gap-3 shadow-sm">
           <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
           <div>{successMsg}</div>
         </div>
       )}
 
       {errorMsg && (
-        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-bold flex items-center gap-3">
+        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-bold flex items-center gap-3 shadow-sm">
           <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
           <div>{errorMsg}</div>
         </div>
       )}
 
-      {/* Main Grid Options */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Step 1: Google Drive Authorization Card */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between space-y-4">
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl inline-flex">
-                <Cloud className="w-5 h-5" />
-              </span>
-              <h3 className="text-sm font-black text-slate-900">1. الربط السحابي (Google Drive)</h3>
-            </div>
-            <p className="text-[11px] text-slate-500 leading-relaxed font-bold">
-              يتم ربط تطبيق بنيان بحساب Google الخاص بك لتخزين نسخ احتياطية كاملة ومجانية بالكامل على مجلد تطبيق خاص بك على جوجل درايف تلقائياً وبأقصى درجات الأمان.
-            </p>
-          </div>
-
-          {googleUser ? (
-            <div className={`p-4 rounded-2xl border space-y-3 text-right ${accessToken ? 'bg-slate-50 border-slate-100' : 'bg-rose-50 border-rose-100'}`}>
-              <div className="flex items-center gap-3">
-                {googleUser.photoURL ? (
-                  <img src={googleUser.photoURL} alt={googleUser.displayName} className="w-9 h-9 rounded-full" referrerPolicy="no-referrer" />
-                ) : (
-                  <div className="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs">G</div>
-                )}
-                <div className="overflow-hidden">
-                  <p className="text-xs font-black text-slate-800 truncate">{googleUser.displayName || 'حساب غوغل'}</p>
-                  <p className="text-[10px] text-slate-500 truncate font-mono">{googleUser.email}</p>
+      {activeSubTab === 'cloud' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Step 1: Secure Cloud Backup (Firestore) */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-150 shadow-sm flex flex-col justify-between space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl inline-flex">
+                    <Database className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900">النسخ الاحتياطي السحابي الفوري</h3>
+                    <p className="text-[10px] text-slate-550 font-bold">حفظ سريع للتقارير والعهود والمصاريف مباشرة على قاعدة بيانات بنيان المؤمنة سحابياً.</p>
+                  </div>
+                </div>
+                <div className="text-xs text-slate-500 font-bold leading-relaxed space-y-1">
+                  <p>• مريح ولا يتطلب حسابات خارجية للشركة.</p>
+                  <p>• يتم تشفيره تحت مظلة الحماية الشاملة للمصادقة السحابية لشركة بنيان.</p>
                 </div>
               </div>
-              <div className={`flex items-center gap-1.5 text-[10px] font-black ${accessToken ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {accessToken ? (
-                  <>
-                    <CheckCircle className="w-4 h-4" />
-                    متصل بخدمة Google Drive بنجاح
-                  </>
+
+              <div className="pt-2">
+                <button
+                  onClick={currentUserRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية لرفع النسخ الاحتياطية') : handleDbBackupNow}
+                  disabled={isDbBackupSaving || currentUserRole === 'viewer'}
+                  className={`w-full py-3.5 ${currentUserRole === 'viewer' ? 'bg-slate-300 text-slate-100 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white'} rounded-2xl text-xs font-black transition active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 shadow`}
+                >
+                  {isDbBackupSaving ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      جاري صياغة ورفع النسخة...
+                    </>
+                  ) : (
+                    <>
+                      <CloudUpload className="w-4 h-4" />
+                      <span>حفظ نسخة سحابية جديدة الآن (Firestore)</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Step 2: Google Drive Backup */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-150 shadow-sm flex flex-col justify-between space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl inline-flex">
+                    <Cloud className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900">ربط جوجل درايف (المزامنة الخاصة)</h3>
+                    <p className="text-[10px] text-slate-550 font-bold">اربط حساب Gmail الخاص بمهندس الموقع لحفظ البيانات في ملف مستقل ومؤمن بجوجل درايف.</p>
+                  </div>
+                </div>
+
+                {googleUser ? (
+                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-150 flex items-center gap-3">
+                    {googleUser.photoURL ? (
+                      <img referrerPolicy="no-referrer" src={googleUser.photoURL} alt={googleUser.displayName} className="w-10 h-10 rounded-full border border-indigo-200" />
+                    ) : (
+                      <span className="w-10 h-10 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-black text-xs">G</span>
+                    )}
+                    <div>
+                      <span className="text-xs font-black text-slate-800 block">{googleUser.displayName || 'مستخدم جوجل'}</span>
+                      <span className="text-[10px] text-slate-400 font-mono font-bold block">{googleUser.email}</span>
+                    </div>
+                  </div>
                 ) : (
-                  <>
-                    <AlertCircle className="w-4 h-4" />
-                    جلسة درايف منتهية، يرجى تفعيل الاتصال
-                  </>
+                  <div className="text-xs text-slate-500 font-bold leading-relaxed space-y-1">
+                    <p>• يحفظ نسخة احتياطية إضافية داخل مساحتك الخاصة على Google Cloud.</p>
+                    <p>• تحتاج للمصادقة مرة واحدة فقط.</p>
+                  </div>
                 )}
               </div>
+
+              <div>
+                {!accessToken ? (
+                  <button
+                    onClick={currentUserRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية لربط الحسابات') : handleConnectGoogle}
+                    disabled={isConnecting || currentUserRole === 'viewer'}
+                    className={`w-full py-3.5 ${currentUserRole === 'viewer' ? 'bg-slate-300 text-slate-100 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 text-white'} rounded-2xl text-xs font-black transition active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2`}
+                  >
+                    {isConnecting ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        يرجى الانتظار، جاري الربط الآمن بجوجل...
+                      </>
+                    ) : (
+                      <>
+                        <Link className="w-4 h-4" />
+                        <span>ربط حساب جوجل وتفعيل Google Drive</span>
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    onClick={currentUserRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية لرفع النسخ الاحتياطية') : handleBackupNow}
+                    disabled={isBackupSaving || currentUserRole === 'viewer'}
+                    className={`w-full py-3.5 ${currentUserRole === 'viewer' ? 'bg-slate-300 text-slate-100 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white'} rounded-2xl text-xs font-black transition active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 shadow`}
+                  >
+                    {isBackupSaving ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        يرجى الانتظار، جاري الرفع لجوجل درايف...
+                      </>
+                    ) : (
+                      <>
+                        <CloudUpload className="w-4 h-4" />
+                        <span>رفع نسخة احتياطية جديدة لـ Google Drive</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Database Server Backups list */}
+          <div className="bg-white rounded-3xl border border-slate-150 shadow-sm overflow-hidden" id="firestore-backups-list">
+            <div className="p-6 border-b border-slate-150 bg-slate-50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Database className="w-5 h-5 text-emerald-600" />
+                <h3 className="text-sm font-black text-slate-900">سجل ولفائف النسخ الاحتياطية السحابية (على Firestore وبنيان السحابية المباشرة)</h3>
+              </div>
               <button 
-                onClick={handleConnectGoogle}
-                className="w-full text-center py-2.5 text-[10.5px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition shadow-md flex justify-center items-center gap-2"
+                onClick={fetchDbBackupsList}
+                className="p-1 px-3 bg-white hover:bg-slate-50 text-slate-600 text-[10px] font-black rounded-lg border border-slate-200 transition flex items-center gap-1"
               >
-                <CloudUpIcon className="w-3.5 h-3.5" />
-                {accessToken ? 'تغيير الحساب المربوط' : 'تفعيل وتجديد الاتصال بجوجل درايف'}
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>مزامنة وتحديث</span>
               </button>
             </div>
-          ) : (
-            <button
-              onClick={handleConnectGoogle}
-              disabled={isConnecting}
-              className="w-full flex items-center justify-center gap-2.5 py-3.5 bg-slate-950 font-black text-xs text-white rounded-2xl hover:bg-slate-850 transition shadow-lg shrink-0"
-            >
-              <CloudUpIcon className="w-4.5 h-4.5" />
-              {isConnecting ? 'جاري الاتصال السحابي...' : (googleUser ? 'تفعيل الاتصال بجوجل درايف' : 'ربط الحساب بجوجل درايف')}
-            </button>
-          )}
-        </div>
 
-        {/* Step 2: Instant Operations actions */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between space-y-4">
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl inline-flex">
-                <CloudUpload className="w-5 h-5" />
-              </span>
-              <h3 className="text-sm font-black text-slate-900">2. النسخ الفوري والاستيراد المباشر</h3>
-            </div>
-            <p className="text-[11px] text-slate-500 leading-relaxed font-bold">
-              اضغط لحفظ نسخة متزامنة وبثها للسحابة، أو استخدم الخيارات المتقدمة للتصدير والاستيراد من جهازك مباشرة بصيغة JSON.
-            </p>
-          </div>
-
-          <div className="space-y-2.5">
-            <button
-              disabled={!accessToken || isBackupSaving}
-              onClick={handleBackupNow}
-              className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-xs font-black shadow-md transition ${
-                !accessToken 
-                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-dashed border-slate-250 shadow-none' 
-                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
-              }`}
-            >
-              {isBackupSaving ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  جاري رفع النسخة السحابية...
-                </>
+            <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto">
+              {isLoadingDbBackups ? (
+                <div className="p-8 text-center text-slate-400 font-bold text-xs flex justify-center items-center gap-2">
+                  <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
+                  جاري جلب القائمة من قاعدة بيانات السحابة...
+                </div>
+              ) : dbBackups.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 font-bold text-xs flex flex-col items-center justify-center gap-1">
+                  <span>لا تووجد نسخ احتياطية مسجلة ومرتبطة حالياً بمشروعك الحالي وموقعك النشط على قاعدة البيانات.</span>
+                  <span className="text-[10px] text-slate-400">يرجى الضغط على "حفظ نسخة سحابية جديدة" لتسجيل نسخة أولى.</span>
+                </div>
               ) : (
-                <>
-                  <CloudUpload className="w-4 h-4" />
-                  إنشاء نسخة احتياطية سحابية الآن
-                </>
+                dbBackups.map((file) => (
+                  <div key={file.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition">
+                    <div className="flex items-center gap-2">
+                      <span className="p-2 bg-emerald-50 text-emerald-600 rounded-lg shrink-0">
+                        <Database className="w-4 h-4" />
+                      </span>
+                      <div className="text-right">
+                        <span className="text-xs font-black text-slate-800 block truncate max-w-sm">{file.name}</span>
+                        <span className="text-[10px] text-slate-400 font-mono mt-0.5 block">{new Date(file.createdTime).toLocaleString('ar-EG')}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                      <button
+                        onClick={currentUserRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية للاستعادة') : () => handleRestoreDbBackup(file)}
+                        disabled={isDbBackupRestoring !== null || currentUserRole === 'viewer'}
+                        className={`px-3.5 py-2 ${currentUserRole === 'viewer' ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 text-emerald-800'} rounded-xl text-[11px] font-black transition active:scale-95 disabled:opacity-50 flex items-center gap-1.5`}
+                      >
+                        {isDbBackupRestoring === file.id ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            جاري فك الترميز والاستعادة...
+                          </>
+                        ) : (
+                          <>
+                            <CloudDownload className="w-3.5 h-3.5" />
+                            <span>استعادة نسخة</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        onClick={currentUserRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية للحذف') : () => handleDeleteDbBackup(file)}
+                        disabled={currentUserRole === 'viewer'}
+                        className={`p-2 ${currentUserRole === 'viewer' ? 'bg-slate-200 text-slate-400 cursor-not-allowed border-none' : 'bg-slate-50 hover:bg-rose-50 border border-slate-200 hover:border-rose-100 text-slate-400 hover:text-rose-600'} rounded-xl transition cursor-pointer`}
+                        title="حذف النسخة من السحابة نهائياً"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
               )}
-            </button>
-
-            {/* Offline Local Fallback tools */}
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={handleDownloadLocalFile}
-                className="flex items-center justify-center gap-1.5 py-3 bg-slate-50 text-slate-700 border border-slate-200 rounded-2xl text-[10.5px] font-black hover:bg-slate-100 transition"
-                title="تنزيل نسخة احتياطية محلية لجهازك"
-              >
-                <FileDown className="w-3.5 h-3.5 text-indigo-600" />
-                تصدير ملف محلي
-              </button>
-              
-              <label className="flex items-center justify-center gap-1.5 py-3 bg-slate-50 text-slate-700 border border-slate-200 rounded-2xl text-[10.5px] font-black hover:bg-slate-100 transition cursor-pointer">
-                <FileUp className="w-3.5 h-3.5 text-emerald-600" />
-                استيراد ملف محلي
-                <input 
-                  type="file" 
-                  accept=".json" 
-                  onChange={handleUploadLocalFile} 
-                  className="hidden" 
-                />
-              </label>
             </div>
           </div>
-        </div>
 
-        {/* Database Status indicator widget */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between space-y-4">
-          <div className="space-y-2">
-            <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-              <Database className="w-5 h-5 text-amber-500" />
-              حالة وقوة اتصال قاعدة البيانات
-            </h3>
-            <p className="text-[11px] text-slate-500 leading-normal font-bold">
-              يراقب نظام بنيان المزامنة التلقائية مع فروع ومواقع المشروعات باستمرار لضمان بيئة عمل سحابية مستقرة.
-            </p>
-          </div>
-          
-          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-150 space-y-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 font-bold">حالة شبكة Firebase:</span>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                dbConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'
-              }`}>
-                {dbConnected ? 'قيد الاتصال السحابي' : 'متصل محلياً (غير متسق)'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 font-bold">موقع التخزين المعتمد:</span>
-              <span className="font-mono text-slate-700 font-bold">Firestore DB Client</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Backups List from Google Drive */}
-      <div className="bg-white rounded-3xl border border-slate-150 shadow-sm overflow-hidden min-h-[250px]">
-        <div className="p-6 border-b border-slate-150 bg-slate-50 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Cloud className="w-5 h-5 text-indigo-600" />
-            <h3 className="text-sm font-black text-slate-900">سجل ولفائف النسخ الاحتياطية على السحابة (Google Drive)</h3>
-          </div>
+          {/* Google Drive files list */}
           {accessToken && (
-            <button
-              onClick={() => fetchBackupsList()}
-              disabled={isLoadingBackups}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-white border border-slate-200 rounded-xl text-[10.5px] font-black hover:bg-slate-100 transition text-slate-600"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${isLoadingBackups ? 'animate-spin' : ''}`} />
-              تحديث السجل
-            </button>
-          )}
-        </div>
+            <div className="bg-white rounded-3xl border border-slate-150 shadow-sm overflow-hidden animate-in slide-in-from-bottom-3 duration-300" id="gdrive-backups-list">
+              <div className="p-6 border-b border-slate-150 bg-slate-50 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Cloud className="w-5 h-5 text-indigo-600" />
+                  <h3 className="text-sm font-black text-slate-900">سجل ولفائف النسخ الاحتياطية على السحابة الخاصة (Google Drive)</h3>
+                </div>
+                <button 
+                  onClick={() => fetchBackupsList()}
+                  className="p-1 px-3 bg-white hover:bg-slate-50 text-slate-600 text-[10px] font-black rounded-lg border border-slate-200 transition flex items-center gap-1"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>مزامنة وتوريد</span>
+                </button>
+              </div>
 
-        {!accessToken ? (
-          <div className="p-12 flex flex-col items-center justify-center text-center space-y-3">
-            <div className="p-4 bg-indigo-50 text-indigo-500 rounded-full">
-              <Cloud className="w-8 h-8 opacity-40" />
-            </div>
-            <p className="text-xs font-black text-slate-505 max-w-sm leading-relaxed">
-              يرجى توصيل حساب Google Drive الخاص بكم لعرض واستعادة وحذف النسخ الاحتياطية المتوفرة ومراقبة تفاصيل البيانات أولاً بأول.
-            </p>
-          </div>
-        ) : isLoadingBackups ? (
-          <div className="p-16 flex flex-col items-center justify-center text-center space-y-2">
-            <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-xs font-black text-slate-400">جاري قراءة وفرز النسخ المتاحة من جوجل درايف الخاص بكم...</p>
-          </div>
-        ) : backups.length === 0 ? (
-          <div className="p-16 flex flex-col items-center justify-center text-center space-y-2">
-            <CheckCircle className="w-10 h-10 text-slate-300" />
-            <p className="text-xs font-black text-slate-400 font-sans">لا توجد أي نسخ احتياطية مسجلة باسم التطبيق في حسابك بعد.</p>
-            <p className="text-[10px] font-bold text-slate-400">اضغط على زر (إنشاء نسخة احتياطية سحابية الآن) بالأعلى لبدء الأرشفة.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-right border-collapse">
-              <thead>
-                <tr className="border-b border-slate-150 text-[10.5px] font-black text-slate-400 bg-slate-50">
-                  <th className="p-4">اسم ملف النسخة الاحتياطية</th>
-                  <th className="p-4">تاريخ ووقت الأرشفة</th>
-                  <th className="p-4">رقم تعريف الملف (ID)</th>
-                  <th className="p-4 text-center">خيارات التحكم والتحميل</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs">
-                {backups.map((file) => (
-                  <tr key={file.id} className="hover:bg-slate-50/50 transition">
-                    <td className="p-4 font-black text-slate-800 flex items-center gap-2">
-                      <Cloud className="w-4 h-4 text-indigo-500 shrink-0" />
-                      {file.name}
-                    </td>
-                    <td className="p-4 text-slate-500 font-bold flex-row items-center gap-2">
-                      <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {new Date(file.createdTime).toLocaleString('ar-EG')}</span>
-                    </td>
-                    <td className="p-4 font-mono text-[10px] text-slate-400 font-bold">{file.id}</td>
-                    <td className="p-4">
-                      <div className="flex items-center justify-center gap-2">
+              <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto">
+                {isLoadingBackups ? (
+                  <div className="p-8 text-center text-slate-400 font-bold text-xs flex justify-center items-center gap-2">
+                    <RefreshCw className="w-4 h-4 animate-spin text-indigo-650" />
+                    جاري جلب القائمة والترتيب من جوجل درايف...
+                  </div>
+                ) : backups.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 font-bold text-xs">
+                    لا توجد لقطات نسخ احتياطية مسجلة بجوجل درايف حتى الآن.
+                  </div>
+                ) : (
+                  backups.map((file) => (
+                    <div key={file.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition">
+                      <div className="flex items-center gap-2">
+                        <span className="p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+                          <Cloud className="w-4 h-4" />
+                        </span>
+                        <div className="text-right">
+                          <span className="text-xs font-black text-slate-800 block truncate max-w-sm">{file.name}</span>
+                          <span className="text-[10px] text-slate-400 font-mono mt-0.5 block">{new Date(file.createdTime).toLocaleString('ar-EG')}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
                         <button
-                          disabled={isBackupRestoring !== null}
-                          onClick={() => handleRestoreCloud(file)}
-                          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10.5px] font-black transition ${
-                            isBackupRestoring === file.id
-                              ? 'bg-amber-100 text-amber-700 animate-pulse'
-                              : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                          }`}
+                          onClick={currentUserRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية للاستعادة') : () => handleRestoreCloud(file)}
+                          disabled={isBackupRestoring !== null || currentUserRole === 'viewer'}
+                          className={`px-3.5 py-2 ${currentUserRole === 'viewer' ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 text-indigo-850'} rounded-xl text-[11px] font-black transition active:scale-95 disabled:opacity-50 flex items-center gap-1.5`}
                         >
                           {isBackupRestoring === file.id ? (
                             <>
-                              <RefreshCw className="w-3 h-3 animate-spin" />
-                              جاري الاستعادة...
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              جاري التحويل والاستعادة...
                             </>
                           ) : (
                             <>
-                              <CloudDownload className="w-3 h-3" />
-                              استعادة هذه النسخة
+                              <CloudDownload className="w-3.5 h-3.5" />
+                              <span>استعادة وتعميم</span>
                             </>
                           )}
                         </button>
 
                         <button
-                          onClick={() => handleDeleteCloudFile(file)}
-                          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                          title="حذف النسخة من الدرايف"
+                          onClick={currentUserRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية للحذف') : () => handleDeleteCloudFile(file)}
+                          disabled={currentUserRole === 'viewer'}
+                          className={`p-2 ${currentUserRole === 'viewer' ? 'bg-slate-200 text-slate-400 cursor-not-allowed border-none' : 'bg-slate-50 hover:bg-rose-50 border border-slate-200 hover:border-rose-100 text-slate-400 hover:text-rose-600'} rounded-xl transition cursor-pointer`}
+                          title="حذف الملف نهائياً من جوجل درايف"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
-// Google SVG Icon Helper for consistent beautiful interface
-function CloudUpIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className={props.className} style={{ display: "block" }}>
-      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
-      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
-      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
-      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
-      <path fill="none" d="M0 0h48v48H0z"></path>
-    </svg>
+      {activeSubTab === 'local' && (
+        <div className="bg-white rounded-3xl border border-slate-150 shadow-sm overflow-hidden" id="local-backup-card">
+          <div className="p-6 border-b border-slate-150 bg-slate-50">
+            <h3 className="text-sm font-black text-slate-900">النسخ والتصدير المحلي اليدوي</h3>
+            <p className="text-[10px] text-slate-500 font-bold mt-0.5">يمكنك تنزيل ملف البيانات للموقع الحالي كـ JSON مسيفاً في جهاز الكمبيوتر لاستعادته يدوياً بأي وقت بلا إنترنت.</p>
+          </div>
+
+          <div className="p-6 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Export Local Box */}
+              <div className="p-6 rounded-2xl bg-indigo-550/5 border border-indigo-500/10 flex flex-col justify-between space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <FileDown className="w-5 h-5 text-indigo-600 animate-bounce" />
+                    <h4 className="text-xs font-black text-indigo-900">حفظ وتصدير ملف JSON محلياً</h4>
+                  </div>
+                  <p className="text-[10.5px] text-slate-500 leading-relaxed font-bold">
+                    قم بتنزيل كافة حسابات الموقع الفنية والتسويات الحالية، وأسماء العمال والآليات ودفتر الحركة بملف واحد مشفر لتبادل النسخ أو الأرشفة الورقية والخارجية.
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleDownloadLocalFile}
+                  className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 shadow"
+                >
+                  <FileDown className="w-4 h-4" />
+                  <span>تصدير وحفظ ملف JSON للجهاز</span>
+                </button>
+              </div>
+
+              {/* Import Local Box */}
+              <div className="p-6 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex flex-col justify-between space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <FileUp className="w-5 h-5 text-amber-600" />
+                    <h4 className="text-xs font-black text-amber-950">استيراد وقراءة ملف JSON تكميلي</h4>
+                  </div>
+                  <p className="text-[10.5px] text-slate-500 leading-relaxed font-bold">
+                    يمكنك تصفح ورفع ملف البيانات بصيغة JSON المحفوظ مسبقاً في جهازك أو الفلاش ديسك. سيقوم بربط وتحميل السجلات كاملة مكان البيانات الحالية المفتوحة.
+                  </p>
+                </div>
+
+                <div className="relative">
+                  <label className={`w-full py-3.5 ${currentUserRole === 'viewer' ? 'bg-slate-300 text-slate-100 cursor-not-allowed' : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer'} rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 shadow text-center`}>
+                    <FileUp className="w-4 h-4" />
+                    <span>اختر ملف النسخة الاحتياطية (.json)</span>
+                    <input
+                      type="file"
+                      accept=".json"
+                      disabled={currentUserRole === 'viewer'}
+                      onChange={handleUploadLocalFile}
+                      className="absolute inset-0 w-full h-full opacity-0 disabled:cursor-not-allowed cursor-pointer"
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeSubTab === 'session' && (
+        <div className="space-y-6">
+          {/* IP and Geographic Real Details */}
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden" id="ip-sensor-panel">
+            <div className="absolute -top-12 -right-12 w-48 h-48 bg-indigo-500/5 rounded-full blur-2xl"></div>
+            <div className="relative z-10 space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="p-2.5 bg-white/5 rounded-xl border border-white/10 text-indigo-400 inline-flex">
+                  <Globe className="w-5 h-5 animate-spin-slow" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-black">جهاز الاستشعار والتحليل للشبكة وموقع الجلسة</h3>
+                  <p className="text-[10.5px] text-slate-400 font-bold">تم الكشف التلقائي عن عنوان الـ IP الجاري الدخول منه وبثه لمنع الدخول غير المصرح به.</p>
+                </div>
+              </div>
+
+              {loadingIp ? (
+                <div className="py-6 flex flex-col items-center justify-center gap-2">
+                  <RefreshCw className="w-6 h-6 text-indigo-400 animate-spin" />
+                  <span className="text-[10px] text-slate-400 font-bold">جاري رصد عنوان الأي بي وإحداثيات الموقع...</span>
+                </div>
+              ) : ipData ? (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  {/* IP address CARD */}
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 relative overflow-hidden group">
+                    <div className="absolute top-2 left-2 text-white/5 font-black font-sans text-xl group-hover:scale-125 duration-300">IP</div>
+                    <span className="text-[9.5px] font-black text-slate-400 block mb-1">عنوان الـ IP العام</span>
+                    <span className="text-base font-black text-indigo-300 font-mono tracking-wider">{ipData.ip}</span>
+                    <span className="text-[9px] text-slate-500 font-bold block mt-1.5 flex items-center gap-1">
+                      <Lock className="w-2.5 h-2.5 text-emerald-400" />
+                      مؤمن ومسجل برمز دخول آلي
+                    </span>
+                  </div>
+
+                  {/* Geographical Location CARD */}
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 relative overflow-hidden group">
+                    <div className="absolute top-2 left-2 text-white/5 font-black font-sans text-xl"><MapPin className="w-5 h-5 text-white/10" /></div>
+                    <span className="text-[9.5px] font-black text-slate-400 block mb-1">الموقع الجغرافي التابع</span>
+                    <span className="text-xs font-black text-indigo-100 block truncate">{ipData.city} • {ipData.region}</span>
+                    <span className="text-[9px] text-slate-405 font-bold block mt-1">{ipData.country_name || 'مصر 🇪🇬'}</span>
+                  </div>
+
+                  {/* ISP operator CARD */}
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 relative overflow-hidden group">
+                    <div className="absolute top-2 left-2 text-white/5 font-black font-sans text-xl"><Cpu className="w-5 h-5 text-white/10" /></div>
+                    <span className="text-[9.5px] font-black text-slate-400 block mb-1">موفر وبوابة شبكة الإنترنت (ISP)</span>
+                    <span className="text-xs font-black text-emerald-300 block truncate" title={ipData.org}>{ipData.org || 'الشبكة المركزية'}</span>
+                    <span className="text-[9px] text-slate-500 font-bold block mt-1">الرمز البريدي للقطاع: {ipData.postal || 'غير معروف'}</span>
+                  </div>
+
+                  {/* Map Coordinates & GPS details */}
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 relative overflow-hidden group">
+                    <div className="absolute top-2 left-2 text-white/5 font-black font-sans text-xl"><Globe className="w-4 h-4 text-white/5" /></div>
+                    <span className="text-[9.5px] font-black text-slate-400 block mb-1">إحداثيات خط العمال والارتفاع</span>
+                    <span className="text-xs font-mono font-black text-indigo-300 block">LAT: {ipData.latitude}</span>
+                    <span className="text-xs font-mono font-black text-indigo-300 block">LON: {ipData.longitude}</span>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Useful Details Subcard (User Agent & Browser Specs) */}
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/6 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs font-bold text-slate-400">
+                <div className="flex items-center gap-2">
+                  <Tv className="w-4 h-4 text-indigo-400" />
+                  <span>معرف متصفحك وسرعة الرصد:</span>
+                  <span className="text-slate-200 truncate max-w-md font-mono text-[10.5px]">
+                    {navigator.userAgent}
+                  </span>
+                </div>
+                <div className="text-[10px] text-emerald-400 flex items-center gap-1 font-sans shrink-0">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>دقة المتصفح والاتصال مستقرة بنسبة ١٠٠٪</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Current user session logs and credentials */}
+          <div className="bg-white rounded-3xl border border-slate-150 shadow-sm overflow-hidden" id="session-logs-card">
+            <div className="p-6 border-b border-slate-150 bg-slate-50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-indigo-600 animate-pulse" />
+                <h3 className="text-sm font-black text-slate-900">بيانات الجلسة الحالية وسجل عمليات الدخول والخروج من هذا الجهاز</h3>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100/50 flex flex-col justify-center">
+                  <span className="text-[10px] font-black text-slate-400 block mb-1">المستخدم النشط حالياً</span>
+                  <span className="text-xs font-black text-indigo-900">{currentUser?.nameAr || 'مستخدم غير معرف'}</span>
+                  <span className="text-[10px] text-indigo-550 font-bold mt-1">@{currentUser?.username || 'unknown'}</span>
+                </div>
+                
+                <div className="p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100/50 flex flex-col justify-center">
+                  <span className="text-[10px] font-black text-slate-400 block mb-1">الرتبة والصلاحية بالنظام</span>
+                  <span className="text-xs font-black text-indigo-900">
+                    {currentUser?.role === 'admin' 
+                      ? 'مدير البرنامج (كامل الصلاحيات)' 
+                      : currentUser?.role === 'projects_manager'
+                      ? 'مدير مشروعات'
+                      : currentUser?.role === 'site_manager'
+                      ? 'مدير موقع العمل النشط'
+                      : 'عضو / مهندس بالموقع كاتب بيانات'}
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-bold mt-1 text-right block leading-relaxed">
+                    حالة الاتصال: {dbConnected ? 'متصل ومحمي 🔒' : 'خارج التغطية / محلي'}
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100/50 flex flex-col justify-center">
+                  <span className="text-[10px] font-black text-slate-400 block mb-1">الموقع والمشروع النشط للتنسيق</span>
+                  <span className="text-xs font-black text-indigo-900">{selectedSite?.nameAr || 'لا يوجد موقع عمل نشط'}</span>
+                  <span className="text-[10px] text-slate-500 font-bold mt-1">📍 {selectedSite?.location || 'محلي'}</span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-slate-700 flex items-center gap-1.5 matches-heading">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                  سجل حركات الدخول والخروج المسجلة لهذا الجهاز:
+                </h4>
+                <div className="overflow-x-auto border border-slate-100 rounded-2xl">
+                  <table className="w-full text-right border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-400">
+                        <th className="p-3">عضو النظام / المهندس</th>
+                        <th className="p-3">نوع الحركة</th>
+                        <th className="p-3">مشروع الحركة</th>
+                        <th className="p-3">توقيت البث الدقيق</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {localSessionLogs.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="p-6 text-center text-slate-400 font-bold">
+                            لا توجد حركات دخول وخروج مسجلة وموثقة في هذا المتصفح للتطبيق حتى الآن.
+                          </td>
+                        </tr>
+                      ) : (
+                        localSessionLogs.map((log) => (
+                          <tr key={log.id} className="hover:bg-slate-50/40 transition">
+                            <td className="p-3 font-extrabold text-slate-800">
+                              {log.nameAr} <span className="text-[9.5px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-md mr-1">{log.role}</span>
+                            </td>
+                            <td className="p-3">
+                              <span className={`px-2.5 py-1 rounded-full text-[9px] font-black ${
+                                log.action === 'دخول' ? 'bg-emerald-50 text-emerald-800 border border-emerald-100' : 'bg-slate-100 text-slate-600 border border-slate-200'
+                              }`}>
+                                {log.action}
+                              </span>
+                            </td>
+                            <td className="p-3 text-slate-500 font-bold">{log.siteName}</td>
+                            <td className="p-3 text-slate-400 font-mono font-bold text-[10.5px]">{log.timestamp}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

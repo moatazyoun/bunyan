@@ -23,6 +23,7 @@ import ExtractsTab from './components/ExtractsTab';
 import ProjectsTab from './components/ProjectsTab';
 import BOQTab from './components/BOQTab';
 import SettingsTab from './components/SettingsTab';
+import NotificationsTab from './components/NotificationsTab';
 import SubmissionsTab from './components/SubmissionsTab';
 import LoginScreen from './components/LoginScreen';
 import SiteSelectionScreen from './components/SiteSelectionScreen';
@@ -97,6 +98,19 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import BunyanLogo from './components/BunyanLogo';
+import * as firestore from 'firebase/firestore';
+import { 
+  doc, 
+  getDoc, 
+  updateDoc, 
+  arrayUnion, 
+  query, 
+  collection, 
+  orderBy, 
+  onSnapshot 
+} from 'firebase/firestore';
+import { db } from './lib/firebase';
+import { appendSessionLog } from './lib/sessionTracker';
 
 function sanitizeLoadedData<T extends { id: string }>(items: any[], prefix: string): T[] {
   if (!items || !Array.isArray(items)) return [];
@@ -195,12 +209,151 @@ export default function App() {
   }, []);
 
   const handleLogout = () => {
+    if (user) {
+      appendSessionLog(user, 'خروج', selectedSite?.nameAr || 'لم يحدد بعد');
+    }
     setUser(null);
     setSelectedSite(null);
     setIsDbLoaded(false);
+    sessionStorage.removeItem('bunyan_logged_this_tab');
     localStorage.removeItem('bunyan_current_user');
     localStorage.removeItem('bunyan_current_site');
   };
+
+  // --- Global Viewer Protection (Strict Mode) ---
+  useEffect(() => {
+    if (user?.role !== 'viewer') {
+      document.body.classList.remove('viewer-mode');
+      return;
+    }
+    
+    document.body.classList.add('viewer-mode');
+
+    const blockEvent = (e: Event) => {
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    };
+
+    const handleActionClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA';
+      if (isInput) {
+        const input = target as HTMLInputElement;
+        const isSearch = input.type === 'search' || input.placeholder?.includes('بحث') || input.className.includes('search');
+        if (!isSearch) {
+          blockEvent(e);
+          // Don't alert on inputs, just quietly block
+          return;
+        }
+      }
+
+      const btn = target.closest('button, [role="button"]') as HTMLButtonElement | null;
+      if (btn) {
+        // Exclude inputs explicitly requested to be accessible or navigation
+        const isNav = target.closest('nav') || target.closest('header') || target.closest('.sidebar');
+        const txt = (btn.textContent || '').toLowerCase();
+        const title = (btn.getAttribute('title') || '').toLowerCase();
+        const HTML = btn.innerHTML || '';
+        
+        // Always let these actions pass
+        if (/إغلاق|رجوع|إلغاء|بحث|تصدير|طباعة|خروج|عرض|تفاصيل|تحميل|close|cancel|back|print|export|view|تسجيل الدخول|دخول/.test(txt + title)) {
+          return;
+        }
+        
+        const isAction = /trash|edit|plus|save|upload|download/i.test(HTML) || 
+                         /إضافة|تعديل|حذف|حفظ|مسح|رفع|تسجيل|صرف|اعتماد|تحديث|edit|delete|add|save|update|remove|trash|plus/i.test(txt + title) || 
+                         btn.type === 'submit' ||
+                         btn.className.includes('bg-rose-') ||
+                         btn.className.includes('bg-emerald-') ||
+                         btn.className.includes('bg-indigo-600') ||
+                         btn.className.includes('text-rose-500');
+
+        if (isAction && !isNav) {
+          blockEvent(e);
+          alert('عذراً، حالة حسابك (مشاهد) ولا تملك صلاحية لهذه العملية.');
+        }
+      }
+    };
+
+    const handleFormSubmit = (e: SubmitEvent) => {
+      blockEvent(e);
+      alert('عذراً، حالة حسابك (مشاهد) ولا تملك صلاحية للحفظ.');
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
+      
+      if (isInput) {
+        const inputBase = target as HTMLInputElement;
+        const isSearch = inputBase.type === 'search' || inputBase.placeholder?.includes('بحث') || inputBase.className.includes('search');
+        
+        if (!isSearch) {
+          // Allow basic navigation keys (Tab, arrows, Home, End, PageUp, PageDown)
+          if (!['Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) {
+            blockEvent(e);
+          }
+        }
+      }
+    };
+
+    // Use capturing phase to intercept before React synthetic events
+    document.addEventListener('click', handleActionClick, true);
+    document.addEventListener('submit', handleFormSubmit, true);
+    document.addEventListener('keydown', handleKeyDown, true);
+    
+    // Aggressively disable elements in DOM to provide UI feedback & secondary blockage
+    const observer = new MutationObserver(() => {
+      // 1. Disable all non-search inputs
+      document.querySelectorAll('input, select, textarea').forEach((el) => {
+        const t = el as HTMLInputElement;
+        const isSearch = t.type === 'search' || t.placeholder?.includes('بحث') || t.className.includes('search');
+        if (!isSearch && !t.disabled) {
+          t.disabled = true;
+          t.style.opacity = '0.7';
+          t.style.cursor = 'not-allowed';
+        }
+      });
+      // 2. Disable specific action buttons
+      document.querySelectorAll('button').forEach((btn) => {
+        const isNav = btn.closest('nav') || btn.closest('header') || btn.closest('.sidebar');
+        if (isNav) return;
+        
+        const txt = (btn.textContent || '').toLowerCase();
+        const HTML = btn.innerHTML || '';
+        const title = (btn.getAttribute('title') || '').toLowerCase();
+        
+        if (/إغلاق|رجوع|إلغاء|بحث|تصدير|طباعة|خروج|عرض|تفاصيل|تحميل/.test(txt + title)) return;
+        
+        const isAction = /trash|edit|plus|save|upload/i.test(HTML) || 
+                         /إضافة|تعديل|حذف|حفظ|مسح|رفع|تسجيل|صرف|اعتماد|تحديث/.test(txt + title) || 
+                         btn.type === 'submit' ||
+                         btn.className.includes('bg-indigo-600') ||
+                         btn.className.includes('bg-rose-');
+
+        if (isAction && !btn.disabled) {
+           btn.disabled = true;
+           btn.style.opacity = '0.5';
+           btn.style.cursor = 'not-allowed';
+        }
+      });
+    });
+    
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    
+    // Run observer once for existing DOM
+    observer.takeRecords();
+    document.querySelectorAll('input, select, textarea, button').forEach(el => observer.observe(el, {attributes: true}));
+
+    return () => {
+      document.removeEventListener('click', handleActionClick, true);
+      document.removeEventListener('submit', handleFormSubmit, true);
+      document.removeEventListener('keydown', handleKeyDown, true);
+      observer.disconnect();
+    };
+  }, [user]);
 
   // 1. Core Trial Session Time tracking & dynamic lockout
   const [trialTimeLeft, setTrialTimeLeft] = useState<number | null>(null);
@@ -210,7 +363,7 @@ export default function App() {
     if (user && user.isTrial && user.trialStartedAt) {
       const calculateLeft = () => {
         const elapsedSec = Math.floor((Date.now() - new Date(user.trialStartedAt!).getTime()) / 1000);
-        const remaining = Math.max(0, 120 - elapsedSec);
+        const remaining = Math.max(0, 3600 - elapsedSec);
         setTrialTimeLeft(remaining);
         if (remaining <= 0) {
           handleLogout();
@@ -573,8 +726,127 @@ export default function App() {
         localStorage.setItem('bunyan_current_session_time', nowStr);
         localStorage.setItem('bunyan_prev_session_user', user.username);
       }
+
+      // Automatically append login log once per tab session
+      const hasLoggedThisTab = sessionStorage.getItem('bunyan_logged_this_tab');
+      if (!hasLoggedThisTab) {
+        appendSessionLog(user, 'دخول', selectedSite?.nameAr || 'لم يحدد بعد');
+        sessionStorage.setItem('bunyan_logged_this_tab', 'true');
+      }
     }
-  }, [user]);
+  }, [user, selectedSite]);
+
+  const [activeNotifications, setActiveNotifications] = useState<any[]>([]);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+
+  useEffect(() => {
+    if (activeNotifications.length > 0) {
+      setShowNotificationModal(true);
+    }
+  }, [activeNotifications]);
+
+  const handleAcknowledgeNotification = async (notificationId: string) => {
+    try {
+      const userDocRef = doc(db, 'users', user.username);
+      const userDoc = await getDoc(userDocRef);
+      const userData = userDoc.data();
+      
+      const docRef = doc(db, 'notifications', notificationId);
+      const dismissedBy = userData?.nameAr ? [userData.nameAr] : [user.username];
+      
+      // Update Firestore to add user to dismissedBy
+      await updateDoc(docRef, {
+        dismissedBy: arrayUnion(user.username)
+      });
+      
+      setActiveNotifications(prev => prev.filter(n => n.id !== notificationId));
+    } catch (e) {
+      console.error("Error acknowledging notification", e);
+    }
+  };
+
+  const handleDismissAll = async () => {
+    for (const notif of activeNotifications) {
+      await handleAcknowledgeNotification(notif.id);
+    }
+    setShowNotificationModal(false);
+  };
+
+  // Real-time notifications listener
+  useEffect(() => {
+    if (!user) {
+      setActiveNotifications([]);
+      return;
+    }
+
+    try {
+      const q = query(collection(db, 'notifications'), orderBy('timestamp', 'desc'));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        // Read local storage in case we dismissed offline too
+        let locallyDismissed: string[] = [];
+        try {
+          const stored = localStorage.getItem('bunyan_dismissed_notifications');
+          if (stored) locallyDismissed = JSON.parse(stored);
+        } catch (e) {
+          console.error(e);
+        }
+
+        const list: any[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          const notifId = docSnap.id;
+          
+          // Check if notification is targetted to this user's site, or is global for everyone
+          const isTargeted = data.siteId === 'all' || (selectedSite && data.siteId === selectedSite.id);
+          
+          // Check if user has already dismissed this notification
+          const isDismissedByCurrentUser = (data.dismissedBy && data.dismissedBy.includes(user.username)) || locallyDismissed.includes(notifId);
+
+          if (isTargeted && !isDismissedByCurrentUser) {
+            list.push({
+              id: notifId,
+              ...data
+            });
+          }
+        });
+        setActiveNotifications(list);
+      }, (error) => {
+        console.warn("Notifications live feed subscription warning:", error);
+      });
+
+      return () => unsubscribe();
+    } catch (e) {
+      console.warn("Could not start real-time notifications subscription", e);
+    }
+  }, [user, selectedSite]);
+
+  const handleDismissNotification = async (notificationId: string) => {
+    // 1. Instantly update UI by saving to local storage so they don't see it while Firebase syncs
+    let locallyDismissed: string[] = [];
+    try {
+      const stored = localStorage.getItem('bunyan_dismissed_notifications');
+      if (stored) locallyDismissed = JSON.parse(stored);
+    } catch {}
+    if (!locallyDismissed.includes(notificationId)) {
+      locallyDismissed.push(notificationId);
+      localStorage.setItem('bunyan_dismissed_notifications', JSON.stringify(locallyDismissed));
+    }
+
+    // 2. Filter out instantly
+    setActiveNotifications(prev => prev.filter(n => n.id !== notificationId));
+
+    // 3. Sync update to Firestore doc
+    if (user) {
+      try {
+        const docRef = doc(db, 'notifications', notificationId);
+        await updateDoc(docRef, {
+          dismissedBy: arrayUnion(user.username)
+        });
+      } catch (err) {
+        console.warn("Failed to sync dismissal to database:", err);
+      }
+    }
+  };
 
   // Helper action: Post automated entry to audit logs
   const addAuditLog = (action: string, module: string, details: string) => {
@@ -1268,7 +1540,17 @@ export default function App() {
             selectedSite={selectedSite}
             getBackupPayload={getBackupPayload}
             onRestoreBackup={handleRestoreBackup}
+            currentUser={user}
             currentUserRole={user?.role}
+            dbConnected={dbConnected}
+          />
+        );
+
+      case 'notifications':
+        return (
+          <NotificationsTab 
+            currentUser={user}
+            selectedSite={selectedSite}
             dbConnected={dbConnected}
           />
         );
@@ -1290,7 +1572,7 @@ export default function App() {
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
         <LoginScreen 
-          onLoginSuccess={(u) => { 
+          onLogin={(u) => { 
             setUser(u); 
             localStorage.setItem('bunyan_current_user', JSON.stringify(u)); 
             setIsDbLoaded(false); 
@@ -1526,16 +1808,7 @@ export default function App() {
               </div>
             )}
 
-            {/* Last session time badge */}
-            {localStorage.getItem('bunyan_last_session_time') && (
-              <div className="px-3.5 py-1.5 rounded-xl border border-indigo-200/50 bg-indigo-50/50 text-indigo-850 flex items-center gap-2 text-xs font-bold font-sans">
-                <Clock size={13} className="text-indigo-600 shrink-0" />
-                <span className="hidden sm:inline text-indigo-700/80 font-semibold">آخر جلسة:</span>
-                <span className="font-mono text-indigo-700 font-extrabold">
-                  {localStorage.getItem('bunyan_last_session_time')}
-                </span>
-              </div>
-            )}
+
 
             {/* Real-time DB Status Badge */}
             <div className={`px-3.5 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all duration-300 font-sans ${
@@ -1654,6 +1927,43 @@ export default function App() {
         />
       )}
 
+      {/* Real-time Administrative Broadcast Center Overlay */}
+      <AnimatePresence>
+        {showNotificationModal && activeNotifications.length > 0 && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md" dir="rtl">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 className="text-lg font-black text-slate-900">إشعارات لم تقرأها</h3>
+                <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold">{activeNotifications.length}</span>
+              </div>
+              
+              <div className="p-6 overflow-y-auto flex flex-col gap-4 flex-1">
+                {activeNotifications.map((notif) => (
+                  <div key={notif.id} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl">
+                    <h4 className="text-sm font-black text-slate-900">{notif.title}</h4>
+                    <p className="text-xs text-slate-600 mt-2 whitespace-pre-wrap">{notif.content}</p>
+                    <div className="text-[10px] text-slate-400 mt-3 font-mono">{new Date(notif.timestamp).toLocaleString('ar-EG')}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="p-5 border-t border-slate-100 bg-slate-50">
+                <button
+                  onClick={handleDismissAll}
+                  className="w-full py-4 bg-slate-950 text-white hover:bg-slate-800 rounded-2xl text-xs font-black shadow-lg hover:shadow-slate-500/10 active:scale-98 transition duration-200 cursor-pointer"
+                >
+                  أقرّ بقراءة جميع الإشعارات
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </motion.div>
   );

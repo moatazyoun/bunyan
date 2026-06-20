@@ -160,11 +160,40 @@ class LocalFirestoreWrapper {
 db = new LocalFirestoreWrapper();
 
 try {
-  const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-  if (fs.existsSync(configPath)) {
-    const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    const databaseId = firebaseConfig.firestoreDatabaseId;
+  let firebaseConfig: any = null;
+  let databaseId: string | undefined = undefined;
 
+  // 1. Check environment variables first (especially useful on Vercel)
+  if (process.env.FIREBASE_PROJECT_ID) {
+    firebaseConfig = {
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      appId: process.env.FIREBASE_APP_ID || "",
+      apiKey: process.env.FIREBASE_API_KEY || "",
+      authDomain: process.env.FIREBASE_AUTH_DOMAIN || `${process.env.FIREBASE_PROJECT_ID}.firebaseapp.com`,
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || `${process.env.FIREBASE_PROJECT_ID}.firebasestorage.app`,
+      messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "",
+      measurementId: process.env.FIREBASE_MEASUREMENT_ID || "",
+    };
+    databaseId = process.env.FIREBASE_DATABASE_ID || "(default)";
+  } else if (process.env.FIREBASE_CONFIG) {
+    try {
+      firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
+      databaseId = firebaseConfig.firestoreDatabaseId || "(default)";
+    } catch (e) {
+      console.error("Failed to parse FIREBASE_CONFIG env variable:", e);
+    }
+  }
+
+  // 2. Fall back to local firebase-applet-config.json if no production env setup detected
+  if (!firebaseConfig) {
+    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+    if (fs.existsSync(configPath)) {
+      firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+      databaseId = firebaseConfig.firestoreDatabaseId;
+    }
+  }
+
+  if (firebaseConfig) {
     const appInstance = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
     try {
@@ -189,7 +218,7 @@ try {
     }
   }
 } catch (err) {
-  // Silent fallback setup
+  console.error("Error setting up Firebase database in server:", err);
 }
 
 async function checkFirestoreHealth() {
@@ -569,6 +598,98 @@ app.post("/api/site/:siteId/auto-backup", async (req, res) => {
   } catch (err: any) {
     console.error("Auto-backup save error:", err);
     res.status(500).json({ error: err.message || "Failed to save daily auto-backup" });
+  }
+});
+
+// GET list of backups for site from Firestore
+app.get("/api/site/:siteId/server-backups", async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: "قاعدة البيانات غير متصلة على الخادم." });
+  }
+  const { siteId } = req.params;
+  try {
+    const snapshot = await db.collection('siteBackups').get();
+    const backupsList = snapshot.docs
+      .map((doc: any) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: data.siteName || "موقع افتراضي",
+          createdTime: data.createdAt || data.backupDate || new Date().toISOString(),
+          backupDate: data.backupDate || "",
+          siteId: data.siteId
+        };
+      })
+      .filter((b: any) => b.siteId === siteId);
+    
+    // sort by createdTime descending
+    backupsList.sort((a: any, b: any) => new Date(b.createdTime).getTime() - new Date(a.createdTime).getTime());
+    res.json({ success: true, files: backupsList });
+  } catch (err: any) {
+    console.error("Fetch server backups failed:", err);
+    res.status(500).json({ error: err.message || "Failed to fetch backups" });
+  }
+});
+
+// POST manual backup for site to Firestore
+app.post("/api/site/:siteId/manual-backup", async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: "قاعدة البيانات غير متصلة على الخادم." });
+  }
+  const { siteId } = req.params;
+  const { siteName, payload } = req.body;
+  if (!payload) {
+    return res.status(400).json({ error: "لا توجد بيانات صالحة للنسخ الاحتياطي." });
+  }
+  try {
+    const timestamp = new Date().toISOString();
+    const backupId = `${siteId}_manual_backup_${Date.now()}`;
+    await db.collection('siteBackups').doc(backupId).set({
+      siteId,
+      siteName: siteName || "موقع افتراضي",
+      backupDate: timestamp.split('T')[0],
+      createdAt: timestamp,
+      payload: payload
+    });
+    res.json({ success: true, backupId });
+  } catch (err: any) {
+    console.error("Manual backup save error:", err);
+    res.status(500).json({ error: err.message || "Failed to save backup" });
+  }
+});
+
+// GET specific backup details to restore
+app.get("/api/site/:siteId/restore-backup/:backupId", async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: "قاعدة البيانات غير متصلة على الخادم." });
+  }
+  const { backupId } = req.params;
+  try {
+    const docRef = db.collection('siteBackups').doc(backupId);
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: "ملف النسخ الاحتياطي المذكور غير موجود." });
+    }
+    const data = docSnap.data();
+    res.json({ success: true, backup: data });
+  } catch (err: any) {
+    console.error("Retrieve backup error:", err);
+    res.status(500).json({ error: err.message || "Failed to retrieve backup data" });
+  }
+});
+
+// DELETE a specific backup
+app.delete("/api/site/:siteId/backup/:backupId", async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: "قاعدة البيانات غير متصلة." });
+  }
+  const { backupId } = req.params;
+  try {
+    await db.collection('siteBackups').doc(backupId).delete();
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Delete backup error:", err);
+    res.status(500).json({ error: err.message || "Failed to delete backup" });
   }
 });
 

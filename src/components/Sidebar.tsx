@@ -21,7 +21,8 @@ import {
   Building,
   FileSpreadsheet,
   FileCheck,
-  Settings
+  Settings,
+  Bell
 } from 'lucide-react';
 import BunyanLogo from './BunyanLogo';
 
@@ -56,26 +57,29 @@ export default function Sidebar({
   const menuItems = [
     { id: 'dashboard', label: 'الصفحة الرئيسية', subtitle: 'Dashboard', icon: Home, perm: true },
     { id: 'projects', label: 'المشروعات والإسناد', subtitle: 'Projects', icon: Briefcase, perm: checkPerm('projects') },
-    { id: 'transactions', label: 'دفتر الحركات المالي', subtitle: 'Ledger', icon: Receipt, perm: checkPerm('transactions') },
-    { id: 'extracts', label: 'المستخلصات الفنية', subtitle: 'Extracts', icon: FileSpreadsheet, perm: checkPerm('extracts') },
-    { id: 'deliveries', label: 'التسليمات وفحص الأعمال', subtitle: 'Deliveries & Inspection', icon: FileCheck, perm: checkPerm('deliveries') },
     { id: 'boq', label: 'المقايسة التثمنية', subtitle: 'Bill of Quantities', icon: FileText, perm: checkPerm('boq') },
+    { id: 'transactions', label: 'دفتر الحركات المالي', subtitle: 'Ledger', icon: Receipt, perm: checkPerm('transactions') },
     { id: 'supplies', label: 'إدارة التوريدات', subtitle: 'Supplies', icon: Truck, perm: checkPerm('supplies') },
     { id: 'subcontractors', label: 'مقاولين باطن', subtitle: 'Subcontractors', icon: Users, perm: checkPerm('subcontractors') },
-    { id: 'weekly-report', label: 'المنصرف الأسبوعي', subtitle: 'Weekly Report', icon: FileText, perm: checkPerm('weeklyReport') },
+    { id: 'extracts', label: 'المستخلصات الفنية', subtitle: 'Extracts', icon: FileSpreadsheet, perm: checkPerm('extracts') },
+    { id: 'deliveries', label: 'التسليمات وفحص الأعمال', subtitle: 'Deliveries & Inspection', icon: FileCheck, perm: checkPerm('deliveries') },
     { id: 'site-workers', label: 'العاملين بالموقع', subtitle: 'Site Workers', icon: Users, perm: checkPerm('siteWorkers') },
     { id: 'fuel-dashboard', label: 'حساب المحروقات', subtitle: 'Fuel Log', icon: Fuel, perm: checkPerm('fuelDashboard') },
     { id: 'equipment-dashboard', label: 'بيان المعدات والآلات', subtitle: 'Equipment Log', icon: LayoutDashboard, perm: checkPerm('equipmentDashboard') },
-    { id: 'settings', label: 'إعدادات النظام والنسخ', subtitle: 'Backup Settings', icon: Settings, perm: true },
+    { id: 'weekly-report', label: 'المنصرف الأسبوعي', subtitle: 'Weekly Report', icon: FileText, perm: checkPerm('weeklyReport') },
+    { id: 'notifications', label: 'مركز الإشعارات', subtitle: 'Notification Center', icon: Bell, perm: true },
+    { 
+      id: 'admin-users', 
+      label: 'حسابات المستخدمين والصلاحيات', 
+      subtitle: 'User Roles', 
+      icon: Users, 
+      perm: user?.role === 'admin' || user?.permissions?.usersManagement !== 'none' 
+    },
+    { id: 'settings', label: 'الإعدادات', subtitle: 'Settings', icon: Settings, perm: true },
   ];
 
   // Filter menu items by permissions
   const visibleMenuItems = menuItems.filter(item => item.perm === true);
-
-  // If user is Admin or has usersManagement permission, add user management tab
-  if (user?.role === 'admin' || user?.permissions?.usersManagement !== 'none') {
-    visibleMenuItems.push({ id: 'admin-users', label: 'حسابات المستخدمين والصلاحيات', subtitle: 'User Roles', icon: Users, perm: true });
-  }
 
   return (
     <>

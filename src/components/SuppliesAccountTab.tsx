@@ -181,29 +181,29 @@ export default function SuppliesAccountTab({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-sm">
           <div className="flex justify-between items-start">
-            <p className="text-xs font-bold text-slate-500">إجمالي مستحقات التوريد</p>
+            <p className="text-sm font-bold text-slate-500">إجمالي مستحقات التوريد</p>
             <Coins className="h-5 w-5 text-indigo-600" />
           </div>
-          <p className="text-2xl font-black text-slate-900 mt-1.5 font-mono">{totalSuppliesCost.toLocaleString()} <span className="text-xs text-indigo-400">ج.م</span></p>
-          <div className="text-[10px] text-slate-400 mt-1">تراكمي التوريدات الهندسية بالموقع</div>
+          <p className="text-3xl font-black text-slate-900 mt-1.5 font-mono">{totalSuppliesCost.toLocaleString()} <span className="text-sm text-indigo-400">ج.م</span></p>
+          <div className="text-xs text-slate-400 mt-1">تراكمي التوريدات الهندسية بالموقع</div>
         </div>
 
         <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-sm">
           <div className="flex justify-between items-start">
-            <p className="text-xs font-bold text-slate-500">إجمالي المسدد والمصروف للموردين</p>
+            <p className="text-sm font-bold text-slate-500">إجمالي المسدد والمصروف للموردين</p>
             <DollarSign className="h-5 w-5 text-emerald-600" />
           </div>
-          <p className="text-2xl font-black text-slate-900 mt-1.5 font-mono">{totalPaidToSuppliers.toLocaleString()} <span className="text-xs text-emerald-400">ج.م</span></p>
-          <div className="text-[10px] text-slate-400 mt-1">كافة الدفعات البنكية والعينية وحسابات العهدة</div>
+          <p className="text-3xl font-black text-slate-900 mt-1.5 font-mono">{totalPaidToSuppliers.toLocaleString()} <span className="text-sm text-emerald-400">ج.م</span></p>
+          <div className="text-xs text-slate-400 mt-1">كافة الدفعات البنكية والعينية وحسابات العهدة</div>
         </div>
 
         <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-sm">
           <div className="flex justify-between items-start">
-            <p className="text-xs font-bold text-slate-500">المتبقي / المديونية القائمة</p>
+            <p className="text-sm font-bold text-slate-500">المتبقي / المديونية القائمة</p>
             <CreditCard className="h-5 w-5 text-red-600" />
           </div>
-          <p className="text-2xl font-black text-slate-900 mt-1.5 font-mono">{totalOutstandingBalance.toLocaleString()} <span className="text-xs text-red-400">ج.م</span></p>
-          <div className="text-[10px] text-slate-400 mt-1">المستحق للدفع وتصفية أرصدة الجرد</div>
+          <p className="text-3xl font-black text-slate-900 mt-1.5 font-mono">{totalOutstandingBalance.toLocaleString()} <span className="text-sm text-red-400">ج.م</span></p>
+          <div className="text-xs text-slate-400 mt-1">المستحق للدفع وتصفية أرصدة الجرد</div>
         </div>
       </div>
 
@@ -258,8 +258,8 @@ export default function SuppliesAccountTab({
                       <User className="h-5 w-5 text-indigo-600" />
                     </div>
                     <div className="flex-1">
-                      <h4 className="text-sm font-black text-slate-900">{s.name}</h4>
-                      <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-2">
+                      <h4 className="text-base font-black text-slate-900">{s.name}</h4>
+                      <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
                         <span className="font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded-md">
                           يورد: {s.materials.length} بنود
                         </span>

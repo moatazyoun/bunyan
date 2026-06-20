@@ -354,12 +354,71 @@ export default function EquipmentDashboard({
     setEditingLogIdx(null);
   };
 
+  const renderConfirmDialog = () => (
+    <AnimatePresence>
+      {confirmState?.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-md">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white rounded-[2.5rem] border border-slate-200 shadow-2xl p-8 max-w-md w-full text-right space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 flex-row-reverse">
+              <div className="flex items-center gap-3">
+                 <div className="p-2 bg-amber-100 text-amber-600 rounded-xl">
+                    <AlertCircle size={18} />
+                 </div>
+                 <h4 className="font-black text-lg text-slate-900 tracking-tight">{confirmState.title}</h4>
+              </div>
+              <button onClick={() => setConfirmState(null)} className="text-slate-400 hover:text-slate-600 transition-colors">✕</button>
+            </div>
+            <p className="text-slate-600 text-xs font-bold leading-relaxed">{confirmState.message}</p>
+            
+            {confirmState.isDeleteAction && (
+              <div className="bg-rose-50 border border-rose-100 p-4 rounded-2xl space-y-3">
+                <label className="block text-[10px] font-black text-rose-500 uppercase tracking-widest text-center">أدخل كود التحقق لتأكيد الحذف: <span className="bg-rose-100 px-2 py-0.5 rounded text-rose-700 text-sm ml-1 select-all font-mono tracking-widest">{expectedDeleteCode}</span></label>
+                <input 
+                  type="text"
+                  value={deleteVerificationInput}
+                  onChange={(e) => setDeleteVerificationInput(e.target.value)}
+                  placeholder="أدخل الكود المكون من 4 أرقام"
+                  className="w-full px-4 py-3 text-center bg-white border border-rose-200 rounded-xl text-lg font-black tracking-[0.5em] text-rose-600 outline-none focus:ring-4 focus:ring-rose-500/10 transition-all placeholder:tracking-normal placeholder:text-[10px] placeholder:font-bold"
+                />
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2 flex-row-reverse">
+              <button
+                type="button"
+                disabled={confirmState.isDeleteAction && deleteVerificationInput !== expectedDeleteCode}
+                onClick={async () => { 
+                  if (confirmState.isDeleteAction && deleteVerificationInput !== expectedDeleteCode) return;
+                  try { await confirmState.onConfirm(); } finally { setConfirmState(null); } 
+                }}
+                className={`px-8 py-3.5 text-xs font-black rounded-2xl transition-all shadow-xl active:scale-95 flex-1 md:flex-none ${
+                  confirmState.isDeleteAction 
+                    ? (deleteVerificationInput === expectedDeleteCode ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-100' : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none')
+                    : 'bg-indigo-600 hover:bg-slate-900 text-white shadow-indigo-100'
+                }`}
+              >
+                {confirmState.confirmLabel || (confirmState.isDeleteAction ? 'تأكيد الحذف النهائي' : 'تأكيد واستمرار')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmState(null)}
+                className="px-8 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-500 text-xs font-black rounded-2xl transition-all flex-1 md:flex-none"
+              >
+                {confirmState.cancelLabel || 'تراجع'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+
   if (!activeEquipment) {
      return (
        <div className="p-20 text-center bg-slate-50 rounded-[2rem] border-4 border-dashed border-slate-200">
          <Truck className="mx-auto text-slate-200 mb-6" size={80} />
          <h2 className="text-2xl font-black text-slate-400 mb-6 tracking-tight italic uppercase">أسطول المشروع فارغ حالياً</h2>
-         <button onClick={() => setShowAddEqModal(true)} className="px-8 py-4 bg-indigo-600 hover:bg-slate-900 text-white rounded-2xl text-sm font-black shadow-2xl transition-all active:scale-95 flex items-center gap-3 mx-auto">
+         <button onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية الإضافة') : () => setShowAddEqModal(true)} disabled={userRole === 'viewer'} className={`px-8 py-4 ${userRole === 'viewer' ? 'bg-slate-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-slate-900 active:scale-95'} text-white rounded-2xl text-sm font-black shadow-2xl transition-all flex items-center gap-3 mx-auto`}>
            <Plus size={20} />
            تسجيل أول معدة بالموقع
          </button>
@@ -372,6 +431,7 @@ export default function EquipmentDashboard({
            newEqDiscount={newEqDiscount} setNewEqDiscount={setNewEqDiscount} newEqDailyHours={newEqDailyHours} setNewEqDailyHours={setNewEqDailyHours}
            editingEqId={editingEqId} setEditingEqId={setEditingEqId} editEqForm={editEqForm} setEditEqForm={setEditEqForm} handleSaveEqEdit={handleSaveEqEdit}
          />
+         {renderConfirmDialog()}
        </div>
      );
   }
@@ -464,62 +524,7 @@ export default function EquipmentDashboard({
         editingEqId={editingEqId} setEditingEqId={setEditingEqId} editEqForm={editEqForm} setEditEqForm={setEditEqForm} handleSaveEqEdit={handleSaveEqEdit}
       />
 
-      <AnimatePresence>
-        {confirmState?.isOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-md">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white rounded-[2.5rem] border border-slate-200 shadow-2xl p-8 max-w-md w-full text-right space-y-6">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4 flex-row-reverse">
-                <div className="flex items-center gap-3">
-                   <div className="p-2 bg-amber-100 text-amber-600 rounded-xl">
-                      <AlertCircle size={18} />
-                   </div>
-                   <h4 className="font-black text-lg text-slate-900 tracking-tight">{confirmState.title}</h4>
-                </div>
-                <button onClick={() => setConfirmState(null)} className="text-slate-400 hover:text-slate-600 transition-colors">✕</button>
-              </div>
-              <p className="text-slate-600 text-xs font-bold leading-relaxed">{confirmState.message}</p>
-              
-              {confirmState.isDeleteAction && (
-                <div className="bg-rose-50 border border-rose-100 p-4 rounded-2xl space-y-3">
-                  <label className="block text-[10px] font-black text-rose-500 uppercase tracking-widest text-center">أدخل كود التحقق لتأكيد الحذف: <span className="bg-rose-100 px-2 py-0.5 rounded text-rose-700 text-sm ml-1 select-all font-mono tracking-widest">{expectedDeleteCode}</span></label>
-                  <input 
-                    type="text"
-                    value={deleteVerificationInput}
-                    onChange={(e) => setDeleteVerificationInput(e.target.value)}
-                    placeholder="أدخل الكود المكون من 4 أرقام"
-                    className="w-full px-4 py-3 text-center bg-white border border-rose-200 rounded-xl text-lg font-black tracking-[0.5em] text-rose-600 outline-none focus:ring-4 focus:ring-rose-500/10 transition-all placeholder:tracking-normal placeholder:text-[10px] placeholder:font-bold"
-                  />
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  disabled={confirmState.isDeleteAction && deleteVerificationInput !== expectedDeleteCode}
-                  onClick={async () => { 
-                    if (confirmState.isDeleteAction && deleteVerificationInput !== expectedDeleteCode) return;
-                    try { await confirmState.onConfirm(); } finally { setConfirmState(null); } 
-                  }}
-                  className={`px-8 py-3.5 text-xs font-black rounded-2xl transition-all shadow-xl active:scale-95 flex-1 md:flex-none ${
-                    confirmState.isDeleteAction 
-                      ? (deleteVerificationInput === expectedDeleteCode ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-100' : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none')
-                      : 'bg-indigo-600 hover:bg-slate-900 text-white shadow-indigo-100'
-                  }`}
-                >
-                  {confirmState.confirmLabel || (confirmState.isDeleteAction ? 'تأكيد الحذف النهائي' : 'تأكيد واستمرار')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmState(null)}
-                  className="px-8 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-500 text-xs font-black rounded-2xl transition-all flex-1 md:flex-none"
-                >
-                  {confirmState.cancelLabel || 'تراجع'}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {renderConfirmDialog()}
     </div>
   );
 }

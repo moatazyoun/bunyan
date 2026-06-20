@@ -31,6 +31,42 @@ body {
   background: #94a3b8;
 }
 
+/* Viewer Mode Global Styling */
+.viewer-mode button[type="submit"],
+.viewer-mode button[class*="bg-indigo-600"],
+.viewer-mode button[class*="bg-rose-"],
+.viewer-mode button[class*="bg-emerald-"],
+.viewer-mode button[class*="text-rose-"],
+.viewer-mode button[class*="text-emerald-"],
+/* Specifically target buttons with action text inside */
+.viewer-mode button:has(svg[class*="lucide-trash"]),
+.viewer-mode button:has(svg[class*="lucide-edit"]),
+.viewer-mode button:has(svg[class*="lucide-plus"]),
+.viewer-mode button:has(svg[class*="lucide-save"]),
+.viewer-mode button:has(svg[class*="lucide-file-plus"]) {
+  /* Dim and disable them globally to reflect unprivileged view cleanly */
+  opacity: 0.4 !important;
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+}
+
+/* Allow exceptions for navigation or search buttons explicitly */
+.viewer-mode nav button,
+.viewer-mode header button,
+.viewer-mode .sidebar button {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+/* Disable generic input styling to look read-only */
+.viewer-mode input:not([type="search"]):not([placeholder*="بحث"]),
+.viewer-mode select,
+.viewer-mode textarea {
+  background-color: transparent !important;
+  color: #64748b !important;
+}
+
 /* HIGH FIDELITY PRINT LAYOUT OVERRIDES */
 @media print {
   @page {
