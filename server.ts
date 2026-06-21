@@ -10,247 +10,24 @@ import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import fs from "fs";
 import * as XLSX from "xlsx";
-import { initializeApp, getApp, getApps } from "firebase/app";
-import { getFirestore, initializeFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, writeBatch } from "firebase/firestore";
-import { getAuth, signInAnonymously } from "firebase/auth";
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
+import firebaseConfig from "./firebase-applet-config.json";
 
 dotenv.config();
 
-// Initialize Firebase Admin securely & setup local fallback database
-let globalRealDb: any = null;
-let db: any = null;
-let isFirestoreHealthy = false;
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp, (firebaseConfig.firestoreDatabaseId === "(default)" || firebaseConfig.firestoreDatabaseId === "") ? undefined : firebaseConfig.firestoreDatabaseId);
 
-// Silence warnings/errors related to fallback for continuous integration tests
-class LocalDocRef {
-  constructor(private colPath: string, private docId: string) {}
+export { db };
 
-  getFilePath() {
-    return "";
-  }
-
-  getRealRef() {
-    return doc(globalRealDb, this.colPath, this.docId);
-  }
-
-  async get() {
-    if (globalRealDb) {
-      try {
-        const docSnap = await getDoc(this.getRealRef());
-        return {
-          exists: docSnap.exists(),
-          data: () => docSnap.data(),
-        };
-      } catch (err) {
-        console.error(`[Firestore Get Error] ${this.colPath}/${this.docId}:`, err);
-        throw err;
-      }
-    }
-    throw new Error("قاعدة البيانات السحابية غير متصلة.");
-  }
-
-  async set(data: any, options?: { merge?: boolean }) {
-    if (globalRealDb) {
-      try {
-        if (options?.merge) {
-          await setDoc(this.getRealRef(), data, { merge: true });
-        } else {
-          await setDoc(this.getRealRef(), data);
-        }
-        return;
-      } catch (err) {
-        console.error(`[Firestore Set Error] ${this.colPath}/${this.docId}:`, err);
-        throw err;
-      }
-    }
-    throw new Error("قاعدة البيانات السحابية غير متصلة.");
-  }
-
-  async update(data: any) {
-    if (globalRealDb) {
-      try {
-        await updateDoc(this.getRealRef(), data);
-        return;
-      } catch (err) {
-        console.error(`[Firestore Update Error] ${this.colPath}/${this.docId}:`, err);
-        throw err;
-      }
-    }
-    throw new Error("قاعدة البيانات السحابية غير متصلة.");
-  }
-
-  async delete() {
-    if (globalRealDb) {
-      try {
-        await deleteDoc(this.getRealRef());
-        return;
-      } catch (err) {
-        console.error(`[Firestore Delete Error] ${this.colPath}/${this.docId}:`, err);
-        throw err;
-      }
-    }
-    throw new Error("قاعدة البيانات السحابية غير متصلة.");
-  }
-}
-
-class LocalColRef {
-  constructor(private colPath: string) {}
-
-  doc(id: string) {
-    return new LocalDocRef(this.colPath, id);
-  }
-
-  async get() {
-    if (globalRealDb) {
-      try {
-        const snapshot = await getDocs(collection(globalRealDb, this.colPath));
-        return {
-          docs: snapshot.docs.map((d: any) => ({
-            id: d.id,
-            ref: d.ref,
-            data: () => d.data(),
-          })),
-        };
-      } catch (err) {
-        console.error(`[Firestore Get Collection Error] ${this.colPath}:`, err);
-        throw err;
-      }
-    }
-    throw new Error("قاعدة البيانات السحابية غير متصلة.");
-  }
-}
-
-class LocalBatch {
-  private ops: { ref: any; data: any; options?: any }[] = [];
-
-  set(docRef: any, data: any, options?: any) {
-    this.ops.push({ ref: docRef, data, options });
-  }
-
-  async commit() {
-    if (globalRealDb) {
-      try {
-        const b = writeBatch(globalRealDb);
-        for (const op of this.ops) {
-          const realRef = op.ref.getRealRef ? op.ref.getRealRef() : op.ref;
-          b.set(realRef, op.data, op.options || {});
-        }
-        await b.commit();
-      } catch (err) {
-        console.error("[Firestore Batch Commit Error]:", err);
-        throw err;
-      }
-    } else {
-      throw new Error("قاعدة البيانات السحابية غير متصلة.");
-    }
-  }
-}
-
-class LocalFirestoreWrapper {
-  collection(name: string) {
-    return new LocalColRef(name);
-  }
-
-  batch() {
-    return new LocalBatch();
-  }
-}
-
-// Always instantiate db with local wrapper that delegates to globalRealDb with local JSON file safety fallback
-db = new LocalFirestoreWrapper();
-
-try {
-  let firebaseConfig: any = null;
-  let databaseId: string | undefined = undefined;
-
-  // 1. Check environment variables first (especially useful on Vercel)
-  if (process.env.FIREBASE_PROJECT_ID) {
-    firebaseConfig = {
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      appId: process.env.FIREBASE_APP_ID || "",
-      apiKey: process.env.FIREBASE_API_KEY || "",
-      authDomain: process.env.FIREBASE_AUTH_DOMAIN || `${process.env.FIREBASE_PROJECT_ID}.firebaseapp.com`,
-      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || `${process.env.FIREBASE_PROJECT_ID}.firebasestorage.app`,
-      messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "",
-      measurementId: process.env.FIREBASE_MEASUREMENT_ID || "",
-    };
-    databaseId = process.env.FIREBASE_DATABASE_ID || "(default)";
-  } else if (process.env.FIREBASE_CONFIG) {
-    try {
-      firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
-      databaseId = firebaseConfig.firestoreDatabaseId || "(default)";
-    } catch (e) {
-      console.error("Failed to parse FIREBASE_CONFIG env variable:", e);
-    }
-  }
-
-  // 2. Fall back to local firebase-applet-config.json if no production env setup detected
-  if (!firebaseConfig) {
-    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-    if (fs.existsSync(configPath)) {
-      firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
-      databaseId = firebaseConfig.firestoreDatabaseId;
-    }
-  }
-
-  if (firebaseConfig) {
-    const appInstance = getApps().length ? getApp() : initializeApp(firebaseConfig);
-
-    try {
-      globalRealDb = initializeFirestore(appInstance, {
-        experimentalForceLongPolling: true,
-      }, databaseId || undefined);
-    } catch (e) {
-      if (databaseId && databaseId !== "(default)") {
-        globalRealDb = getFirestore(appInstance, databaseId);
-      } else {
-        globalRealDb = getFirestore(appInstance);
-      }
-    }
-  } else {
-    const appInstance = getApps().length ? getApp() : initializeApp();
-    try {
-      globalRealDb = initializeFirestore(appInstance, {
-        experimentalForceLongPolling: true,
-      });
-    } catch (e) {
-      globalRealDb = getFirestore(appInstance);
-    }
-  }
-} catch (err) {
-  console.error("Error setting up Firebase database in server:", err);
-}
-
-async function checkFirestoreHealth() {
-  if (!globalRealDb) {
-    console.error("[Persistence] checkFirestoreHealth: globalRealDb is null!");
-    return;
-  }
-  try {
-    // Authenticate anonymously so rule checks pass if signed-in requirement exists
-    const appAuth = getAuth(getApp());
-    await signInAnonymously(appAuth).catch(() => {});
-    
-    // Attempt to list collections instead of reading a potentially non-existent document
-    await getDocs(collection(globalRealDb, "sites"));
-    isFirestoreHealthy = true;
-    console.log("[Persistence] Cloud storage successfully linked.");
-  } catch (err) {
-    isFirestoreHealthy = false;
-    console.error("[Persistence] Firestore health check FAILED:", err);
-    console.log("[Persistence] Active container restrictions or configuration issue. Falling back seamlessly to local JSON persistence.");
-  }
-}
-
-
+// Initialize Admin User
 async function initializeAdminUser() {
-  await checkFirestoreHealth();
-  if (!db) return;
   try {
-    const adminRef = db.collection('users').doc('moataz');
-    const doc = await adminRef.get();
-    if (!doc.exists) {
-      await adminRef.set({
+    const adminRef = doc(db, 'users', 'moataz');
+    const docSnap = await getDoc(adminRef);
+    if (!docSnap.exists()) {
+      await setDoc(adminRef, {
         password: 'moat_010100',
         nameAr: 'م. معتز يونس',
         role: 'admin'
@@ -261,8 +38,8 @@ async function initializeAdminUser() {
     // Silent recovery
   }
 }
-
 initializeAdminUser();
+
 
 // Helper functions for Excel parsing
 function isExcelMimeType(mimeType: string): boolean {
@@ -323,7 +100,7 @@ app.post("/api/auth/login", async (req, res) => {
   const searchUser = username.toString().trim().toLowerCase();
 
   try {
-    const userDoc = await db.collection('users').doc(searchUser).get();
+    const userDoc = await getDoc(doc(db, 'users', searchUser));
     const user = userDoc.data();
 
     if (!user || user.password !== password.toString().trim()) {
@@ -354,8 +131,8 @@ app.post("/api/projects/:projectId/assign-users", async (req, res) => {
   }
 
   try {
-    const usersBatch = db.batch();
-    const allUsers = await db.collection('users').get();
+    const usersBatch = writeBatch(db);
+    const allUsers = await getDocs(collection(db, 'users'));
     
     allUsers.docs.forEach(doc => {
       const userData = doc.data();
@@ -388,7 +165,7 @@ app.get("/api/users", async (req, res) => {
     return res.status(503).json({ error: "قاعدة البيانات غير متصلة على الخادم." });
   }
   try {
-    const snapshot = await db.collection('users').get();
+    const snapshot = await getDocs(collection(db, 'users'));
     const users = snapshot.docs.map(doc => ({
         username: doc.id,
         nameAr: doc.data().nameAr,
@@ -426,7 +203,7 @@ app.post("/api/users", async (req, res) => {
   if (assignedProjects !== undefined) updateData.assignedProjects = assignedProjects;
 
   try {
-    await db.collection('users').doc(normalizedUsername).set(updateData, { merge: true });
+    await setDoc(doc(db, 'users', normalizedUsername), updateData, { merge: true });
     res.json({ success: true, user: { username: normalizedUsername, ...updateData } });
   } catch (err) {
     console.error("Save user error:", err);
@@ -444,7 +221,7 @@ app.delete("/api/users/:username", async (req, res) => {
   }
 
   try {
-    await db.collection('users').doc(usernameToDelete).delete();
+    await deleteDoc(doc(db, 'users', usernameToDelete));
     res.json({ success: true });
   } catch (err) {
     console.error("Delete user error:", err);
@@ -458,7 +235,7 @@ app.get("/api/sites", async (req, res) => {
     return res.status(503).json({ error: "قاعدة البيانات غير متصلة على الخادم." });
   }
   try {
-    const snapshot = await db.collection('sites').get();
+    const snapshot = await getDocs(collection(db, 'sites'));
     const sites = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -482,12 +259,12 @@ app.post("/api/sites", async (req, res) => {
   const formattedId = id.toString().trim().toLowerCase().replace(/\s+/g, "-");
 
   try {
-    const docSnap = await db.collection('sites').doc(formattedId).get();
-    if (docSnap.exists) {
+    const docSnap = await getDoc(doc(db, 'sites', formattedId));
+    if (docSnap.exists()) {
       return res.status(400).json({ error: "رمز موقع العمل مكرر وتام التسجيل مسبقاً لموقع إنشائي آخر." });
     }
 
-    await db.collection('sites').doc(formattedId).set({
+    await setDoc(doc(db, 'sites', formattedId), {
         nameAr: nameAr.toString().trim(),
         location: location.toString().trim(),
         description: description ? description.toString().trim() : ""
@@ -510,7 +287,7 @@ app.put("/api/sites/:id", async (req, res) => {
   }
 
   try {
-    await db.collection('sites').doc(id).update({
+    await updateDoc(doc(db, 'sites', id), {
         nameAr: nameAr.toString().trim(),
         location: location.toString().trim(),
         description: description ? description.toString().trim() : ""
@@ -528,8 +305,8 @@ app.delete("/api/sites/:id", async (req, res) => {
   }
   const { id } = req.params;
   try {
-    await db.collection('sites').doc(id).delete();
-    await db.collection('siteData').doc(id).delete();
+    await deleteDoc(doc(db, 'sites', id));
+    await deleteDoc(doc(db, 'siteData', id));
     res.json({ success: true });
   } catch (err) {
     console.error("Delete site error:", err);
@@ -544,7 +321,7 @@ app.get("/api/site/:siteId/data", async (req, res) => {
   const { siteId } = req.params;
 
   try {
-    const docSnap = await db.collection('siteData').doc(siteId).get();
+    const docSnap = await getDoc(doc(db, 'siteData', siteId));
     res.json(docSnap.data() || {});
   } catch (err) {
     console.error("Get site data error:", err);
@@ -563,7 +340,7 @@ app.post("/api/site/:siteId/save", async (req, res) => {
   }
 
   try {
-    await db.collection('siteData').doc(siteId).set(data, { merge: true });
+    await setDoc(doc(db, 'siteData', siteId), data, { merge: true });
     res.json({ success: true });
   } catch (err) {
     console.error("Save site data error:", err);
@@ -585,7 +362,7 @@ app.post("/api/site/:siteId/auto-backup", async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
     const backupId = `${siteId}_backup_${today}`;
     
-    await db.collection('siteBackups').doc(backupId).set({
+    await setDoc(doc(db, 'siteBackups', backupId), {
       siteId,
       siteName: siteName || "موقع افتراضي",
       backupDate: today,
@@ -608,7 +385,7 @@ app.get("/api/site/:siteId/server-backups", async (req, res) => {
   }
   const { siteId } = req.params;
   try {
-    const snapshot = await db.collection('siteBackups').get();
+    const snapshot = await getDocs(collection(db, 'siteBackups'));
     const backupsList = snapshot.docs
       .map((doc: any) => {
         const data = doc.data();
@@ -644,7 +421,7 @@ app.post("/api/site/:siteId/manual-backup", async (req, res) => {
   try {
     const timestamp = new Date().toISOString();
     const backupId = `${siteId}_manual_backup_${Date.now()}`;
-    await db.collection('siteBackups').doc(backupId).set({
+    await setDoc(doc(db, 'siteBackups', backupId), {
       siteId,
       siteName: siteName || "موقع افتراضي",
       backupDate: timestamp.split('T')[0],
@@ -665,9 +442,9 @@ app.get("/api/site/:siteId/restore-backup/:backupId", async (req, res) => {
   }
   const { backupId } = req.params;
   try {
-    const docRef = db.collection('siteBackups').doc(backupId);
-    const docSnap = await docRef.get();
-    if (!docSnap.exists) {
+    const docRef = doc(db, 'siteBackups', backupId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) {
       return res.status(404).json({ error: "ملف النسخ الاحتياطي المذكور غير موجود." });
     }
     const data = docSnap.data();
@@ -685,7 +462,7 @@ app.delete("/api/site/:siteId/backup/:backupId", async (req, res) => {
   }
   const { backupId } = req.params;
   try {
-    await db.collection('siteBackups').doc(backupId).delete();
+    await deleteDoc(doc(db, 'siteBackups', backupId));
     res.json({ success: true });
   } catch (err: any) {
     console.error("Delete backup error:", err);
@@ -694,7 +471,7 @@ app.delete("/api/site/:siteId/backup/:backupId", async (req, res) => {
 });
 
 app.get("/api/db-status", async (req, res) => {
-    if (globalRealDb) {
+    if (db) {
       res.json({ 
         connected: true, 
         cloud: true, 

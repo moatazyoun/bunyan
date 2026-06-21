@@ -6,15 +6,44 @@
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { initializeFirestore, getFirestore, doc, getDoc, getDocs, setDoc, deleteDoc, collection, query, where } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, doc, getDoc, getDocs, setDoc, deleteDoc, collection, query, where, setLogLevel } from 'firebase/firestore';
 import appletConfig from '../../firebase-applet-config.json';
 import { UserModulePermissions } from '../types';
 
+declare global {
+  interface ImportMetaEnv {
+    readonly VITE_FIREBASE_API_KEY?: string;
+    readonly VITE_FIREBASE_AUTH_DOMAIN?: string;
+    readonly VITE_FIREBASE_PROJECT_ID?: string;
+    readonly VITE_FIREBASE_STORAGE_BUCKET?: string;
+    readonly VITE_FIREBASE_MESSAGING_SENDER_ID?: string;
+    readonly VITE_FIREBASE_APP_ID?: string;
+    readonly VITE_FIREBASE_MEASUREMENT_ID?: string;
+    readonly VITE_FIREBASE_DATABASE_ID?: string;
+    readonly VITE_FIREBASE_CONFIG?: string;
+  }
+
+  interface ImportMeta {
+    readonly env: ImportMetaEnv;
+  }
+}
+
+try {
+  setLogLevel('error');
+} catch (err) {
+  console.warn("Could not set Firestore log level in Interceptor:", err);
+}
+
 // Support environments like Vercel with custom environment variable configurations
 let envConfig: any = {};
-const metaEnv = (import.meta as any).env || {};
 try {
-  const envVal = metaEnv.VITE_FIREBASE_CONFIG;
+  let envVal: string | undefined;
+  try {
+    envVal = import.meta.env.VITE_FIREBASE_CONFIG;
+  } catch (e) {
+    const metaEnv = (import.meta as any).env || {};
+    envVal = metaEnv.VITE_FIREBASE_CONFIG;
+  }
   if (envVal) {
     envConfig = JSON.parse(envVal);
   }
@@ -22,15 +51,50 @@ try {
   console.warn("VITE_FIREBASE_CONFIG JSON parse error in apiInterceptor: fallback to properties", e);
 }
 
+const getEnvValue = (metaVal: any, envProp: any, configProp: any): any => {
+  return metaVal || envProp || configProp;
+};
+
+// Literal references are mandatory for Vite bundling replacement
+let metaApiKey: string | undefined;
+let metaAuthDomain: string | undefined;
+let metaProjectId: string | undefined;
+let metaStorageBucket: string | undefined;
+let metaMessagingSenderId: string | undefined;
+let metaAppId: string | undefined;
+let metaMeasurementId: string | undefined;
+let metaDatabaseId: string | undefined;
+
+try {
+  metaApiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+  metaAuthDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN;
+  metaProjectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+  metaStorageBucket = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET;
+  metaMessagingSenderId = import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID;
+  metaAppId = import.meta.env.VITE_FIREBASE_APP_ID;
+  metaMeasurementId = import.meta.env.VITE_FIREBASE_MEASUREMENT_ID;
+  metaDatabaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID;
+} catch (e) {
+  const metaEnv = (import.meta as any).env || {};
+  metaApiKey = metaEnv.VITE_FIREBASE_API_KEY;
+  metaAuthDomain = metaEnv.VITE_FIREBASE_AUTH_DOMAIN;
+  metaProjectId = metaEnv.VITE_FIREBASE_PROJECT_ID;
+  metaStorageBucket = metaEnv.VITE_FIREBASE_STORAGE_BUCKET;
+  metaMessagingSenderId = metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID;
+  metaAppId = metaEnv.VITE_FIREBASE_APP_ID;
+  metaMeasurementId = metaEnv.VITE_FIREBASE_MEASUREMENT_ID;
+  metaDatabaseId = metaEnv.VITE_FIREBASE_DATABASE_ID;
+}
+
 const firebaseConfig = {
-  apiKey: metaEnv.VITE_FIREBASE_API_KEY || envConfig.apiKey || appletConfig.apiKey,
-  authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN || envConfig.authDomain || appletConfig.authDomain,
-  projectId: metaEnv.VITE_FIREBASE_PROJECT_ID || envConfig.projectId || appletConfig.projectId,
-  storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET || envConfig.storageBucket || appletConfig.storageBucket,
-  messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || envConfig.messagingSenderId || appletConfig.messagingSenderId,
-  appId: metaEnv.VITE_FIREBASE_APP_ID || envConfig.appId || appletConfig.appId,
-  measurementId: metaEnv.VITE_FIREBASE_MEASUREMENT_ID || envConfig.measurementId || appletConfig.measurementId,
-  firestoreDatabaseId: metaEnv.VITE_FIREBASE_DATABASE_ID || envConfig.firestoreDatabaseId || (appletConfig as any).firestoreDatabaseId || '(default)'
+  apiKey: getEnvValue(metaApiKey, envConfig.apiKey, appletConfig.apiKey),
+  authDomain: getEnvValue(metaAuthDomain, envConfig.authDomain, appletConfig.authDomain),
+  projectId: getEnvValue(metaProjectId, envConfig.projectId, appletConfig.projectId),
+  storageBucket: getEnvValue(metaStorageBucket, envConfig.storageBucket, appletConfig.storageBucket),
+  messagingSenderId: getEnvValue(metaMessagingSenderId, envConfig.messagingSenderId, appletConfig.messagingSenderId),
+  appId: getEnvValue(metaAppId, envConfig.appId, appletConfig.appId),
+  measurementId: getEnvValue(metaMeasurementId, envConfig.measurementId, appletConfig.measurementId),
+  firestoreDatabaseId: getEnvValue(metaDatabaseId, envConfig.firestoreDatabaseId || envConfig.databaseId, (appletConfig as any).firestoreDatabaseId || '(default)')
 };
 
 // Initialize Firebase App & Firestore safely to avoid multi-app errors
@@ -43,13 +107,24 @@ let authReadyPromise: Promise<void> | null = null;
 const getAuthReady = () => {
   if (!authReadyPromise) {
     authReadyPromise = new Promise((resolve) => {
-      const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
-        if (!user) {
-          signInAnonymously(firebaseAuth).catch((err) => {
+      let resolved = false;
+      const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
+        if (user) {
+          if (!resolved) {
+            resolved = true;
+            resolve();
+          }
+        } else {
+          try {
+            await signInAnonymously(firebaseAuth);
+          } catch (err: any) {
              console.warn("[API Interceptor Client Auth] Anonymous sign in failed:", err.message || err);
-          });
+             if (!resolved) {
+               resolved = true;
+               resolve();
+             }
+          }
         }
-        resolve();
       });
     });
   }
@@ -68,7 +143,14 @@ try {
   }, dbId);
 } catch (e: any) {
   console.log('[Firestore] Interceptor pre-initialized or fallback:', e.message || e);
-  db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+  const dbId = (firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)') 
+    ? firebaseConfig.firestoreDatabaseId 
+    : undefined;
+  if (dbId) {
+    db = getFirestore(firebaseApp, dbId);
+  } else {
+    db = getFirestore(firebaseApp);
+  }
 }
 
 enum OperationType {
@@ -99,15 +181,19 @@ interface FirestoreErrorInfo {
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
   const errMessage = error instanceof Error ? error.message : String(error);
+  const currentUser = firebaseAuth.currentUser;
   const errInfo: FirestoreErrorInfo = {
     error: errMessage,
     authInfo: {
-      userId: null,
-      email: null,
-      emailVerified: false,
-      isAnonymous: true,
-      tenantId: null,
-      providerInfo: []
+      userId: currentUser?.uid || null,
+      email: currentUser?.email || null,
+      emailVerified: currentUser?.emailVerified || false,
+      isAnonymous: currentUser?.isAnonymous || false,
+      tenantId: (currentUser as any)?.tenantId || null,
+      providerInfo: currentUser?.providerData?.map(p => ({
+        providerId: p.providerId,
+        email: p.email,
+      })) || []
     },
     operationType,
     path
@@ -920,7 +1006,7 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     if (!uid) {
       return mockResponseErr('كود المصادقة من جوجل مفقود.', 400);
     }
-    const lowerUid = uid.trim().toLowerCase();
+    const lowerUid = uid.trim(); // FIXED: Retained case-sensitivity to match request.auth.uid in Firestore security rules
     
     try {
       const userDocRef = doc(db, 'users', lowerUid);
@@ -1013,7 +1099,7 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     if (!username || !nameAr || !phone || !uid) {
       return mockResponseErr('يرجى كتابة جميع البيانات الإجبارية لتفعيل الحساب.', 400);
     }
-    const lowerUid = uid.trim().toLowerCase();
+    const lowerUid = uid.trim(); // FIXED: Retained case-sensitivity to match request.auth.uid in Firestore security rules
     const cleanUsername = username.trim();
     const lowerUser = cleanUsername.toLowerCase();
 

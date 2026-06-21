@@ -5,14 +5,43 @@
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { initializeFirestore, getFirestore } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, setLogLevel } from 'firebase/firestore';
 import appletConfig from '../../firebase-applet-config.json';
+
+declare global {
+  interface ImportMetaEnv {
+    readonly VITE_FIREBASE_API_KEY?: string;
+    readonly VITE_FIREBASE_AUTH_DOMAIN?: string;
+    readonly VITE_FIREBASE_PROJECT_ID?: string;
+    readonly VITE_FIREBASE_STORAGE_BUCKET?: string;
+    readonly VITE_FIREBASE_MESSAGING_SENDER_ID?: string;
+    readonly VITE_FIREBASE_APP_ID?: string;
+    readonly VITE_FIREBASE_MEASUREMENT_ID?: string;
+    readonly VITE_FIREBASE_DATABASE_ID?: string;
+    readonly VITE_FIREBASE_CONFIG?: string;
+  }
+
+  interface ImportMeta {
+    readonly env: ImportMetaEnv;
+  }
+}
+
+try {
+  setLogLevel('error');
+} catch (err) {
+  console.warn("Could not set Firestore log level:", err);
+}
 
 // Support environments like Vercel with custom environment variable configurations
 let envConfig: any = {};
-const metaEnv = (import.meta as any).env || {};
 try {
-  const envVal = metaEnv.VITE_FIREBASE_CONFIG;
+  let envVal: string | undefined;
+  try {
+    envVal = import.meta.env.VITE_FIREBASE_CONFIG;
+  } catch (e) {
+    const metaEnv = (import.meta as any).env || {};
+    envVal = metaEnv.VITE_FIREBASE_CONFIG;
+  }
   if (envVal) {
     envConfig = JSON.parse(envVal);
   }
@@ -20,29 +49,72 @@ try {
   console.warn("VITE_FIREBASE_CONFIG JSON parse error: fallback to properties", e);
 }
 
+const getEnvValue = (metaVal: any, envProp: any, configProp: any): any => {
+  return metaVal || envProp || configProp;
+};
+
+// Literal references are mandatory for Vite bundling replacement
+let metaApiKey: string | undefined;
+let metaAuthDomain: string | undefined;
+let metaProjectId: string | undefined;
+let metaStorageBucket: string | undefined;
+let metaMessagingSenderId: string | undefined;
+let metaAppId: string | undefined;
+let metaMeasurementId: string | undefined;
+let metaDatabaseId: string | undefined;
+
+try {
+  metaApiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+  metaAuthDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN;
+  metaProjectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+  metaStorageBucket = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET;
+  metaMessagingSenderId = import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID;
+  metaAppId = import.meta.env.VITE_FIREBASE_APP_ID;
+  metaMeasurementId = import.meta.env.VITE_FIREBASE_MEASUREMENT_ID;
+  metaDatabaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID;
+} catch (e) {
+  const metaEnv = (import.meta as any).env || {};
+  metaApiKey = metaEnv.VITE_FIREBASE_API_KEY;
+  metaAuthDomain = metaEnv.VITE_FIREBASE_AUTH_DOMAIN;
+  metaProjectId = metaEnv.VITE_FIREBASE_PROJECT_ID;
+  metaStorageBucket = metaEnv.VITE_FIREBASE_STORAGE_BUCKET;
+  metaMessagingSenderId = metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID;
+  metaAppId = metaEnv.VITE_FIREBASE_APP_ID;
+  metaMeasurementId = metaEnv.VITE_FIREBASE_MEASUREMENT_ID;
+  metaDatabaseId = metaEnv.VITE_FIREBASE_DATABASE_ID;
+}
+
 const firebaseConfig = {
-  apiKey: metaEnv.VITE_FIREBASE_API_KEY || envConfig.apiKey || appletConfig.apiKey,
-  authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN || envConfig.authDomain || appletConfig.authDomain,
-  projectId: metaEnv.VITE_FIREBASE_PROJECT_ID || envConfig.projectId || appletConfig.projectId,
-  storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET || envConfig.storageBucket || appletConfig.storageBucket,
-  messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || envConfig.messagingSenderId || appletConfig.messagingSenderId,
-  appId: metaEnv.VITE_FIREBASE_APP_ID || envConfig.appId || appletConfig.appId,
-  measurementId: metaEnv.VITE_FIREBASE_MEASUREMENT_ID || envConfig.measurementId || appletConfig.measurementId,
-  firestoreDatabaseId: metaEnv.VITE_FIREBASE_DATABASE_ID || envConfig.firestoreDatabaseId || (appletConfig as any).firestoreDatabaseId || '(default)'
+  apiKey: getEnvValue(metaApiKey, envConfig.apiKey, appletConfig.apiKey),
+  authDomain: getEnvValue(metaAuthDomain, envConfig.authDomain, appletConfig.authDomain),
+  projectId: getEnvValue(metaProjectId, envConfig.projectId, appletConfig.projectId),
+  storageBucket: getEnvValue(metaStorageBucket, envConfig.storageBucket, appletConfig.storageBucket),
+  messagingSenderId: getEnvValue(metaMessagingSenderId, envConfig.messagingSenderId, appletConfig.messagingSenderId),
+  appId: getEnvValue(metaAppId, envConfig.appId, appletConfig.appId),
+  measurementId: getEnvValue(metaMeasurementId, envConfig.measurementId, appletConfig.measurementId),
+  firestoreDatabaseId: getEnvValue(metaDatabaseId, envConfig.firestoreDatabaseId || envConfig.databaseId, (appletConfig as any).firestoreDatabaseId)
 };
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize firestore with force long polling to prevent GrpcConnection stream cancellations in proxied environments
-let secureDb: any;
-try {
-  secureDb = initializeFirestore(app, {
-    experimentalForceLongPolling: true,
-  }, firebaseConfig.firestoreDatabaseId || '(default)');
-} catch (e: any) {
-  console.log('[Firestore] Applet already initialized or configured, using existing instance:', e.message || e);
-  secureDb = getFirestore(app);
-}
+const dbId = (firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)' && firebaseConfig.firestoreDatabaseId !== '') 
+  ? firebaseConfig.firestoreDatabaseId 
+  : undefined;
+
+ // Initialize firestore with force long polling to prevent GrpcConnection stream cancellations in proxied environments
+ let secureDb: any;
+ try {
+   secureDb = initializeFirestore(app, {
+     experimentalForceLongPolling: true,
+   }, dbId);
+ } catch (e: any) {
+   console.log('[Firestore] Applet already initialized or configured, using existing instance:', e.message || e);
+   if (dbId) {
+     secureDb = getFirestore(app, dbId);
+   } else {
+     secureDb = getFirestore(app);
+   }
+ }
 
 export const db = secureDb;
 export const auth = getAuth(app);

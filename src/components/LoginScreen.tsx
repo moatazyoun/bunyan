@@ -58,7 +58,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, dbConnected, dbLaten
       if (data.success) {
         onLogin(data.user);
       } else {
-        setError(data.message || 'فشل تسجيل الدخول. يرجى مراجعة البيانات.');
+        setError(data.error || data.message || 'فشل تسجيل الدخول. يرجى مراجعة البيانات.');
       }
     } catch (err) {
       setError('حدث خطأ في الاتصال بالخادم. يرجى المحاولة لاحقاً.');
@@ -102,7 +102,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, dbConnected, dbLaten
           onLogin(data.user);
         }
       } else {
-        setError(data.message || 'حدث خطأ في مصادقة جوجل.');
+        setError(data.error || data.message || 'حدث خطأ في مصادقة جوجل.');
       }
     } catch (err: any) {
       console.error('Google Sign-In Error:', err);
@@ -134,7 +134,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, dbConnected, dbLaten
       if (data.success) {
         onLogin(data.user);
       } else {
-        setError(data.message || 'فشل تفعيل الحساب.');
+        setError(data.error || data.message || 'فشل تفعيل الحساب.');
       }
     } catch (err) {
       setError('حدث خطأ في الاتصال بالخادم.');
