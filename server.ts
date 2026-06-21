@@ -11,7 +11,8 @@ import fs from "fs";
 import * as XLSX from "xlsx";
 import { initializeApp } from "firebase/app";
 import { getFirestore, initializeFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
-import firebaseConfig from "./firebase-applet-config.json";
+
+const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8"));
 
 dotenv.config();
 
@@ -857,7 +858,8 @@ app.post("/api/gemini/analyze-boq", async (req, res) => {
 // Setup Vite Dev server or production static serving
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
+    const viteModule = "vite";
+    const { createServer: createViteServer } = await import(/* @vite-ignore */ viteModule);
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
