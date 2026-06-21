@@ -11,13 +11,25 @@ import dotenv from "dotenv";
 import fs from "fs";
 import * as XLSX from "xlsx";
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
+import { getFirestore, initializeFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import firebaseConfig from "./firebase-applet-config.json";
 
 dotenv.config();
 
 const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp, (firebaseConfig.firestoreDatabaseId === "(default)" || firebaseConfig.firestoreDatabaseId === "") ? undefined : firebaseConfig.firestoreDatabaseId);
+
+const dbId = (firebaseConfig.firestoreDatabaseId === "(default)" || firebaseConfig.firestoreDatabaseId === "") ? undefined : firebaseConfig.firestoreDatabaseId;
+
+let secureDb: any;
+try {
+  secureDb = initializeFirestore(firebaseApp, {
+    experimentalForceLongPolling: true,
+  }, dbId);
+} catch (e: any) {
+  secureDb = getFirestore(firebaseApp, dbId);
+}
+
+const db = secureDb;
 
 export { db };
 
