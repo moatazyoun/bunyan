@@ -29,7 +29,7 @@ import {
   CheckCircle2,
   Lock
 } from 'lucide-react';
-import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth, signInWithPopup, GoogleAuthProvider, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import { getSessionLogs, SessionEvent } from '../lib/sessionTracker';
 import { UserItem } from '../types';
 
@@ -140,6 +140,32 @@ export default function SettingsTab({
     }
   }, [activeSubTab, ipData]);
 
+  // Handle redirect result
+  useEffect(() => {
+    const auth = getAuth();
+    const processRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          if (credential?.accessToken) {
+            setAccessToken(credential.accessToken);
+            setGoogleUser({
+              displayName: result.user.displayName,
+              email: result.user.email,
+              photoURL: result.user.photoURL
+            });
+            fetchBackupsList(credential.accessToken);
+            setSuccessMsg('تم ربط حساب Google بنجاح وإتاحة الوصول لجوجل درايف!');
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    processRedirect();
+  }, []);
+
   // Auto-connect on mount if authenticated with Google providers in Firebase
   useEffect(() => {
     const auth = getAuth();
@@ -170,22 +196,12 @@ export default function SettingsTab({
       const provider = new GoogleAuthProvider();
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       
-      const result = await signInWithPopup(auth, provider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (credential?.accessToken) {
-          setAccessToken(credential.accessToken);
-          setGoogleUser({
-            displayName: result.user.displayName,
-            email: result.user.email,
-            photoURL: result.user.photoURL
-          });
-          fetchBackupsList(credential.accessToken);
-          setSuccessMsg('تم ربط حساب Google بنجاح وإتاحة الوصول لجوجل درايف!');
-      }
+      await signInWithRedirect(auth, provider);
     } catch (err: any) {
-      console.error(err);
-      setErrorMsg(err.message || 'فشل التوصيل بحساب Google المصرح به.');
-    } finally {
+      if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
+        console.error(err);
+        setErrorMsg(err.message || 'فشل التوصيل بحساب Google المصرح به.');
+      }
       setIsConnecting(false);
     }
   };
