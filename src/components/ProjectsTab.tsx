@@ -26,7 +26,6 @@ import {
   AlertCircle,
   CheckCircle
 } from 'lucide-react';
-import { getAuth, signInWithRedirect, GoogleAuthProvider, getRedirectResult } from 'firebase/auth';
 import { Project, BOQItem, UserItem } from '../types';
 
 interface ProjectsTabProps {

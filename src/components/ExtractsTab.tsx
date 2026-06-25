@@ -221,7 +221,22 @@ export default function ExtractsTab({
   const [isEditingSignatoryNames, setIsEditingSignatoryNames] = useState(false);
   const [selectedSubcontractorId, setSelectedSubcontractorId] = useState<string>(() => subcontractors[0]?.id || '');
 
+  const handleAddSignatory = () => {
+    const newSignatory = {
+      id: Date.now().toString(),
+      role: '',
+      name: ''
+    };
+    saveSettings({ signatories: [...settings.signatories, newSignatory] });
+  };
+
+  const handleRemoveSignatory = (id: string) => {
+    const updatedSignatories = settings.signatories.filter((s: any) => s.id !== id);
+    saveSettings({ signatories: updatedSignatories });
+  };
+
   const handleUpdateSignatory = (id: string, updates: Partial<SignatoryItem>) => {
+
     const updatedSignatories = settings.signatories.map((s: any) => s.id === id ? { ...s, ...updates } : s);
     saveSettings({ signatories: updatedSignatories });
   };
@@ -1168,11 +1183,25 @@ export default function ExtractsTab({
                        <UserCheck className="w-4 h-4 text-blue-400" />
                        تعديل بيانات طاقم المراجعة والاعتماد (Signatories)
                     </h3>
-                    <button onClick={() => setIsEditingSignatoryNames(false)} className="text-slate-500 hover:text-white"><X className="w-5 h-5" /></button>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={handleAddSignatory} 
+                        className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold py-1.5 px-3 rounded-lg transition"
+                      >
+                        <Plus className="w-3 h-3" /> إضافة توقيع
+                      </button>
+                      <button onClick={() => setIsEditingSignatoryNames(false)} className="text-slate-500 hover:text-white"><X className="w-5 h-5" /></button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {settings.signatories.map((sig: any, idx: number) => (
-                      <div key={sig?.id || `sig0_${idx}`} className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/50 space-y-3">
+                      <div key={sig?.id || `sig0_${idx}`} className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/50 space-y-3 relative group">
+                        <button
+                          onClick={() => handleRemoveSignatory(sig.id)}
+                          className="absolute top-2 left-2 text-slate-500 hover:text-rose-500 transition opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                         <div className="space-y-1">
                           <label className="text-[9px] font-black text-slate-500">المسمى الوظيفي</label>
                           <input 

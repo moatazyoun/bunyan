@@ -17,7 +17,7 @@ import {
   Plus
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
-import { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import BunyanLogo from './BunyanLogo';
 
 interface LoginScreenProps {
@@ -44,21 +44,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, dbConnected, dbLaten
 
   // Check for successful redirect result when the component mounts
   useEffect(() => {
-    const processRedirect = async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        if (result && result.user) {
-          setIsGoogleLoading(true);
-          await processGoogleUser(result.user);
-        }
-      } catch (err: any) {
-        console.error("Redirect login error:", err);
-        setError("فشل تسجيل الدخول: " + (err.message || ''));
-      } finally {
-        setIsGoogleLoading(false);
-      }
-    };
-    processRedirect();
+    // Redirect flow removed
   }, [onLogin]);
 
   const processGoogleUser = async (user: any) => {
@@ -104,7 +90,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, dbConnected, dbLaten
       // Only prompt on first interaction
       provider.setCustomParameters({ prompt: 'select_account' });
       
-      await signInWithRedirect(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      if (result.user) {
+        await processGoogleUser(result.user);
+      }
     } catch (err: any) {
       if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
         console.error('Google Sign-In Error:', err);

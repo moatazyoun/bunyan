@@ -29,7 +29,7 @@ import {
   CheckCircle2,
   Lock
 } from 'lucide-react';
-import { getAuth, signInWithRedirect, GoogleAuthProvider, getRedirectResult } from 'firebase/auth';
+import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { getSessionLogs, SessionEvent } from '../lib/sessionTracker';
 import { UserItem } from '../types';
 
@@ -144,29 +144,6 @@ export default function SettingsTab({
   useEffect(() => {
     const auth = getAuth();
     
-    // Handle redirect result
-    const processRedirect = async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        if (result) {
-          const credential = GoogleAuthProvider.credentialFromResult(result);
-          if (credential?.accessToken) {
-            setAccessToken(credential.accessToken);
-            setGoogleUser({
-              displayName: result.user.displayName,
-              email: result.user.email,
-              photoURL: result.user.photoURL
-            });
-            fetchBackupsList(credential.accessToken);
-            setSuccessMsg('تم ربط حساب Google بنجاح وإتاحة الوصول لجوجل درايف!');
-          }
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    processRedirect();
-
     const user = auth.currentUser;
     if (user) {
       const googleProvider = user.providerData.find(p => p.providerId === 'google.com');
@@ -193,7 +170,18 @@ export default function SettingsTab({
       const provider = new GoogleAuthProvider();
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       
-      await signInWithRedirect(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+          setAccessToken(credential.accessToken);
+          setGoogleUser({
+            displayName: result.user.displayName,
+            email: result.user.email,
+            photoURL: result.user.photoURL
+          });
+          fetchBackupsList(credential.accessToken);
+          setSuccessMsg('تم ربط حساب Google بنجاح وإتاحة الوصول لجوجل درايف!');
+      }
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || 'فشل التوصيل بحساب Google المصرح به.');
