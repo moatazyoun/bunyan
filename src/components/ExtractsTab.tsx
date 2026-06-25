@@ -486,8 +486,7 @@ export default function ExtractsTab({
       const { pounds, piastres } = splitPrice(item.rate || 0);
       const isExceeded = item.totalQty > (item.boqQty || 0);
       return `
-        <tr class="border-b border-slate-950 text-[10px] text-slate-950 text-center h-10 ${isExceeded ? 'bg-amber-50/50' : ''}">
-          <td class="p-1 border border-slate-950 font-bold">${index + 1}</td>
+        <tr class="border-b border-slate-950 text-[10px] text-slate-950 text-center h-10 ${isExceeded ? 'bg-amber-50/50' : ''}" style="page-break-inside: avoid; break-inside: avoid;">
           <td class="p-1.5 border border-slate-950 text-right font-black leading-tight text-[9px]">
             <div>${item.description}</div>
             ${isExceeded ? `<div class="text-[8px] text-rose-600 font-extrabold mt-0.5">⚠️ يتخطى المقايسة (${item.boqQty})</div>` : ''}
@@ -582,7 +581,7 @@ export default function ExtractsTab({
         </style>
       </head>
       <body class="p-1 bg-white text-slate-950">
-        <div class="border-[4px] border-double-custom border-slate-950 p-5 flex flex-col justify-between box-border text-right" dir="rtl" style="min-height: ${targetMinHeight}; max-width: 100%;">
+        <div class="border-[4px] border-double-custom border-slate-950 p-5 flex flex-col justify-between box-border text-right rounded-3xl" dir="rtl" style="min-height: ${targetMinHeight}; max-width: 100%;">
           <div>
             <!-- Header section with 3 columns -->
             <div class="grid grid-cols-3 items-start mb-6 text-[10px] font-bold leading-relaxed border-b-2 border-slate-950 pb-4">
@@ -625,8 +624,7 @@ export default function ExtractsTab({
               <table class="w-full border-collapse border-[1.2px] border-slate-950 text-[9px] text-center font-bold">
                 <thead class="bg-slate-100">
                   <tr>
-                    <th rowspan="2" class="w-[3%] border border-slate-950 p-1">رقم</th>
-                    <th rowspan="2" class="w-[21%] border border-slate-950 p-1.5">بيان الأعمال بالتفصيل ومواصفة البند</th>
+                    <th rowspan="2" class="w-[25%] border border-slate-950 p-1.5">بيان الأعمال بالتفصيل ومواصفة البند</th>
                     <th rowspan="2" class="w-[3%] border border-slate-950 p-1">الوحدة</th>
                     <th rowspan="2" class="w-[5%] border border-slate-950 p-1">الكمية بالمناقصة</th>
                     <th colspan="2" class="w-[8%] border border-slate-950 p-1 border-b-[0.5px]">سعر الوحدة</th>
