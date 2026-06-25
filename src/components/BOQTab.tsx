@@ -157,15 +157,22 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
     const doc = iframe.contentWindow?.document || iframe.contentDocument;
     if (!doc) return;
 
+    let targetMinHeight = '262mm';
+    if (paperSize === 'A4') {
+      targetMinHeight = orientation === 'landscape' ? '180mm' : '262mm';
+    } else if (paperSize === 'A3') {
+      targetMinHeight = orientation === 'landscape' ? '262mm' : '385mm';
+    }
+
     const itemsRows = activeBoqItems.map((item, index) => `
-      <tr class="border-b border-slate-300 text-slate-800 text-xs">
-        <td class="p-2.5 text-center font-bold border border-slate-400">${index + 1}</td>
-        <td class="p-2.5 text-center font-bold font-mono text-indigo-700 border border-slate-400">${item.code}</td>
-        <td class="p-2.5 text-right font-medium leading-relaxed max-w-[400px] border border-slate-400">${item.description}</td>
-        <td class="p-2.5 text-center font-bold border border-slate-400">${item.unit}</td>
-        <td class="p-2.5 text-center font-bold font-mono border border-slate-400">${item.quantity.toLocaleString('en-US')}</td>
-        <td class="p-2.5 text-center font-bold font-mono text-emerald-700 border border-slate-400">${item.price.toLocaleString('en-US')}</td>
-        <td class="p-2.5 text-center font-black font-mono text-slate-900 border border-slate-400">${(item.quantity * item.price).toLocaleString('en-US')}</td>
+      <tr class="border-b border-slate-950 text-slate-950 text-xs hover:bg-slate-50/50">
+        <td class="p-2 text-center font-bold border border-slate-950">${index + 1}</td>
+        <td class="p-2 text-center font-bold font-mono text-indigo-900 border border-slate-950">${item.code}</td>
+        <td class="p-2 text-right font-bold leading-relaxed border border-slate-950">${item.description}</td>
+        <td class="p-2 text-center font-bold border border-slate-950">${item.unit}</td>
+        <td class="p-2 text-center font-bold font-mono border border-slate-950">${item.quantity.toLocaleString('en-US')}</td>
+        <td class="p-2 text-center font-bold font-mono text-emerald-800 border border-slate-950">${item.price.toLocaleString('en-US')}</td>
+        <td class="p-2 text-center font-black font-mono text-slate-950 border border-slate-950">${(item.quantity * item.price).toLocaleString('en-US')}</td>
       </tr>
     `).join('');
 
@@ -195,7 +202,7 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
         <style>
           @page {
             size: ${paperSize} ${orientation};
-            margin: 15mm 15mm 15mm 15mm;
+            margin: ${orientation === 'landscape' ? '12mm 15mm 12mm 15mm' : '15mm 12mm 15mm 12mm'};
           }
           @media print {
             body {
@@ -204,71 +211,78 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
               background-color: white !important;
             }
           }
-          body {
+          html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
             font-family: 'Tajawal', sans-serif;
             background-color: white;
+            box-sizing: border-box;
+          }
+          .border-double-custom {
+            border-style: double;
           }
         </style>
       </head>
-      <body class="p-4 bg-white text-slate-900 selection:bg-indigo-50">
+      <body class="p-1 bg-white text-slate-950">
         <!-- Outer Frame -->
-        <div class="border-4 border-double border-slate-700 p-6 min-h-full flex flex-col justify-between">
+        <div class="border-[4px] border-double-custom border-slate-950 p-5 flex flex-col justify-between box-border" dir="rtl" style="min-height: ${targetMinHeight}; max-width: 100%;">
           <div>
             <!-- Header Block -->
-            <div class="flex items-center justify-between border-b-2 border-slate-800 pb-4 mb-6">
-              <div class="text-right space-y-1">
-                <h1 class="text-sm font-black text-slate-800">شركة بنيان للتشييد والتطوير العقاري</h1>
-                <p class="text-[10px] font-bold text-slate-500">إدارة المشروعات والرقابة الهندسية والمقايسات</p>
-                <p class="text-[9px] text-slate-400">تاريخ الطباعة: ${dateStr}</p>
+            <div class="grid grid-cols-3 gap-4 items-center border-b-2 border-slate-950 pb-4 mb-6">
+              <div class="text-right space-y-1 text-xs font-bold leading-relaxed">
+                <h1 class="text-sm font-black text-slate-950">شركة بنيان للتشييد والتطوير العقاري</h1>
+                <p class="text-[10px] font-black text-slate-600">إدارة المشروعات والرقابة الهندسية والمقايسات</p>
+                <p class="text-[9px] text-slate-500">تاريخ الطباعة: ${dateStr}</p>
               </div>
               
               <div class="text-center">
-                <div class="border-2 border-slate-800 px-4 py-2 bg-slate-50 rounded-lg">
-                  <span class="text-xs font-black text-slate-800 block">شعار بنيان</span>
-                  <span class="text-[10px] font-bold text-slate-400">BUNYAN CO.</span>
+                <div class="border-2 border-slate-950 px-4 py-2 bg-slate-50 rounded-xl inline-block shadow-sm">
+                  <span class="text-xs font-black text-slate-950 block">شعار بنيان</span>
+                  <span class="text-[9px] font-extrabold text-slate-500">BUNYAN CO.</span>
                 </div>
               </div>
 
-              <div class="text-left text-xs space-y-1">
-                <p class="font-bold">الموقع النشط: <span class="font-black text-indigo-700">${activeProject?.name || '---'}</span></p>
-                <p class="font-bold text-[10px] text-slate-500">كود الإسناد: ${activeProject?.assignmentNumber || '---'}</p>
-                <p class="font-bold text-[10px] text-slate-500">تاريخ الإسناد: ${activeProject ? new Date(activeProject.assignmentDate).toLocaleDateString('ar-EG') : '---'}</p>
+              <div class="text-left text-xs space-y-1 font-bold">
+                <p>الموقع النشط: <span class="font-black text-indigo-900">${activeProject?.name || '---'}</span></p>
+                <p class="text-[10px] text-slate-700">كود الإسناد: ${activeProject?.assignmentNumber || '---'}</p>
+                <p class="text-[10px] text-slate-700">تاريخ الإسناد: ${activeProject ? new Date(activeProject.assignmentDate).toLocaleDateString('ar-EG') : '---'}</p>
               </div>
             </div>
 
             <!-- Page Title -->
             <div class="text-center my-6">
-              <h2 class="text-lg font-black text-slate-900 border-b-4 border-indigo-600 inline-block pb-1 px-6 uppercase tracking-wider">
+              <h2 class="text-xl font-black text-slate-950 border-b-[3px] border-indigo-600 inline-block pb-1.5 px-8 uppercase tracking-wider">
                 جدول الكميات وفئات الأعمال (المقايسة المعتمدة)
               </h2>
-              <p class="text-[11px] font-bold text-slate-500 mt-2">عقد إسناد رقم: ${activeProject?.assignmentNumber || '---'}</p>
+              <p class="text-xs font-black text-indigo-950 mt-2">عقد إسناد رقم: ${activeProject?.assignmentNumber || '---'}</p>
             </div>
 
             <!-- BOQ Table -->
-            <div class="mt-4">
-              <table class="w-full text-right text-xs border-collapse border border-slate-400">
+            <div class="mt-4 overflow-x-auto">
+              <table class="w-full text-right text-xs border-collapse border-[1.2px] border-slate-950">
                 <thead>
-                  <tr class="bg-slate-100 border-b border-slate-400 text-slate-900">
-                    <th class="p-2.5 border border-slate-400 text-center font-black w-10">م</th>
-                    <th class="p-2.5 border border-slate-400 text-center font-black w-20">بند</th>
-                    <th class="p-2.5 border border-slate-400 font-black text-right">بيان الأعمال والمواصفات الفنية المعتمدة</th>
-                    <th class="p-2.5 border border-slate-400 text-center font-black w-12">الوحدة</th>
-                    <th class="p-2.5 border border-slate-400 text-center font-black w-24">الكمية</th>
-                    <th class="p-2.5 border border-slate-400 text-center font-black w-24">الفئة (ج.م)</th>
-                    <th class="p-2.5 border border-slate-400 text-center font-black w-28">الإجمالي (ج.م)</th>
+                  <tr class="bg-slate-100 border-b border-slate-950 text-slate-950 font-black">
+                    <th class="w-[4%] p-2.5 border border-slate-950 text-center font-black">م</th>
+                    <th class="w-[8%] p-2.5 border border-slate-950 text-center font-black">بند</th>
+                    <th class="w-[50%] p-2.5 border border-slate-950 font-black text-right">بيان الأعمال والمواصفات الفنية المعتمدة</th>
+                    <th class="w-[6%] p-2.5 border border-slate-950 text-center font-black">الوحدة</th>
+                    <th class="w-[10%] p-2.5 border border-slate-950 text-center font-black">الكمية</th>
+                    <th class="w-[10%] p-2.5 border border-slate-950 text-center font-black">الفئة (ج.م)</th>
+                    <th class="w-[12%] p-2.5 border border-slate-950 text-center font-black">الإجمالي (ج.م)</th>
                   </tr>
                 </thead>
                 <tbody>
                   ${itemsRows}
                   <!-- Total Row -->
-                  <tr class="bg-slate-50 border-t-2 border-slate-800 text-xs font-black">
-                    <td colspan="4" class="p-3 border border-slate-400 text-right text-slate-900 font-black">
+                  <tr class="bg-slate-100 border-t-2 border-slate-950 text-xs font-black h-12">
+                    <td colspan="4" class="p-3 border border-slate-950 text-right text-slate-950 font-black">
                       إجمالي قيمة المقايسة المعتمدة:
                     </td>
-                    <td colspan="2" class="p-3 border border-slate-400 text-center text-indigo-700 font-mono text-sm">
+                    <td colspan="2" class="p-3 border border-slate-950 text-center text-indigo-900 font-mono text-sm bg-slate-200">
                       ${formattedTotal} ج.م
                     </td>
-                    <td class="p-3 border border-slate-400 text-center text-slate-900 font-mono text-sm">
+                    <td class="p-3 border border-slate-950 text-center text-slate-950 font-mono text-sm bg-slate-300">
                       ${formattedTotal}
                     </td>
                   </tr>
@@ -277,16 +291,16 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
             </div>
 
             <!-- Tafqit box -->
-            <div class="mt-4 p-4 bg-slate-50 border border-slate-300 rounded-xl">
-              <p class="text-xs font-black text-slate-800 leading-relaxed">
-                <span class="text-indigo-700">فقط وقدره:</span> ${writtenTotal}
+            <div class="mt-4 p-4 bg-slate-50 border border-slate-400 rounded-xl">
+              <p class="text-xs font-black text-slate-950 leading-relaxed">
+                <span class="text-indigo-900 font-black">فقط وقدره:</span> ${writtenTotal}
               </p>
             </div>
 
             <!-- Important Notes -->
-            <div class="mt-6 text-[10px] text-slate-500 space-y-1 leading-relaxed">
-              <p class="font-bold">ملاحظات هامة للجهات الفنية والمالية:</p>
-              <ul class="list-disc list-inside space-y-0.5 pr-2">
+            <div class="mt-6 text-[10px] text-slate-600 space-y-1 leading-relaxed">
+              <p class="font-black text-slate-800">ملاحظات هامة للجهات الفنية والمالية:</p>
+              <ul class="list-disc list-inside space-y-0.5 pr-2 font-bold">
                 <li>تعتمد هذه المقايسة كمرجع أساسي لحصر كميات الأعمال المنفذة على الطبيعة وصرف المستخلصات الجارية والختامية لمهندسي الموقع.</li>
                 <li>تخضع فئات الأسعار المدرجة أعلاه لشروط عقد التكلفة المتفق عليه مع الإدارة المركزية لشركة بنيان.</li>
                 <li>لا يجوز تخطي الكميات التعاقدية دون موافقة كتابية رسمية من قطاع الدعم الفني والمكتب الفني بالمركز الرئيسي.</li>
@@ -295,22 +309,22 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
           </div>
 
           <!-- Signatures Section -->
-          <div class="mt-12 grid grid-cols-4 gap-4 text-center text-[10px] font-bold text-slate-700 pt-8 border-t border-slate-200">
+          <div class="mt-12 grid grid-cols-4 gap-6 text-center text-xs font-bold text-slate-800 pt-6 border-t border-slate-300">
             <div class="space-y-12">
-              <p>مهندس موقع التنفيذ</p>
-              <p class="border-t border-dashed border-slate-400 pt-1.5 w-3/4 mx-auto">الاسم والتوقيع: .....................</p>
+              <p class="font-black text-slate-900">مهندس موقع التنفيذ</p>
+              <p class="border-t border-dashed border-slate-400 pt-1.5 w-5/6 mx-auto">الاسم والتوقيع: .....................</p>
             </div>
             <div class="space-y-12">
-              <p>المكتب الفني ومراجع التكاليف</p>
-              <p class="border-t border-dashed border-slate-400 pt-1.5 w-3/4 mx-auto">الاسم والتوقيع: .....................</p>
+              <p class="font-black text-slate-900">المكتب الفني ومراجع التكاليف</p>
+              <p class="border-t border-dashed border-slate-400 pt-1.5 w-5/6 mx-auto">الاسم والتوقيع: .....................</p>
             </div>
             <div class="space-y-12">
-              <p>مدير المشروع الميداني</p>
-              <p class="border-t border-dashed border-slate-400 pt-1.5 w-3/4 mx-auto">الاسم والتوقيع: .....................</p>
+              <p class="font-black text-slate-900">مدير المشروع الميداني</p>
+              <p class="border-t border-dashed border-slate-400 pt-1.5 w-5/6 mx-auto">الاسم والتوقيع: .....................</p>
             </div>
             <div class="space-y-12">
-              <p>اعتماد مدير عام المشروعات</p>
-              <p class="border-t border-dashed border-slate-400 pt-1.5 w-3/4 mx-auto">الاسم والتوقيع: .....................</p>
+              <p class="font-black text-slate-900">اعتماد مدير عام المشروعات</p>
+              <p class="border-t border-dashed border-slate-400 pt-1.5 w-5/6 mx-auto">الاسم والتوقيع: .....................</p>
             </div>
           </div>
         </div>

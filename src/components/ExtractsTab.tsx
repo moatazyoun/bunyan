@@ -471,6 +471,13 @@ export default function ExtractsTab({
     const doc = iframe.contentWindow?.document || iframe.contentDocument;
     if (!doc) return;
 
+    let targetMinHeight = '180mm';
+    if (paperSize === 'A4') {
+      targetMinHeight = orientation === 'landscape' ? '180mm' : '262mm';
+    } else if (paperSize === 'A3') {
+      targetMinHeight = orientation === 'landscape' ? '262mm' : '385mm';
+    }
+
     const dateStr = new Date(ext.periodEnd).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
     const assignmentDateStr = activeProject?.assignmentDate ? new Date(activeProject.assignmentDate).toLocaleDateString('ar-EG') : '.......';
 
@@ -552,7 +559,7 @@ export default function ExtractsTab({
         <style>
           @page {
             size: ${paperSize} ${orientation};
-            margin: 10mm;
+            margin: ${orientation === 'landscape' ? '12mm 15mm 12mm 15mm' : '15mm 12mm 15mm 12mm'};
           }
           @media print {
             body {
@@ -561,17 +568,21 @@ export default function ExtractsTab({
               background-color: white !important;
             }
           }
-          body {
+          html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
             font-family: 'Tajawal', sans-serif;
             background-color: white;
+            box-sizing: border-box;
           }
           .border-double-custom {
             border-style: double;
           }
         </style>
       </head>
-      <body class="p-2 bg-white text-slate-950">
-        <div class="border-[4px] border-double-custom border-slate-950 p-6 min-h-full flex flex-col justify-between text-right" dir="rtl">
+      <body class="p-1 bg-white text-slate-950">
+        <div class="border-[4px] border-double-custom border-slate-950 p-5 flex flex-col justify-between box-border text-right" dir="rtl" style="min-height: ${targetMinHeight}; max-width: 100%;">
           <div>
             <!-- Header section with 3 columns -->
             <div class="grid grid-cols-3 items-start mb-6 text-[10px] font-bold leading-relaxed border-b-2 border-slate-950 pb-4">
