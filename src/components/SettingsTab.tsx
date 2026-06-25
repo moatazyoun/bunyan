@@ -29,7 +29,7 @@ import {
   CheckCircle2,
   Lock
 } from 'lucide-react';
-import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth, signInWithRedirect, GoogleAuthProvider, getRedirectResult } from 'firebase/auth';
 import { getSessionLogs, SessionEvent } from '../lib/sessionTracker';
 import { UserItem } from '../types';
 
@@ -143,6 +143,30 @@ export default function SettingsTab({
   // Auto-connect on mount if authenticated with Google providers in Firebase
   useEffect(() => {
     const auth = getAuth();
+    
+    // Handle redirect result
+    const processRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          if (credential?.accessToken) {
+            setAccessToken(credential.accessToken);
+            setGoogleUser({
+              displayName: result.user.displayName,
+              email: result.user.email,
+              photoURL: result.user.photoURL
+            });
+            fetchBackupsList(credential.accessToken);
+            setSuccessMsg('تم ربط حساب Google بنجاح وإتاحة الوصول لجوجل درايف!');
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    processRedirect();
+
     const user = auth.currentUser;
     if (user) {
       const googleProvider = user.providerData.find(p => p.providerId === 'google.com');
@@ -158,7 +182,7 @@ export default function SettingsTab({
         }
       }
     }
-  }, []);
+  }, [accessToken]);
 
   const handleConnectGoogle = async () => {
     setIsConnecting(true);
@@ -169,27 +193,10 @@ export default function SettingsTab({
       const provider = new GoogleAuthProvider();
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       
-      const result = await signInWithPopup(auth, provider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (!credential || !credential.accessToken) {
-        throw new Error('لم يتم استلام رمز الوصول والمصادقة من جوجل درايف للنسخ الاحتياطي.');
-      }
-      
-      setAccessToken(credential.accessToken);
-      setGoogleUser({
-        displayName: result.user.displayName,
-        email: result.user.email,
-        photoURL: result.user.photoURL
-      });
-      setSuccessMsg('تم ربط حساب Google بنجاح وإتاحة الوصول لجوجل درايف!');
-      fetchBackupsList(credential.accessToken);
+      await signInWithRedirect(auth, provider);
     } catch (err: any) {
       console.error(err);
-      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
-        setErrorMsg('تم إلغاء أو إغلاق نافذة الاتصال. يرجى الضغط على زر "متابعة" (Continue) في نافذة جوجل المفتوحة ومنح الصلاحيات لإتمام عملية ربط جوجل درايف بنجاح.');
-      } else {
-        setErrorMsg(err.message || 'فشل التوصيل بحساب Google المصرح به.');
-      }
+      setErrorMsg(err.message || 'فشل التوصيل بحساب Google المصرح به.');
     } finally {
       setIsConnecting(false);
     }
@@ -509,11 +516,15 @@ export default function SettingsTab({
   };
 
   const handleUploadLocalFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const targetInput = e.target;
+    const file = targetInput.files?.[0];
     if (!file) return;
 
     const isConfirmed = window.confirm('تحذير:\n\nهل أنت متأكد من رغبتك في استيراد هذه النسخة الاحتياطية المحلية؟ سيتم إعادة كتابة كافة بيانات المشروع النشط بالبيانات المستوردة.');
-    if (!isConfirmed) return;
+    if (!isConfirmed) {
+      targetInput.value = '';
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -522,7 +533,10 @@ export default function SettingsTab({
         onRestoreBackup(backupDataPayload);
         setSuccessMsg('تم تحميل واستعادة البيانات المحلية بنجاح!');
       } catch (err: any) {
+        console.error("Local backup restore failed:", err);
         setErrorMsg('الملف المرفق غير صالح أو أنه تالف وليس بتنسيق JSON صحيح للمنصة.');
+      } finally {
+        if (targetInput) targetInput.value = '';
       }
     };
     reader.readAsText(file);

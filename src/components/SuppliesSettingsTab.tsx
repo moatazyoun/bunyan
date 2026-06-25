@@ -11,6 +11,7 @@ interface SuppliesSettingsTabProps {
   cubicCertificates?: CubicCertificate[];
   userRole?: string;
   addAuditLog: (action: string, module: string, details: string) => void;
+  contracts?: any[];
 }
 
 export default function SuppliesSettingsTab({ 
@@ -20,7 +21,8 @@ export default function SuppliesSettingsTab({
   setSupplyItems,
   cubicCertificates = [],
   userRole,
-  addAuditLog
+  addAuditLog,
+  contracts = []
 }: SuppliesSettingsTabProps) {
   // --- Materials State ---
   const [activeMaterialCode, setActiveMaterialCode] = useState<string | null>(null);
@@ -559,6 +561,22 @@ export default function SuppliesSettingsTab({
                         {group.phone && (
                           <div className="text-[10px] text-slate-500 mt-0.5 font-mono">{group.phone}</div>
                         )}
+                        {(() => {
+                          const linkedCon = contracts.find(con => con.counterparty.trim() === group.name.trim());
+                          const displayContract = linkedCon ? linkedCon.contractNumber : group.contractNumber;
+                          if (displayContract) {
+                            return (
+                              <div className="text-[10px] text-indigo-600 font-bold mt-1 flex items-center gap-1">
+                                <FileText size={10} className="text-indigo-400" />
+                                <span>عقد: {displayContract}</span>
+                                {linkedCon && (
+                                  <span className="bg-indigo-100 text-indigo-700 text-[8px] px-1 rounded font-black scale-90">مربوط</span>
+                                )}
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                         <button onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية التعديل') : () => startEditSupplier(group)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl transition-colors shadow-sm">
@@ -642,9 +660,25 @@ export default function SuppliesSettingsTab({
                         <div className="bg-white/10 px-3 py-1 rounded-full text-[10px] font-bold border border-white/5">
                           {activeSupplier.deliveryMethods?.length || 0} وسيلة
                         </div>
-                        {activeSupplier.contractNumber && (
-                          <div className="text-slate-400 text-[10px] font-bold">عقد #{activeSupplier.contractNumber}</div>
-                        )}
+                        {(() => {
+                          const linkedCon = contracts.find(con => con.counterparty.trim() === activeSupplier.name.trim());
+                          if (linkedCon) {
+                            return (
+                              <div className="bg-indigo-600/50 text-indigo-200 px-3 py-1 rounded-full text-[10px] font-black border border-indigo-500/30 flex items-center gap-1.5">
+                                <span>عقد #{linkedCon.contractNumber}</span>
+                                <span className="bg-indigo-500 text-white text-[8px] px-1.5 py-0.5 rounded-full font-sans scale-90">مربوط</span>
+                              </div>
+                            );
+                          } else if (activeSupplier.contractNumber) {
+                            return (
+                              <div className="text-slate-400 text-[10px] font-bold">عقد #{activeSupplier.contractNumber}</div>
+                            );
+                          } else {
+                            return (
+                              <div className="text-slate-500 text-[10px] font-bold">بدون عقد مسجل</div>
+                            );
+                          }
+                        })()}
                       </div>
                     </div>
                   </div>

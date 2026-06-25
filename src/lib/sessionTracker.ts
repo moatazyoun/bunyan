@@ -75,7 +75,6 @@ function getRoleLabelStr(role: string): string {
     case 'accountant': return 'محاسب مالي';
     case 'supervisor': return 'مشرف موقع';
     case 'dc': return 'DC';
-    case 'viewer': return 'مراقب مشاهدة';
     default: return role;
   }
 }

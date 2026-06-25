@@ -212,6 +212,9 @@ export default function ExtractsTab({
   const formatVal = (val: number | undefined) => (val === 0 || !val) ? '-' : val.toLocaleString('en-US', { maximumFractionDigits: 2 });
 
   const [showPrintWarning, setShowPrintWarning] = useState(false);
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [printPaperSize, setPrintPaperSize] = useState<'A4' | 'A3'>('A4');
+  const [printOrientation, setPrintOrientation] = useState<'portrait' | 'landscape'>('landscape');
   const [copiedLink, setCopiedLink] = useState(false);
   const [isEditingSignatories, setIsEditingSignatories] = useState(false);
   const [isEditingHeader, setIsEditingHeader] = useState(false);
@@ -385,9 +388,11 @@ export default function ExtractsTab({
   };
 
   const extractCalculations = useMemo(() => {
-    if (!selectedExtract) return { grossValue: 0, previousPaid: 0, totalDiscount: 0, netValue: 0, itemsCalculated: [] };
+    if (!selectedExtract) return { grossValue: 0, previousPaid: 0, totalDiscount: 0, netValue: 0, prevPaidTotal: 0, finalItemTotal: 0, itemsCalculated: [] };
     let grossTotalTotal = 0;
     let discountTotalTotal = 0;
+    let prevPaidTotalTotal = 0;
+    let finalItemTotalTotal = 0;
 
     const itemsCalculated = selectedExtract.items.map(it => {
       const matchBOQ = activeBoqItems.find(item => item.id === it.boqItemId);
@@ -399,8 +404,28 @@ export default function ExtractsTab({
       const discountVal = currentVal * (it.retentionPercent / 100);
       const netValTotal = currentVal - discountVal;
 
+      // Calculate "سابق المستحق صرفه في المستخلصات السابقة"
+      let prevNetPaid = 0;
+      let relevantExtracts = extracts.filter(e => e.projectId === activeProjectId && e.extractNumber < selectedExtract.extractNumber);
+      if (extractType === 'Subcontractor' && selectedExtract.subcontractorId) {
+        relevantExtracts = relevantExtracts.filter(e => e.subcontractorId === selectedExtract.subcontractorId);
+      }
+      prevNetPaid = relevantExtracts.reduce((sum, ext) => {
+        const match = ext.items.find(prevIt => prevIt.boqItemId === it.boqItemId);
+        if (match) {
+          const prevCurrentVal = match.currentQuantity * rate;
+          const prevDiscountVal = prevCurrentVal * (match.retentionPercent / 100);
+          return sum + (prevCurrentVal - prevDiscountVal);
+        }
+        return sum;
+      }, 0);
+
+      const itemTotal = prevNetPaid + netValTotal;
+
       grossTotalTotal += currentVal; // Base totals on current work as per user request
       discountTotalTotal += discountVal;
+      prevPaidTotalTotal += prevNetPaid;
+      finalItemTotalTotal += itemTotal;
 
       return {
         ...it,
@@ -413,7 +438,9 @@ export default function ExtractsTab({
         totalGross,
         currentVal,
         discountVal,
-        netValTotal
+        netValTotal,
+        prevNetPaid,
+        itemTotal
       };
     });
 
@@ -425,13 +452,242 @@ export default function ExtractsTab({
       grossValue: grossTotalTotal,
       totalDiscount: discountTotalTotal,
       netValue: grossTotalTotal - discountTotalTotal,
+      prevPaidTotal: prevPaidTotalTotal,
+      finalItemTotal: finalItemTotalTotal,
       itemsCalculated: filteredItems
     };
-  }, [selectedExtract, boqItems]);
+  }, [selectedExtract, boqItems, extracts, activeProjectId, extractType]);
+
+  const handlePrintTechnicalExtract = (ext: CustomExtract, paperSize: 'A4' | 'A3', orientation: 'portrait' | 'landscape') => {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (!doc) return;
+
+    const dateStr = new Date(ext.periodEnd).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+    const assignmentDateStr = activeProject?.assignmentDate ? new Date(activeProject.assignmentDate).toLocaleDateString('ar-EG') : '.......';
+
+    // Generate table rows
+    const rows = extractCalculations.itemsCalculated.map((item, index) => {
+      const { pounds, piastres } = splitPrice(item.rate || 0);
+      const isExceeded = item.totalQty > (item.boqQty || 0);
+      return `
+        <tr class="border-b border-slate-950 text-[10px] text-slate-950 text-center h-10 ${isExceeded ? 'bg-amber-50/50' : ''}">
+          <td class="p-1 border border-slate-950 font-bold">${index + 1}</td>
+          <td class="p-1.5 border border-slate-950 text-right font-black leading-tight text-[9px]">
+            <div>${item.description}</div>
+            ${isExceeded ? `<div class="text-[8px] text-rose-600 font-extrabold mt-0.5">⚠️ يتخطى المقايسة (${item.boqQty})</div>` : ''}
+          </td>
+          <td class="p-1 border border-slate-950">${item.unit}</td>
+          <td class="p-1 border border-slate-950 font-mono">${item.boqQty}</td>
+          <td class="p-1 border border-slate-950 font-mono">${piastres}</td>
+          <td class="p-1 border border-slate-950 font-mono">${pounds}</td>
+          <td class="p-1 border border-slate-950 font-mono text-slate-550">${formatQty(item.previousQuantity)}</td>
+          <td class="p-1 border border-slate-950 font-mono font-black ${isExceeded ? 'text-rose-700 bg-amber-100/50' : 'bg-emerald-50/20'}">${formatQty(item.currentQuantity)}</td>
+          <td class="p-1 border border-slate-950 font-mono font-black ${isExceeded ? 'text-rose-700' : ''}">${formatQty(item.totalQty)}</td>
+          <td class="p-1 border border-slate-950 font-mono">${formatVal(item.currentVal)}</td>
+          <td class="p-1 border border-slate-950 font-mono text-rose-600">${item.retentionPercent}%</td>
+          <td class="p-1 border border-slate-950 font-mono text-rose-700">${formatVal(item.discountVal)}</td>
+          <td class="p-1 border border-slate-950 font-mono font-black bg-slate-50">${formatVal(item.netValTotal)}</td>
+          <td class="p-1 border border-slate-950 font-mono text-slate-500">${formatVal(item.prevNetPaid)}</td>
+          <td class="p-1 border border-slate-950 font-mono font-black bg-indigo-50/30 text-indigo-950">${formatVal(item.itemTotal)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    // Prepare signatory rows
+    const signatories1 = [
+      { role: 'ملاحظات', name: '', id: 'notes' },
+      ...(settings.signatories[0] ? [settings.signatories[0]] : []),
+      ...(settings.signatories[2] ? [settings.signatories[2]] : []),
+      ...(settings.signatories[4] ? [settings.signatories[4]] : [])
+    ];
+
+    const signatories2 = [
+      { role: 'المكتب الفنى', name: '', id: 'tech_office' },
+      ...(settings.signatories[1] ? [settings.signatories[1]] : []),
+      ...(settings.signatories[3] ? [settings.signatories[3]] : []),
+      ...(settings.signatories[5] ? [settings.signatories[5]] : [])
+    ];
+
+    const renderSigCol = (sig: any) => `
+      <div class="flex flex-col items-center justify-between min-h-[110px] w-full border border-slate-300 rounded-xl p-2 bg-slate-50/30">
+        <div class="text-[10px] font-black text-slate-800 text-center w-full border-b border-slate-200 pb-1">${sig.role}</div>
+        ${sig.id !== 'notes' && sig.id !== 'tech_office' && sig.name ? `
+          <div class="text-[11px] font-bold text-slate-950 text-center mt-2">${sig.name}</div>
+        ` : `<div class="h-8"></div>`}
+        <div class="text-[8px] text-slate-400 border-t border-dashed border-slate-300 pt-1 w-full text-center mt-4">التوقيع: ...................</div>
+      </div>
+    `;
+
+    const sigsHtmlRow1 = signatories1.map(s => renderSigCol(s)).join('');
+    const sigsHtmlRow2 = signatories2.map(s => renderSigCol(s)).join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <title>طباعة مستخلص فني - رقم ${ext.extractNumber}</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+        <script>
+          tailwind.config = {
+            theme: {
+              extend: {
+                fontFamily: {
+                  sans: ['Tajawal', 'sans-serif'],
+                }
+              }
+            }
+          }
+        </script>
+        <style>
+          @page {
+            size: ${paperSize} ${orientation};
+            margin: 10mm;
+          }
+          @media print {
+            body {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+              background-color: white !important;
+            }
+          }
+          body {
+            font-family: 'Tajawal', sans-serif;
+            background-color: white;
+          }
+          .border-double-custom {
+            border-style: double;
+          }
+        </style>
+      </head>
+      <body class="p-2 bg-white text-slate-950">
+        <div class="border-[4px] border-double-custom border-slate-950 p-6 min-h-full flex flex-col justify-between text-right" dir="rtl">
+          <div>
+            <!-- Header section with 3 columns -->
+            <div class="grid grid-cols-3 items-start mb-6 text-[10px] font-bold leading-relaxed border-b-2 border-slate-950 pb-4">
+              <div class="space-y-1 text-center font-bold">
+                ${settings?.headerTexts?.ownerLogo ? `
+                  <div class="flex flex-col items-center mb-1">
+                    <img src="${settings.headerTexts.ownerLogo}" class="h-14 w-auto object-contain" />
+                  </div>
+                ` : ''}
+                <div>${settings?.headerTexts?.ministry || ''}</div>
+                <div>${settings?.headerTexts?.authority || ''}</div>
+                <div>${settings?.headerTexts?.device || ''}</div>
+              </div>
+
+              <div class="text-center space-y-2">
+                <h1 class="text-xl font-black border-b-[2.5px] border-slate-950 inline-block px-6 pb-1">
+                  ${ext.extractType === 'final' ? 'مستخلص ختامي' : ext.extractType === 'no_works' ? 'مستخلص صفري' : 'مستخلص جاري'} (${ext.extractNumber})
+                </h1>
+                <p class="text-xs font-black text-slate-900">${linkedProject?.name || ''}</p>
+                <div class="text-[9px] space-y-0.5 font-bold">
+                  <p>بأمر إسناد رقم: ${activeProject?.assignmentNumber || '.......'} بتاريخ: ${assignmentDateStr}</p>
+                  <p class="text-slate-600">من بداية الأعمال وحتى ${dateStr}</p>
+                </div>
+              </div>
+
+              <div class="space-y-1 text-center font-bold">
+                ${settings?.headerTexts?.contractorLogo ? `
+                  <div class="flex flex-col items-center mb-1">
+                    <img src="${settings.headerTexts.contractorLogo}" class="h-14 w-auto object-contain" />
+                  </div>
+                ` : ''}
+                <div class="font-black">${settings?.headerTexts?.contractor || ''}</div>
+                <div>${settings?.headerTexts?.contractorDetails || ''}</div>
+                <div>${settings?.headerTexts?.contractorDetails2 || ''}</div>
+              </div>
+            </div>
+
+            <!-- Table of works -->
+            <div class="mt-4 overflow-x-auto">
+              <table class="w-full border-collapse border-[1.2px] border-slate-950 text-[9px] text-center font-bold">
+                <thead class="bg-slate-100">
+                  <tr>
+                    <th rowspan="2" class="w-[3%] border border-slate-950 p-1">رقم</th>
+                    <th rowspan="2" class="w-[21%] border border-slate-950 p-1.5">بيان الأعمال بالتفصيل ومواصفة البند</th>
+                    <th rowspan="2" class="w-[3%] border border-slate-950 p-1">الوحدة</th>
+                    <th rowspan="2" class="w-[5%] border border-slate-950 p-1">الكمية بالمناقصة</th>
+                    <th colspan="2" class="w-[8%] border border-slate-950 p-1 border-b-[0.5px]">سعر الوحدة</th>
+                    <th colspan="3" class="w-[18%] border border-slate-950 p-1">كميات الأعمال المنجزة</th>
+                    <th rowspan="2" class="w-[8%] border border-slate-950 p-1 bg-slate-50/50">قيمة الاعمال الحالية</th>
+                    <th rowspan="2" class="w-[4%] border border-slate-950 p-1 text-rose-600">الخصم</th>
+                    <th rowspan="2" class="w-[6%] border border-slate-950 p-1 text-rose-600">قيمة الخصم</th>
+                    <th rowspan="2" class="w-[8%] border border-slate-950 p-1 bg-slate-100">صافى المستحق صرفه</th>
+                    <th rowspan="2" class="w-[8%] border border-slate-950 p-1">السابق صرفه</th>
+                    <th rowspan="2" class="w-[8%] border border-slate-950 p-1 bg-indigo-50/30">الإجمالى</th>
+                  </tr>
+                  <tr>
+                    <td class="w-[4%] border border-slate-950 p-1 font-semibold">قرش</td>
+                    <td class="w-[4%] border border-slate-950 p-1 font-semibold">جنيه</td>
+                    <td class="w-[6%] border border-slate-950 p-1">السابق</td>
+                    <td class="w-[6%] border border-slate-950 p-1 bg-indigo-50/20">الحالي</td>
+                    <td class="w-[6%] border border-slate-950 p-1">الإجمالي</td>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rows}
+                  <!-- Totals Row -->
+                  <tr class="bg-slate-100 font-black h-12 border-t-2 border-slate-950 text-[10px]">
+                    <td colspan="9" class="border border-slate-950 px-4 text-center text-slate-900">الاجمالى العام</td>
+                    <td class="border border-slate-950 font-mono">${formatVal(extractCalculations.grossValue)}</td>
+                    <td class="border border-slate-950"></td>
+                    <td class="border border-slate-950 font-mono text-rose-700">${formatVal(extractCalculations.totalDiscount)}</td>
+                    <td class="border border-slate-950 font-mono bg-slate-200">${formatVal(extractCalculations.netValue)}</td>
+                    <td class="border border-slate-950 font-mono text-slate-600">${formatVal(extractCalculations.prevPaidTotal)}</td>
+                    <td class="border border-slate-950 font-mono text-[11px] bg-slate-300 text-indigo-950 underline">${formatVal(extractCalculations.finalItemTotal)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Signature block -->
+          <div class="mt-8 pt-4 border-t border-slate-300">
+            <div class="grid grid-cols-4 gap-4">
+              ${sigsHtmlRow1}
+            </div>
+            <div class="grid grid-cols-4 gap-4 mt-4">
+              ${sigsHtmlRow2}
+            </div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+              setTimeout(function() {
+                window.frameElement.remove();
+              }, 500);
+            }, 1000);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+  };
 
   const handlePrint = () => {
-    setShowPrintWarning(true);
-    window.print();
+    if (selectedExtract) {
+      setShowPrintModal(true);
+    } else {
+      alert('الرجاء اختيار مستخلص أولاً للطباعة');
+    }
   };
 
   if (!isSettingsLoaded) {
@@ -1080,22 +1336,24 @@ export default function ExtractsTab({
                       <thead className="bg-[#f5f5f5]">
                         <tr>
                           <th rowSpan={2} className="w-[3%] border border-slate-950 p-1">رقم</th>
-                          <th rowSpan={2} className="w-[31%] border border-slate-950 p-2">بيان الأعمال بالتفصيل ومواصفة البند</th>
-                          <th rowSpan={2} className="w-[4%] border border-slate-950 p-1">الوحدة</th>
-                          <th rowSpan={2} className="w-[6%] border border-slate-950 p-1">الكمية<br/>بالمناقصة</th>
+                          <th rowSpan={2} className="w-[21%] border border-slate-950 p-2">بيان الأعمال بالتفصيل ومواصفة البند</th>
+                          <th rowSpan={2} className="w-[3%] border border-slate-950 p-1">الوحدة</th>
+                          <th rowSpan={2} className="w-[5%] border border-slate-950 p-1">الكمية<br/>بالمناقصة</th>
                           <th colSpan={2} className="w-[8%] border border-slate-950 p-1 border-b-[0.5px]">سعر الوحدة</th>
-                          <th colSpan={3} className="w-[21%] border border-slate-950 p-1">كميات الأعمال المنجزة</th>
-                          <th rowSpan={2} className="w-[8%] border border-slate-950 p-1">قيمة إجمالي الأعمال</th>
-                          <th rowSpan={2} className="w-[5%] border border-slate-950 p-1 text-rose-600">% الخصم</th>
-                          <th rowSpan={2} className="w-[6%] border border-slate-950 p-1 text-rose-600">مبلغ<br/>الخصم</th>
-                          <th rowSpan={2} className="w-[8%] border border-slate-950 p-1 bg-slate-100">صافي المستحق</th>
+                          <th colSpan={3} className="w-[18%] border border-slate-950 p-1">كميات الأعمال المنجزة</th>
+                          <th rowSpan={2} className="w-[8%] border border-slate-950 p-1">قيمة الاعمال الحالية</th>
+                          <th rowSpan={2} className="w-[4%] border border-slate-950 p-1 text-rose-600">الخصم</th>
+                          <th rowSpan={2} className="w-[6%] border border-slate-950 p-1 text-rose-600">قيمة الخصم</th>
+                          <th rowSpan={2} className="w-[8%] border border-slate-950 p-1 bg-slate-100">صافى المستحق صرفه</th>
+                          <th rowSpan={2} className="w-[8%] border border-slate-950 p-1">السابق صرفه</th>
+                          <th rowSpan={2} className="w-[8%] border border-slate-950 p-1 bg-indigo-50/30">الإجمالى</th>
                         </tr>
                         <tr>
                           <td className="w-[4%] border border-slate-950 p-1">قرش</td>
                           <td className="w-[4%] border border-slate-950 p-1">جنيه</td>
-                          <td className="w-[7%] border border-slate-950 p-1">السابق</td>
-                          <td className="w-[7%] border border-slate-950 p-1 bg-indigo-50/50">الحالي</td>
-                          <td className="w-[7%] border border-slate-950 p-1">الإجمالي</td>
+                          <td className="w-[6%] border border-slate-950 p-1">السابق</td>
+                          <td className="w-[6%] border border-slate-950 p-1 bg-indigo-50/50">الحالي</td>
+                          <td className="w-[6%] border border-slate-950 p-1">الإجمالي</td>
                         </tr>
                       </thead>
                       <tbody>
@@ -1134,7 +1392,7 @@ export default function ExtractsTab({
                                   <span>{formatQty(item.totalQty)}</span>
                                 </div>
                               </td>
-                              <td className="border border-slate-950 p-1 font-mono">{formatVal(item.totalGross)}</td>
+                              <td className="border border-slate-950 p-1 font-mono">{formatVal(item.currentVal)}</td>
                               <td className="border border-slate-950 p-0 overflow-hidden bg-rose-50/20 text-rose-600 group-hover:bg-rose-50/40 transition-colors">
                                 <div className="flex items-center justify-center gap-0 w-full h-full" dir="ltr">
                                   <input 
@@ -1149,16 +1407,20 @@ export default function ExtractsTab({
                               </td>
                               <td className="border border-slate-950 p-1 font-mono text-rose-700">{formatVal(item.discountVal)}</td>
                               <td className="border border-slate-950 p-1 font-mono font-black bg-slate-50">{formatVal(item.netValTotal)}</td>
+                              <td className="border border-slate-950 p-1 font-mono text-slate-500">{formatVal(item.prevNetPaid)}</td>
+                              <td className="border border-slate-950 p-1 font-mono font-black bg-indigo-50/20 text-indigo-950">{formatVal(item.itemTotal)}</td>
                             </tr>
                           );
                         })}
                         {/* Totals Row */}
                         <tr className="bg-slate-100 font-black h-12 border-t-2 border-slate-950">
-                          <td colSpan={9} className="border border-slate-950 px-4 text-sm text-center">الاجمالــــــى</td>
+                          <td colSpan={9} className="border border-slate-950 px-4 text-sm text-center">الاجمالى العام</td>
                           <td className="border border-slate-950 font-mono">{formatVal(extractCalculations.grossValue)}</td>
                           <td className="border border-slate-950"></td>
                           <td className="border border-slate-950 font-mono text-rose-700">{formatVal(extractCalculations.totalDiscount)}</td>
                           <td className="border border-slate-950 font-mono text-base bg-slate-200">{formatVal(extractCalculations.netValue)}</td>
+                          <td className="border border-slate-950 font-mono text-slate-600">{formatVal(extractCalculations.prevPaidTotal)}</td>
+                          <td className="border border-slate-950 font-mono text-base bg-slate-300 text-indigo-950 underline">{formatVal(extractCalculations.finalItemTotal)}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -1249,6 +1511,89 @@ export default function ExtractsTab({
         </div>
       </>
     )}
+
+      {/* Print Technical Extract Settings Modal */}
+      {showPrintModal && selectedExtract && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in text-right" dir="rtl">
+          <div className="bg-white border border-slate-200 rounded-[2rem] w-full max-w-md p-6 shadow-2xl space-y-6">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <Printer className="h-5 w-5 text-indigo-600" />
+                إعدادات طباعة المستخلص الفني
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowPrintModal(false)}
+                className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-black text-slate-500 mb-1">المستخلص المستهدف:</p>
+                <p className="text-sm font-black text-indigo-900 bg-indigo-50/50 border border-indigo-100 p-2.5 rounded-xl">
+                  مستخلص رقم {selectedExtract.extractNumber} ({selectedExtract.extractType === 'final' ? 'مستخلص ختامي' : selectedExtract.extractType === 'no_works' ? 'مستخلص صفري' : 'مستخلص جاري'})
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-black text-slate-500 mb-2">نوع التقرير للطباعة:</p>
+                <div className="p-3 bg-slate-50 border rounded-xl text-xs font-bold text-indigo-950 leading-relaxed">
+                  بيان كشف حركة حساب المستخلص الفني متضمناً قياسات البنود، قيم الاعمال الحالية، نسب ومبالغ الخصم وصافي المبالغ المستحق صرفها للمشروع.
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block font-bold">حجم الورقة:</label>
+                  <select
+                    value={printPaperSize}
+                    onChange={(e: any) => setPrintPaperSize(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20"
+                  >
+                    <option value="A4">A4 (قياسي)</option>
+                    <option value="A3">A3 (كبير جداً - تفصيلي)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block font-bold">اتجاه الصفحة:</label>
+                  <select
+                    value={printOrientation}
+                    onChange={(e: any) => setPrintOrientation(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20"
+                  >
+                    <option value="landscape">أفقي (Landscape - مستحسن)</option>
+                    <option value="portrait">رأسي (Portrait)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  handlePrintTechnicalExtract(selectedExtract, printPaperSize, printOrientation);
+                  setShowPrintModal(false);
+                }}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl shadow-lg transition text-center text-xs"
+              >
+                تأكيد وأمر الطباعة
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPrintModal(false)}
+                className="px-4 bg-slate-50 hover:bg-slate-100 text-slate-500 font-bold py-3 rounded-xl transition text-xs"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
   </div>
   );
 }

@@ -1023,9 +1023,29 @@ export default function WeeklyExpenseReport({
         })
       });
 
-      const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || 'فشل الاتصال بخدمة التحليل المالي بالذكاء الاصطناعي.');
+        let errData;
+        try { errData = await response.json(); } catch(e) {}
+        throw new Error((errData && errData.error) || 'فشل الاتصال بخدمة التحليل المالي بالذكاء الاصطناعي.');
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let resultText = '';
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          resultText += decoder.decode(value, { stream: true });
+        }
+      }
+      
+      let data: any = {};
+      try {
+        data = JSON.parse(resultText);
+      } catch (e) {
+        console.error("Failed to parse stream as JSON", e);
+        throw new Error("فشل في تحليل المخرجات الواردة من الذكاء الاصطناعي.");
       }
 
       if (data.transactions) {

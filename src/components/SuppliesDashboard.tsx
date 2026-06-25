@@ -24,12 +24,14 @@ interface SuppliesDashboardProps {
   cubicCertificates: CubicCertificate[];
   contractorsReport: any[];
   workers: SiteWorker[];
+  custodies?: any[];
   setSupplyRecords: (records: SupplyRecord[]) => void;
   setSupplyItems: (items: SupplyItem[]) => void;
   setCubicCertificates: (certs: CubicCertificate[]) => void;
   setContractorsReport: (report: any[]) => void;
   userRole?: string;
   addAuditLog: (action: string, module: string, details: string) => void;
+  contracts?: any[];
 }
 
 export default function SuppliesDashboard({ 
@@ -40,18 +42,32 @@ export default function SuppliesDashboard({
   cubicCertificates,
   contractorsReport,
   workers,
+  custodies = [],
   setSupplyRecords,
   setSupplyItems,
   setCubicCertificates,
   setContractorsReport,
   userRole,
-  addAuditLog
+  addAuditLog,
+  contracts = []
 }: SuppliesDashboardProps) {
   // 1. Tab switches default: 'accounts' | 'records' | 'cubic' | 'settings'
   const [activeTab, setActiveTab] = useState<'accounts' | 'records' | 'cubic' | 'settings'>('accounts');
 
-  // Derive Payments from Ledger
-  const supplierPayments = transactions.filter(t => t.category === 'supplies' && t.type === 'spent');
+  // Derive Payments from Ledger, ensuring recipient is mapped to supplierName
+  const supplierPayments = useMemo(() => {
+    return transactions
+      .filter(t => t.category === 'supplies' && t.type === 'spent')
+      .map(t => ({
+        id: t.id,
+        supplierName: t.recipient,
+        date: t.date,
+        amount: t.amount,
+        paymentMethod: t.paymentMethod || 'اخرى',
+        referenceNo: t.referenceNo || 'بدون مرجع',
+        notes: t.description || t.notes || ''
+      }));
+  }, [transactions]);
 
   // 3. Suppliers derived from contractorsReport (needs mapping in App.tsx or derived here)
   const suppliers = contractorsReport;
@@ -339,6 +355,7 @@ export default function SuppliesDashboard({
             onAddRecord={handleAddRecord}
             userRole={userRole}
             addAuditLog={addAuditLog}
+            custodies={custodies}
           />
         )}
 
@@ -380,6 +397,7 @@ export default function SuppliesDashboard({
             cubicCertificates={cubicCertificates}
             userRole={userRole}
             addAuditLog={addAuditLog}
+            contracts={contracts}
           />
         )}
       </motion.div>

@@ -622,8 +622,11 @@ async function callDirectGeminiClientSide(path: string, bodyData: any): Promise<
                  localStorage.getItem('bunyan_gemini_api_key');
 
   if (!apiKey) {
-    console.warn("[API Interceptor Client Fallback] No API key found, using mock data gracefully.");
-    return getMockFallbackResponse(path);
+    console.error("[API Interceptor Client Fallback] No API key found, unable to proceed with AI analysis.");
+    return new Response(JSON.stringify({ error: "لا يمكن معالجة وتحليل هذا الملف لعدم توفر اتصال موثوق بخدمات الذكاء الاصطناعي (API Key Server-side or Client-side missing)." }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 
   try {
@@ -842,8 +845,10 @@ async function callDirectGeminiClientSide(path: string, bodyData: any): Promise<
 
   } catch (error: any) {
     console.error("[API Interceptor Client Fallback Direct API Error]:", error);
-    console.warn("[API Interceptor Client Fallback] Falling back to pre-defined mock data...");
-    return getMockFallbackResponse(path);
+    return new Response(JSON.stringify({ error: error.message || "حدث خطأ غير متوقع أثناء الاتصال بالذكاء الاصطناعي للاحتياطي." }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }
 
@@ -926,17 +931,23 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     try {
       const realResponse = await originalFetch(input, init);
       const contentType = realResponse.headers.get('content-type') || '';
-      if (realResponse.ok && contentType.includes('application/json')) {
+      if (realResponse.ok && (contentType.includes('application/json') || contentType.includes('text/plain'))) {
+        if (contentType.includes('text/plain')) {
+           // For text/plain it's the new streaming backend. We cannot JSON parse it until stream is done.
+           // Let's just return it directly so the client stream reader can start reading!
+           return realResponse;
+        }
+
         const clonedRes = realResponse.clone();
         const bodyText = await clonedRes.text();
         const parsed = JSON.parse(bodyText || '{}');
         if (!parsed.error) {
           return realResponse;
         } else {
-          console.warn("[API Interceptor] Gemini backend responded with an error, trying direct client-side fallback...", parsed.error);
+          console.warn("[API Interceptor] Gemini backend responded with an JSON error, trying fallback...", parsed.error);
         }
       } else {
-        console.warn(`[API Interceptor] Gemini backend returned non-OK or non-JSON response (status: ${realResponse.status}). Falling back to advanced direct client-side fallback...`);
+        console.warn(`[API Interceptor] Gemini backend returned non-OK or unrecognized content type (status: ${realResponse.status}, type: ${contentType}). Falling back...`);
       }
     } catch (err: any) {
       console.warn("Real fetch to Gemini backend failed or timed out. Falling back to advanced direct client-side fallback...", err);
@@ -2015,69 +2026,6 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
       console.warn(`[Firestore Log] Failed to delete siteBackup ${backupId}:`, err);
       return mockResponseErr('تعذر حذف نسخة البيانات من السحابة: ' + (err.message || String(err)), 500);
     }
-  }
-
-  // Route 9: POST /api/gemini/analyze-report
-  if (path === '/api/gemini/analyze-report' && method === 'POST') {
-    const { textContent } = bodyData;
-    const reportData = parseTextToReport(textContent);
-    return mockResponseOk(reportData);
-  }
-
-  // Route 10: POST /api/gemini/analyze-voucher
-  if (path === '/api/gemini/analyze-voucher' && method === 'POST') {
-    const { textContent } = bodyData;
-    const voucherData = parseTextToVouchers(textContent);
-    return mockResponseOk(voucherData);
-  }
-
-  // Route 11: POST /api/gemini/analyze-boq
-  if (path === '/api/gemini/analyze-boq' && method === 'POST') {
-    const defaultBOQItems = [
-      {
-        code: "1-1",
-        description: "أعمال الحفر في التربة العادية لزوم خطوط وشبكات الصرف الصحي والمطابق بالأعماق المطلوبة",
-        unit: "م٣",
-        quantity: 2400,
-        price: 85
-      },
-      {
-        code: "1-2",
-        description: "توريد وفرش سن ميكانيكي معتمد فئة 6 سم بالسمك المطلوب لزوم إحلال التربة وتجهيز قاع الحفر",
-        unit: "م٣",
-        quantity: 650,
-        price: 295
-      },
-      {
-        code: "1-3",
-        description: "توريد وتركيب مواسير بلاستيك بولي فينيل كلوريد (uPVC) ضغط 6 بار قطر خارجي 200 مم لشبكات الانحدار",
-        unit: "م.ط",
-        quantity: 1200,
-        price: 380
-      },
-      {
-        code: "1-4",
-        description: "توريد وبناء غرف تفتيش ومطابق دائرية من الطوب الأسمنتي المصمت قطر داخلي 1.0 م بالأعماق المطلوبة",
-        unit: "عدد",
-        quantity: 45,
-        price: 4200
-      },
-      {
-        code: "1-5",
-        description: "أعمال الخرسانة المسلحة لزوم القواعد والأسقف والمنشآت الملحقة بالمشروع بمقاومة 300 كجم/سم2",
-        unit: "م٣",
-        quantity: 380,
-        price: 6500
-      },
-      {
-        code: "1-6",
-        description: "أعمال الطبقة الرابطة السطحية من الخرسانة الأسفلتية بسمك 5 سم شاملاً تجهيز المسار والرش والدمك الفني والمواصفات",
-        unit: "م٢",
-        quantity: 8500,
-        price: 240
-      }
-    ];
-    return mockResponseOk({ items: defaultBOQItems });
   }
 
   // Catch-all

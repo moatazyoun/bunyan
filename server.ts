@@ -316,13 +316,37 @@ app.delete("/api/sites/:id", async (req, res) => {
     return res.status(503).json({ error: "قاعدة البيانات غير متصلة على الخادم." });
   }
   const { id } = req.params;
+  const adminUsername = (req.body.adminUsername || req.headers['x-admin-username'] || req.query.adminUsername || '').toString().trim().toLowerCase();
+  const adminPassword = (req.body.adminPassword || req.headers['x-admin-password'] || req.query.adminPassword || '').toString().trim();
+
+  if (!adminUsername || !adminPassword) {
+    return res.status(401).json({ error: "صلاحية مرفوضة! يرجى تقديم اسم مستخدم وكلمة مرور مدير النظام للتحقق والتأكيد الحاسم." });
+  }
+
   try {
+    // Look up the admin user
+    const userDoc = await getDoc(doc(db, 'users', adminUsername));
+    const adminUser = userDoc.data();
+
+    if (!adminUser) {
+      return res.status(401).json({ error: "اسم مستخدم غير صحيح لمدير النظام." });
+    }
+
+    if (adminUser.role !== 'admin') {
+      return res.status(403).json({ error: "خطأ في الصلاحيات! إجراء الحذف متاح فقط لحسابات مدراء النظام المعتمدين." });
+    }
+
+    if (adminUser.password !== adminPassword) {
+      return res.status(401).json({ error: "رمز المرور الخاص بمدير النظام غير صحيح. يرجى إعادة المحاولة بدقة." });
+    }
+
+    // Perform secure site deletion
     await deleteDoc(doc(db, 'sites', id));
     await deleteDoc(doc(db, 'siteData', id));
     res.json({ success: true });
   } catch (err) {
     console.error("Delete site error:", err);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json({ error: "فشل حذف موقع العمل نتيجة خطأ تقني داخلي في السيرفر." });
   }
 });
 
@@ -500,27 +524,48 @@ app.get("/api/db-status", async (req, res) => {
     }
 });
 
-// Helper for Gemini content generation with retry and model fallback to eliminate 503 unavailability
-async function generateWithRetryAndFallback(ai: any, contents: any, config: any) {
-  const modelsToTry = ["gemini-flash-latest", "gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview"];
+// Helper for Gemini content generation with retry and model fallback using streaming to eliminate Vercel 504 timeouts
+async function generateStreamWithRetryAndFallback(ai: any, contents: any, config: any, res: express.Response) {
+  const modelsToTry = ["gemini-1.5-flash", "gemini-2.5-flash", "gemini-flash-latest"];
   let lastError: any = null;
 
   for (const model of modelsToTry) {
-    const maxAttempts = 3;
+    const maxAttempts = 2; // Shortened for edge compatibility
     let delay = 1000;
     
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        console.log(`[Gemini Request] Attempting model ${model} (Attempt ${attempt}/${maxAttempts})...`);
-        const response = await ai.models.generateContent({
+        console.log(`[Gemini Stream Request] Attempting model ${model} (Attempt ${attempt}/${maxAttempts})...`);
+        const responseStream = await ai.models.generateContentStream({
           model,
           contents,
           config,
         });
-        console.log(`[Gemini Success] Successfully generated content with model ${model}`);
-        return response;
+
+        // Set streaming headers immediately when stream is established
+        if (!res.headersSent) {
+          res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+          res.setHeader('Transfer-Encoding', 'chunked');
+        }
+
+        for await (const chunk of responseStream) {
+          if (chunk.text) {
+            res.write(chunk.text);
+          }
+        }
+        res.end();
+        console.log(`[Gemini Stream Success] Successfully streamed content with model ${model}`);
+        return;
       } catch (error: any) {
         lastError = error;
+        
+        // If stream already started, we can't retry or send JSON error. Just end stream.
+        if (res.headersSent) {
+          console.error(`[Gemini Stream] Error generated mid-stream for ${model}`, error);
+          res.end();
+          return;
+        }
+
         const errMessage = error instanceof Error ? error.message : String(error);
         const errStatus = error?.status || (error?.error?.status) || "";
         const errCode = error?.code || (error?.error?.code) || 0;
@@ -537,7 +582,7 @@ async function generateWithRetryAndFallback(ai: any, contents: any, config: any)
           errMessage.includes("overloaded");
 
         if (isTransient && attempt < maxAttempts) {
-          const jitter = Math.random() * 800; // adding random delay to avoid collision
+          const jitter = Math.random() * 800;
           const totalDelay = delay + jitter;
           console.warn(`[Gemini API] Temporary overload error on model ${model} (Attempt ${attempt}/${maxAttempts}): ${errMessage}. Retrying in ${Math.round(totalDelay)}ms...`);
           await new Promise(resolve => setTimeout(resolve, totalDelay));
@@ -550,7 +595,11 @@ async function generateWithRetryAndFallback(ai: any, contents: any, config: any)
     }
   }
 
-  throw lastError || new Error("فشلت جميع محاولات الاتصال بنماذج الذكاء الاصطناعي بسبب الضغط العالي المؤقت. يرجى إعادة المحاولة بعد ثوانٍ قليلة.");
+  if (!res.headersSent) {
+    res.status(500).json({ error: lastError?.message || "فشلت جميع محاولات الاتصال بنماذج الذكاء الاصطناعي." });
+  } else {
+    res.end();
+  }
 }
 
 // Serve AI analysis backend endpoint
@@ -621,7 +670,7 @@ app.post("/api/gemini/analyze-report", async (req, res) => {
       }
     }
 
-    const response = await generateWithRetryAndFallback(ai, { parts }, {
+    await generateStreamWithRetryAndFallback(ai, { parts }, {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -658,13 +707,15 @@ app.post("/api/gemini/analyze-report", async (req, res) => {
           },
           required: ["transactions"]
         }
-    });
+    }, res);
 
-    const resultText = response.text;
-    res.json(JSON.parse(resultText || "{}"));
   } catch (error: any) {
     console.error("Gemini API error:", error);
-    res.status(500).json({ error: error.message || "حدث خطأ غير متوقع أثناء تحليل التقرير بالذكاء الاصطناعي." });
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message || "حدث خطأ غير متوقع أثناء تحليل التقرير بالذكاء الاصطناعي." });
+    } else {
+      res.end();
+    }
   }
 });
 
@@ -736,7 +787,7 @@ app.post("/api/gemini/analyze-voucher", async (req, res) => {
       }
     }
 
-    const response = await generateWithRetryAndFallback(ai, { parts }, {
+    await generateStreamWithRetryAndFallback(ai, { parts }, {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -766,12 +817,15 @@ app.post("/api/gemini/analyze-voucher", async (req, res) => {
           },
           required: ["vouchers"]
         }
-    });
+    }, res);
 
-    res.json(JSON.parse(response.text || "{}"));
   } catch (error: any) {
     console.error("Voucher analysis error:", error);
-    res.status(500).json({ error: error.message || "حدث خطأ غير متوقع أثناء تحليل ملف بونات التوريد." });
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message || "حدث خطأ غير متوقع أثناء تحليل ملف بونات التوريد." });
+    } else {
+      res.end();
+    }
   }
 });
 
@@ -824,7 +878,7 @@ app.post("/api/gemini/analyze-boq", async (req, res) => {
       }
     });
 
-    const response = await generateWithRetryAndFallback(ai, { parts }, {
+    await generateStreamWithRetryAndFallback(ai, { parts }, {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -846,12 +900,15 @@ app.post("/api/gemini/analyze-boq", async (req, res) => {
           },
           required: ["items"]
         }
-    });
+    }, res);
 
-    res.json(JSON.parse(response.text || "{}"));
   } catch (error: any) {
     console.error("BOQ analysis error:", error);
-    res.status(500).json({ error: error.message || "حدث خطأ غير متوقع أثناء تحليل ملف المقايسة بالذكاء الاصطناعي." });
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message || "حدث خطأ غير متوقع أثناء تحليل ملف المقايسة بالذكاء الاصطناعي." });
+    } else {
+      res.end();
+    }
   }
 });
 

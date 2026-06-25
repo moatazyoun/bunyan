@@ -22,7 +22,16 @@ import {
   FileSpreadsheet,
   FileCheck,
   Settings,
-  Bell
+  Bell,
+  Scroll,
+  AlertCircle,
+  AlertTriangle,
+  ShieldCheck,
+  Package,
+  Calendar,
+  ShieldAlert,
+  Wrench,
+  BarChart3
 } from 'lucide-react';
 import BunyanLogo from './BunyanLogo';
 
@@ -62,6 +71,17 @@ export default function Sidebar({
     { id: 'supplies', label: 'إدارة التوريدات', subtitle: 'Supplies', icon: Truck, perm: checkPerm('supplies') },
     { id: 'subcontractors', label: 'مقاولين باطن', subtitle: 'Subcontractors', icon: Users, perm: checkPerm('subcontractors') },
     { id: 'extracts', label: 'المستخلصات الفنية', subtitle: 'Extracts', icon: FileSpreadsheet, perm: checkPerm('extracts') },
+    { id: 'contracts', label: 'العقود', subtitle: 'Contracts', icon: Scroll, perm: true },
+    { id: 'risk-management', label: 'إدارة المخاطر', subtitle: 'Risk Management', icon: AlertTriangle, perm: true },
+    { id: 'quality-management', label: 'إدارة الجودة الشاملة', subtitle: 'Quality Management', icon: ShieldCheck, perm: true },
+    { id: 'hr', label: 'الموارد البشرية', subtitle: 'HR', icon: Users, perm: true },
+    { id: 'inventory', label: 'المخازن والمستودعات', subtitle: 'Inventory', icon: Package, perm: true },
+    { id: 'planning', label: 'الجدولة الزمنية', subtitle: 'Planning', icon: Calendar, perm: true },
+    { id: 'hse', label: 'الصحة والسلامة المهنية', subtitle: 'HSE', icon: ShieldAlert, perm: true },
+    { id: 'documents', label: 'إدارة الوثائق', subtitle: 'Documents', icon: FileText, perm: true },
+    { id: 'crm', label: 'إدارة العملاء', subtitle: 'CRM', icon: Users, perm: true },
+    { id: 'maintenance', label: 'صيانة المعدات', subtitle: 'Maintenance', icon: Wrench, perm: true },
+    { id: 'reports', label: 'التقارير والتحليلات', subtitle: 'Reports', icon: BarChart3, perm: true },
     { id: 'deliveries', label: 'التسليمات وفحص الأعمال', subtitle: 'Deliveries & Inspection', icon: FileCheck, perm: checkPerm('deliveries') },
     { id: 'site-workers', label: 'العاملين بالموقع', subtitle: 'Site Workers', icon: Users, perm: checkPerm('siteWorkers') },
     { id: 'fuel-dashboard', label: 'حساب المحروقات', subtitle: 'Fuel Log', icon: Fuel, perm: checkPerm('fuelDashboard') },
@@ -104,7 +124,7 @@ export default function Sidebar({
 
       {/* Sidebar Container */}
       <aside className={`
-        fixed inset-y-0 right-0 z-40 w-72 bg-slate-50 border-l border-slate-200 text-slate-800 flex flex-col justify-between transition-transform duration-300 ease-in-out
+        fixed inset-y-0 right-0 z-40 w-72 bg-slate-50 border-l border-slate-200 text-slate-800 flex flex-col justify-between transition-transform duration-300 ease-in-out shadow-lg
         ${isOpen ? 'translate-x-0' : 'translate-x-full'} md:translate-x-0 h-screen
       `}>
         {/* Upper Side: Logo & Header */}
@@ -115,23 +135,23 @@ export default function Sidebar({
               setActiveTab('dashboard');
               setIsOpen(false);
             }}
-            className="w-full shrink-0 text-right p-5 border-b border-slate-200 flex items-center justify-start hover:bg-slate-100/70 transition-all duration-300 group outline-none focus:ring-2 focus:ring-indigo-500/20"
+            className="w-full shrink-0 text-right p-5 border-b border-slate-200 flex items-center justify-start hover:bg-indigo-50 bg-white transition-all duration-300 group outline-none focus:ring-2 focus:ring-indigo-500/10"
             title="العودة إلى الرئيسية"
           >
             <div className="relative inline-flex items-center justify-start gap-3 p-1 rounded-xl transition-colors">
               <div className="relative flex items-center justify-center p-0 rounded-xl transition-all duration-300">
                 <BunyanLogo 
                   className="h-10 w-auto transition-transform duration-500 group-hover:scale-105 group-hover:-rotate-2 drop-shadow-md" 
-                  iconClassName="fill-slate-800 group-hover:fill-indigo-900"
+                  iconClassName="fill-slate-700 group-hover:fill-indigo-600"
                   barsClassName="fill-indigo-600 group-hover:fill-amber-500"
                   dotClassName="fill-indigo-600 group-hover:fill-indigo-500"
                 />
                 {/* Modern subtle glow behind the logo */}
-                <div className="absolute inset-0 bg-indigo-400/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <div className="absolute inset-0 bg-indigo-550/5 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
               </div>
               <div className="text-right">
-                <h1 className="font-bold text-base tracking-wide text-slate-900 group-hover:text-indigo-600 transition-colors font-sans">بنيان</h1>
-                <p className="text-[11px] text-slate-500 font-bold group-hover:text-slate-700 transition-colors">نظام بنيان الذكي لإدارة المشروعات والتكاليف</p>
+                <h1 className="font-extrabold text-base tracking-wide text-slate-800 group-hover:text-indigo-600 transition-colors font-sans">بنيان</h1>
+                <p className="text-[10px] text-slate-500 font-bold group-hover:text-slate-700 transition-colors">نظام بنيان الذكي لإدارة المشروعات والتكاليف</p>
               </div>
             </div>
           </button>
@@ -140,8 +160,8 @@ export default function Sidebar({
           <nav className="flex-1 overflow-y-auto px-3 py-2 space-y-1 
             [&::-webkit-scrollbar]:w-2 
             [&::-webkit-scrollbar-track]:bg-transparent
-            [&::-webkit-scrollbar-track]:hover:bg-slate-100/50
-            [&::-webkit-scrollbar-thumb]:bg-slate-300/80 
+            [&::-webkit-scrollbar-track]:hover:bg-slate-200/30
+            [&::-webkit-scrollbar-thumb]:bg-slate-300 
             [&::-webkit-scrollbar-thumb]:rounded-full 
             hover:[&::-webkit-scrollbar-thumb]:bg-slate-400
             transition-colors duration-200
@@ -159,19 +179,19 @@ export default function Sidebar({
                   className={`
                     w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-205 text-right group
                     ${isActive 
-                      ? 'bg-indigo-50/80 text-indigo-700 font-bold border-r-4 border-indigo-600 shadow-sm' 
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      ? 'bg-indigo-50/90 text-indigo-700 font-bold border-r-4 border-indigo-600 shadow-sm shadow-indigo-500/5' 
+                      : 'text-slate-650 hover:bg-slate-200/50 hover:text-slate-900'
                     }
                   `}
                   id={`nav-item-${item.id}`}
                 >
                   <Icon 
                     size={18} 
-                    className={`transition-transform duration-200 group-hover:scale-105 ${isActive ? 'text-indigo-650' : 'text-slate-400 group-hover:text-indigo-600'}`} 
+                    className={`transition-transform duration-200 group-hover:scale-105 ${isActive ? 'text-indigo-600' : 'text-slate-500 group-hover:text-indigo-600'}`} 
                   />
                   <div className="flex-1">
                     <span className="block text-xs font-semibold">{item.label}</span>
-                    <span className={`block text-[9.5px] font-medium tracking-wider leading-none mt-0.5 ${isActive ? 'text-indigo-600/80' : 'text-slate-400 group-hover:text-slate-500'}`}>
+                    <span className={`block text-[9.5px] font-semibold tracking-wider leading-none mt-0.5 ${isActive ? 'text-indigo-500' : 'text-slate-405 group-hover:text-slate-500'}`}>
                       {item.subtitle}
                     </span>
                   </div>
@@ -182,15 +202,15 @@ export default function Sidebar({
         </div>
 
         {/* Footer: User profile and system version */}
-        <div className="p-4 border-t border-slate-200 bg-slate-100/50 space-y-3">
-          <div className="flex items-center justify-between gap-2 p-2 bg-slate-200/40 rounded-lg">
+        <div className="p-4 border-t border-slate-200 bg-slate-100/40 space-y-3">
+          <div className="flex items-center justify-between gap-2 p-2 bg-white border border-slate-200/85 rounded-lg shadow-sm">
             <div className="flex items-center gap-2 overflow-hidden">
-              <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold shrink-0">
+              <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-sm">
                 {user?.nameAr ? user.nameAr.charAt(0) : 'م'}
               </div>
               <div className="overflow-hidden text-right">
-                <p className="text-xs font-extrabold text-slate-800 truncate leading-none">{user?.nameAr?.replace(/\s*\(?مدير التكاليف\)?/g, '') || 'مستخدم عام'}</p>
-                <span className="inline-block mt-1 text-[8.5px] font-extrabold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded-md border border-indigo-100/40">
+                <p className="text-xs font-black text-slate-800 truncate leading-none">{user?.nameAr?.replace(/\s*\(?مدير التكاليف\)?/g, '') || 'مستخدم عام'}</p>
+                <span className="inline-block mt-1 text-[8.5px] font-black text-indigo-600 bg-indigo-50/70 px-1.5 py-0.5 rounded-md border border-indigo-100">
                   {user?.role === 'admin' && 'مدير البرنامج'}
                   {user?.role === 'projects_manager' && 'مدير مشروعات'}
                   {user?.role === 'site_manager' && 'مدير موقع'}
@@ -199,7 +219,6 @@ export default function Sidebar({
                   {user?.role === 'accountant' && 'محاسب مالي'}
                   {user?.role === 'supervisor' && 'مشرف'}
                   {user?.role === 'dc' && 'DC'}
-                  {user?.role === 'viewer' && 'مراقب مشاهدة'}
                 </span>
               </div>
             </div>
@@ -207,7 +226,7 @@ export default function Sidebar({
             <div className="flex items-center gap-1 shrink-0">
               <button
                 onClick={onChangeSite}
-                className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition"
                 title="تغيير موقع العمل النشط"
                 id="sidebar-change-site-btn"
               >
@@ -215,7 +234,7 @@ export default function Sidebar({
               </button>
               <button
                 onClick={onLogout}
-                className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded-lg transition"
                 title="تسجيل الخروج الآمن"
                 id="sidebar-logout-btn"
               >
@@ -226,7 +245,7 @@ export default function Sidebar({
           
           <div className="text-[10px] text-slate-500 flex justify-between items-center font-mono">
             <span>بنيان ERP v2.5</span>
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[9px] border border-emerald-100/40">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[9px] border border-emerald-100">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
               قيد الاتصال
             </span>

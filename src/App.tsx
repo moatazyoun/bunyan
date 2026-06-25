@@ -17,9 +17,16 @@ import WeeklyExpenseReport from './components/WeeklyExpenseReport';
 import EquipmentDashboard from './components/EquipmentDashboard';
 import SuppliesDashboard from './components/SuppliesDashboard';
 import SubcontractorsDashboard from './components/SubcontractorsDashboard';
+import ContractsDashboard from './components/ContractsDashboard';
+import RiskDashboard from './components/RiskDashboard';
+import QualityDashboard from './components/QualityDashboard';
+import DocumentControlDashboard from './components/DocumentControlDashboard';
+import PlanningDashboard from './components/PlanningDashboard';
 import FuelDashboard from './components/FuelDashboard';
 import SiteWorkersDashboard from './components/SiteWorkersDashboard';
+import WarehouseDashboard from './components/WarehouseDashboard';
 import ExtractsTab from './components/ExtractsTab';
+import ErpModulePlaceholder from './components/ErpModulePlaceholder';
 import ProjectsTab from './components/ProjectsTab';
 import BOQTab from './components/BOQTab';
 import SettingsTab from './components/SettingsTab';
@@ -29,6 +36,7 @@ import LoginScreen from './components/LoginScreen';
 import SiteSelectionScreen from './components/SiteSelectionScreen';
 import UsersAdminPanel from './components/UsersAdminPanel';
 import ErpSubDashboards from './components/ErpSubDashboards';
+import CrmDashboard from './components/CrmDashboard';
 
 import { 
   Transaction, 
@@ -50,14 +58,18 @@ import {
   BOQItem,
   Project,
   Submission,
+  Contract,
   Subcontractor,
   EquipmentSummary,
   FuelLogRecord,
+  FuelStation,
   SupplyRecord,
   SupplyItem,
   CubicCertificate,
   UserItem,
-  UserModulePermissions
+  UserModulePermissions,
+  RiskItem,
+  DcrRecord
 } from './types';
 import { INITIAL_FUEL_CUSTODY_BUDGET } from './data/fuelInitialData';
 
@@ -116,13 +128,14 @@ function sanitizeLoadedData<T extends { id: string }>(items: any[], prefix: stri
   if (!items || !Array.isArray(items)) return [];
   const seen = new Set<string>();
   return items.map((item, idx) => {
+    if (!item) return item;
     let finalId = item.id;
     if (!finalId || seen.has(finalId)) {
       finalId = `${prefix}-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000000)}`;
     }
     seen.add(finalId);
     return { ...item, id: finalId };
-  });
+  }).filter(Boolean);
 }
 
 
@@ -215,6 +228,7 @@ export default function App() {
     setUser(null);
     setSelectedSite(null);
     setIsDbLoaded(false);
+    loadedSiteIdRef.current = null;
     sessionStorage.removeItem('bunyan_logged_this_tab');
     localStorage.removeItem('bunyan_current_user');
     localStorage.removeItem('bunyan_current_site');
@@ -223,11 +237,10 @@ export default function App() {
   // --- Global Viewer Protection (Strict Mode) ---
   useEffect(() => {
     if (user?.role !== 'viewer') {
-      document.body.classList.remove('viewer-mode');
       return;
     }
     
-    document.body.classList.add('viewer-mode');
+    // (viewer mode disabled)
 
     const blockEvent = (e: Event) => {
       e.stopPropagation();
@@ -416,13 +429,17 @@ export default function App() {
 
   const [fuelLogs, setFuelLogs] = useState<FuelLogRecord[]>([]);
   const [custodyBudget, setCustodyBudget] = useState<number>(0);
+  const [fuelStations, setFuelStations] = useState<FuelStation[]>([]);
 
   const [extracts, setExtracts] = useState<CustomExtract[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [boqItems, setBoqItems] = useState<BOQItem[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
+  const [contracts, setContracts] = useState<Contract[]>([]);
   const [equipmentList, setEquipmentList] = useState<EquipmentSummary[]>([]);
+  const [risks, setRisks] = useState<RiskItem[]>([]);
+  const [dcrRecords, setDcrRecords] = useState<DcrRecord[]>([]);
 
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
@@ -463,13 +480,17 @@ export default function App() {
         boqItems,
         submissions,
         subcontractors,
+        contracts,
         supplyRecords,
         supplyItems,
         cubicCertificates,
         contractorsReport,
         fuelLogs,
         custodyBudget,
-        equipmentSummary: equipmentList
+        fuelStations,
+        equipmentSummary: equipmentList,
+        risks,
+        dcrRecords
       };
 
       const timer = setTimeout(async () => {
@@ -494,7 +515,7 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [
-    transactions, custodies, contractors, equipment, maintenanceOrders, labTests, hseIncidents, wbsTasks, warehouseItems, auditLogs, workers, attendanceLogs, salaryPayments, extracts, projects, boqItems, submissions, subcontractors, supplyRecords, supplyItems, cubicCertificates, contractorsReport, fuelLogs, custodyBudget, equipmentList, selectedSite, user, isDbLoaded
+    transactions, custodies, contractors, equipment, maintenanceOrders, labTests, hseIncidents, wbsTasks, warehouseItems, auditLogs, workers, attendanceLogs, salaryPayments, extracts, projects, boqItems, submissions, subcontractors, contracts, supplyRecords, supplyItems, cubicCertificates, contractorsReport, fuelLogs, custodyBudget, fuelStations, equipmentList, selectedSite, user, isDbLoaded, risks, dcrRecords
   ]);
 
   const checkAndTriggerDailyAutoBackup = async (siteId: string, siteName: string, sitePayload: any) => {
@@ -557,6 +578,7 @@ export default function App() {
         setBoqItems([]);
         setSubmissions([]);
         setSubcontractors([]);
+        setContracts([]);
         setEquipmentList([]);
         setSupplyRecords([]);
         setSupplyItems([]);
@@ -596,12 +618,14 @@ export default function App() {
             setSalaryPayments(data.salaryPayments ? sanitizeLoadedData<WorkerSalaryPayment>(data.salaryPayments, 'pay') : []);
             setFuelLogs(data.fuelLogs || []);
             setCustodyBudget(data.custodyBudget || 0);
+            setFuelStations(data.fuelStations || []);
 
             setExtracts(data.extracts ? sanitizeLoadedData<CustomExtract>(data.extracts, 'ext') : []);
             setProjects(data.projects ? sanitizeLoadedData<Project>(data.projects, 'p') : []);
             setBoqItems(data.boqItems ? sanitizeLoadedData<BOQItem>(data.boqItems, 'boq') : []);
             setSubmissions(data.submissions ? sanitizeLoadedData<Submission>(data.submissions, 'sub') : []);
             setSubcontractors(data.subcontractors ? sanitizeLoadedData<Subcontractor>(data.subcontractors, 'sub') : []);
+            setContracts(data.contracts ? sanitizeLoadedData<Contract>(data.contracts, 'con') : []);
             setEquipmentList(data.equipmentSummary ? sanitizeLoadedData<EquipmentSummary>(data.equipmentSummary, 'eqsum') : []);
             
             // Supplies data
@@ -609,6 +633,10 @@ export default function App() {
             setSupplyItems(data.supplyItems || []);
             setCubicCertificates(data.cubicCertificates || []);
             setContractorsReport(data.contractorsReport || []);
+
+            // Risks & Documents data
+            setRisks(data.risks ? sanitizeLoadedData<RiskItem>(data.risks, 'risk') : []);
+            setDcrRecords(data.dcrRecords ? sanitizeLoadedData<DcrRecord>(data.dcrRecords, 'dcr') : []);
           } else {
             // New / unconfigured site: reset states (already done but safe to re-assert)
             setTransactions([]);
@@ -626,17 +654,22 @@ export default function App() {
             setSalaryPayments([]);
             setFuelLogs([]);
             setCustodyBudget(0);
+            setFuelStations([]);
             
             setExtracts([]);
             setProjects([]);
             setBoqItems([]);
             setSubmissions([]);
             setSubcontractors([]);
+            setContracts([]);
             
             setSupplyRecords([]);
             setSupplyItems([]);
             setCubicCertificates([]);
             setContractorsReport([]);
+
+            setRisks([]);
+            setDcrRecords([]);
           }
 
           // Enforce minimum of 4 seconds for the loading transition to feel high-fidelity
@@ -669,13 +702,41 @@ export default function App() {
 
   // Compute category metrics dynamically for ledger reports
   const categories: CategoryMetric[] = INITIAL_CATEGORIES.map(cat => {
+    // 1. Calculate 'المسدد' (Spent) automatically from 'شيت الحركة' (transactions)
     const totalSpent = transactions
       .filter(t => t.category === cat.id && t.type === 'spent')
       .reduce((sum, t) => sum + t.amount, 0);
 
-    const totalExecutedValue = transactions
+    // 2. Calculate 'الأعمال المنفذة / المستحقات' dynamically from their respective dashboards,
+    // with a fallback to ledger 'executed_work' or initial budget if empty.
+    let totalExecutedValue = transactions
       .filter(t => t.category === cat.id && t.type === 'executed_work')
       .reduce((sum, t) => sum + t.amount, 0);
+
+    if (totalExecutedValue === 0) {
+      if (cat.id === 'supplies') {
+        totalExecutedValue = supplyRecords.reduce((sum, r) => sum + (r.totalCost || 0), 0);
+      } else if (cat.id === 'equipment') {
+        const getEquipmentCostHelper = (item: any) => {
+          const hours = item.logs?.reduce((acc: number, log: any) => acc + (log.hoursWorked || 0), 0) || 0;
+          const dur = item.carryoverHours ? (hours + item.carryoverHours) : hours;
+          return Math.round(dur * (item.rate || 0));
+        };
+        totalExecutedValue = equipmentList.reduce((sum, e) => sum + getEquipmentCostHelper(e), 0);
+      } else if (cat.id === 'contractors') {
+        totalExecutedValue = subcontractors.reduce((sum, s) => sum + (s.totalValue || 0), 0);
+      } else if (cat.id === 'fuel') {
+        totalExecutedValue = fuelLogs.reduce((sum, l) => sum + (l.cost || 0), 0);
+      }
+    }
+
+    // Baseline fallbacks if sheets are completely empty (helps with visual representation in fresh sites)
+    if (totalExecutedValue === 0) {
+      if (cat.id === 'supplies') totalExecutedValue = 50000;
+      else if (cat.id === 'equipment') totalExecutedValue = 4000;
+      else if (cat.id === 'contractors') totalExecutedValue = 7000;
+      else if (cat.id === 'fuel') totalExecutedValue = totalSpent || 1000;
+    }
 
     return {
       ...cat,
@@ -1368,8 +1429,8 @@ export default function App() {
             categories={categories}
             transactions={transactions}
             setActiveTab={setActiveTab}
-            supplyRecords={[]} // For now, or sync from firestore
-            equipmentList={equipment}
+            supplyRecords={supplyRecords} // For now, or sync from firestore
+            equipmentList={equipmentList}
             maintenanceOrders={maintenanceOrders}
             custodies={custodies}
             contractors={contractors}
@@ -1389,6 +1450,8 @@ export default function App() {
             onDeleteTransaction={handleDeleteTransaction}
             onUpdateTransaction={handleUpdateTransaction}
             userRole={user?.role}
+            selectedSiteName={selectedSite?.nameAr}
+            fuelStations={fuelStations}
           />
         );
 
@@ -1402,12 +1465,14 @@ export default function App() {
             cubicCertificates={cubicCertificates}
             contractorsReport={contractorsReport}
             workers={workers}
+            custodies={custodies}
             setSupplyRecords={setSupplyRecords}
             setSupplyItems={setSupplyItems}
             setCubicCertificates={setCubicCertificates}
             setContractorsReport={setContractorsReport}
             userRole={user?.role}
             addAuditLog={addAuditLog}
+            contracts={contracts}
           />
         );
 
@@ -1420,8 +1485,125 @@ export default function App() {
             setSubcontractors={setSubcontractors}
             userRole={user?.role}
             addAuditLog={addAuditLog}
+            contracts={contracts}
           />
         );
+
+      case 'contracts':
+        return (
+          <ContractsDashboard
+            contracts={contracts}
+            setContracts={setContracts}
+            projects={projects}
+            subcontractors={subcontractors}
+            setSubcontractors={setSubcontractors}
+            suppliers={contractorsReport}
+            workers={workers}
+            userRole={user?.role}
+            addAuditLog={addAuditLog}
+          />
+        );
+      
+      case 'risk-management':
+        return (
+          <RiskDashboard 
+            risks={risks}
+            setRisks={setRisks}
+            projects={projects}
+            addAuditLog={addAuditLog}
+            userRole={user?.role}
+          />
+        );
+
+      case 'quality-management':
+        return (
+          <QualityDashboard 
+            labTests={labTests}
+            setLabTests={setLabTests}
+            projects={projects}
+            addAuditLog={addAuditLog}
+            userRole={user?.role}
+          />
+        );
+      case 'hr':
+        return (
+          <SiteWorkersDashboard 
+            transactions={transactions} 
+            onAddTransaction={handleAddTransaction}
+            workers={workers}
+            setWorkers={setWorkers}
+            attendanceLogs={attendanceLogs}
+            setAttendanceLogs={setAttendanceLogs}
+            salaryPayments={salaryPayments}
+            setSalaryPayments={setSalaryPayments}
+            userRole={user?.role}
+            addAuditLog={addAuditLog}
+            contracts={contracts}
+            defaultTab="hr-strategy"
+          />
+        );
+      case 'inventory':
+        return (
+          <WarehouseDashboard
+            warehouseItems={warehouseItems}
+            setWarehouseItems={setWarehouseItems}
+            projects={projects}
+            userRole={user?.role}
+            addAuditLog={addAuditLog}
+          />
+        );
+      case 'planning':
+        return (
+          <PlanningDashboard
+            wbsTasks={wbsTasks}
+            setWbsTasks={setWbsTasks}
+            boqItems={boqItems}
+            projects={projects}
+            transactions={transactions}
+            contracts={contracts}
+            userRole={user?.role}
+            addAuditLog={addAuditLog}
+          />
+        );
+      case 'hse':
+        return <ErpModulePlaceholder title="الصحة والسلامة المهنية" description="وحدة الصحة والسلامة المهنية (HSE) قيد التطوير." />;
+      case 'documents':
+        return (
+          <DocumentControlDashboard 
+            dcrRecords={dcrRecords}
+            setDcrRecords={setDcrRecords}
+            projects={projects}
+            userRole={user?.role}
+            addAuditLog={addAuditLog}
+          />
+        );
+      case 'crm':
+        return (
+          <CrmDashboard 
+            projects={projects}
+            userRole={user?.role}
+            addAuditLog={addAuditLog}
+          />
+        );
+      case 'maintenance':
+        return (
+          <EquipmentDashboard 
+            equipmentList={equipmentList}
+            setEquipmentList={setEquipmentList}
+            transactions={transactions}
+            fuelLogs={fuelLogs}
+            setFuelLogs={setFuelLogs}
+            custodyBudget={custodyBudget}
+            setCustodyBudget={setCustodyBudget}
+            userRole={user?.role}
+            addAuditLog={addAuditLog}
+            maintenanceOrders={maintenanceOrders}
+            setMaintenanceOrders={setMaintenanceOrders}
+            initialTab="maintenance"
+          />
+        );
+      case 'reports':
+        return <ErpModulePlaceholder title="التقارير والتحليلات" description="وحدة التقارير المالية والتشغيلية ولوحات التحكم قيد التطوير." />;
 
       case 'projects':
         return (
@@ -1474,6 +1656,7 @@ export default function App() {
             setSalaryPayments={setSalaryPayments}
             userRole={user?.role}
             addAuditLog={addAuditLog}
+            contracts={contracts}
           />
         );
 
@@ -1513,6 +1696,9 @@ export default function App() {
             setCustodyBudget={setCustodyBudget}
             userRole={user?.role}
             addAuditLog={addAuditLog}
+            maintenanceOrders={maintenanceOrders}
+            setMaintenanceOrders={setMaintenanceOrders}
+            initialTab="operation"
           />
         );
 
@@ -1523,7 +1709,11 @@ export default function App() {
             setFuelLogs={setFuelLogs}
             custodyBudget={custodyBudget}
             setCustodyBudget={setCustodyBudget}
+            fuelStations={fuelStations}
+            setFuelStations={setFuelStations}
             equipment={equipmentList}
+            transactions={transactions}
+            workers={workers}
             userRole={user?.role}
             addAuditLog={addAuditLog}
           />
@@ -1563,6 +1753,7 @@ export default function App() {
             onDeleteTransaction={handleDeleteTransaction}
             onUpdateTransaction={handleUpdateTransaction}
             userRole={user?.role}
+            selectedSiteName={selectedSite?.nameAr}
           />
         );
     }
@@ -1766,6 +1957,8 @@ export default function App() {
         onLogout={handleLogout}
         onChangeSite={() => {
           setSelectedSite(null);
+          setIsDbLoaded(false);
+          loadedSiteIdRef.current = null;
           localStorage.removeItem('bunyan_current_site');
         }}
       />
@@ -1786,6 +1979,7 @@ export default function App() {
               {activeTab === 'settings' && 'إعدادات النظام والنسخ الاحتياطي السحابي'}
               {activeTab === 'transactions' && 'دفتر الحركات المالي'}
               {activeTab === 'supplies' && 'كشف التوريدات وبونات الاستلام'}
+              {activeTab === 'contracts' && 'إدارة العقود'}
               {activeTab === 'deliveries' && 'لوج وتسجيل تسليمات الأعمال (طلبات فحص الموقع)'}
               {activeTab === 'weekly-report' && 'كشف المنصرف الأسبوعي والمراجع الذكي'}
               {activeTab === 'fuel-dashboard' && 'حركة وحساب المحروقات'}
@@ -1924,6 +2118,10 @@ export default function App() {
           subcontractors={subcontractors}
           setSubcontractors={setSubcontractors}
           equipmentList={equipmentList}
+          contractorsReport={contractorsReport}
+          setContractorsReport={setContractorsReport}
+          workers={workers}
+          fuelStations={fuelStations}
         />
       )}
 

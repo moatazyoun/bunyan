@@ -33,6 +33,7 @@ export interface Transaction {
   paymentMethod?: PaymentMethod;
   referenceNo?: string;
   equipmentId?: string; // ID of the linked equipment if category is equipment
+  fuelStationId?: string; // ID of the linked fuel station for adding balance
   notes?: string;
 }
 
@@ -76,13 +77,14 @@ export interface UserModulePermissions {
 export interface UserItem {
   username: string;
   nameAr: string;
-  role: 'admin' | 'projects_manager' | 'site_manager' | 'tech_office' | 'site_engineer' | 'accountant' | 'supervisor' | 'dc' | 'viewer';
+  role: 'admin' | 'projects_manager' | 'site_manager' | 'tech_office' | 'site_engineer' | 'accountant' | 'supervisor' | 'dc';
   email?: string;
   phone?: string;
   permissions: UserModulePermissions;
   assignedProjects?: string[]; // List of project IDs the user can access
   isTrial?: boolean;
   trialStartedAt?: string; // ISO string when the 1-hour trial began
+  createdAt?: string; // ISO string when user was created
 }
 
 export type EquipmentStatus = 'active' | 'under_maintenance' | 'idle' | 'out_of_service';
@@ -226,8 +228,20 @@ export interface FuelLogRecord {
   day: string;
   equipmentName: string;
   quantity: number; // باللتر
-  cost: number;     // بالجنيه المصري
+  cost: number;     // إجمالي التكلفة (بالجنيه المصري)
+  additionalCost: number; // تكلفة إضافية
+  recipientName: string; // اسم المستلم
+  stationId?: string; // ID of the linked fuel station
   notes?: string;
+}
+
+export interface FuelStation {
+  id: string;
+  name: string;
+  location: string;
+  delegateName: string;
+  delegatePhone: string;
+  isInfinite?: boolean;
 }
 
 export interface OperationalLog {
@@ -503,6 +517,115 @@ export interface Submission {
   surveyNotes?: string; // ملاحظات مساحية
   labNotes?: string; // ملاحظات معملية
   signatories: SubmissionSignatories;
+}
+
+export type ContractStatus = 'active' | 'completed' | 'terminated';
+export type ContractCategory = 'project' | 'employee' | 'subcontractor' | 'supplier' | 'other';
+
+export interface ContractAttachment {
+  id: string;
+  name: string;
+  url: string;
+}
+
+export interface Contract {
+  id: string;
+  contractNumber: string;
+  date: string;
+  counterparty: string;
+  category: ContractCategory;
+  value: number;
+  durationMonths: number;
+  status: ContractStatus;
+  projectId: string;
+  subcontractorId?: string;
+  scope: string; // الأعمال
+  specifications: string; // المواصفات
+  paymentTerms: string; // شروط الدفع
+  attachments: ContractAttachment[];
+}
+
+export interface RiskRecord {
+  id: string;
+  projectId: string;
+  type: string;
+  probability: 'low' | 'medium' | 'high';
+  impact: 'low' | 'medium' | 'high';
+  mitigationPlan: string;
+  status: 'active' | 'mitigated' | 'closed';
+}
+
+export interface QualityReport {
+  id: string;
+  projectId: string;
+  date: string;
+  result: 'passed' | 'failed' | 'needs_improvement';
+  inspectionDetails: string;
+  attachments: ContractAttachment[];
+  correctiveAction?: string;
+}
+
+export interface HrRecord {
+  id: string;
+  employeeId: string;
+  type: 'salary' | 'bonus' | 'penalty';
+  amount: number;
+  date: string;
+  notes: string;
+}
+
+export interface ScheduleActivity {
+  id: string;
+  projectId: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  progress: number;
+  plannedResources: string[];
+}
+
+export interface DocumentRecord {
+  id: string;
+  projectId: string;
+  title: string;
+  type: 'drawing' | 'spec' | 'correspondence';
+  url: string;
+  date: string;
+}
+
+export interface CustomerRecord {
+  id: string;
+  name: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  contracts: string[];
+}
+
+export interface DcrRecord {
+  id: string;
+  code: string;
+  title: string;
+  discipline: 'Civil' | 'Survey' | 'Mechanical' | 'Electrical' | 'HSE' | 'Contractual';
+  type: 'Drawing' | 'RFI' | 'Method Statement' | 'Transmittal' | 'Correspondence';
+  revision: string;
+  status: 'A' | 'B' | 'C' | 'D'; // A: Approved, B: Approved with Remarks, C: Rejected, D: For Info
+  date: string;
+  author: string;
+  projectId: string;
+  workflowStep: 'Draft' | 'Under Review' | 'Approved' | 'Distributed';
+}
+
+export interface RiskItem {
+  id: string;
+  type: string; // نوع الخطر
+  category: 'technical' | 'financial' | 'supply' | 'safety' | 'environmental';
+  probability: 'high' | 'medium' | 'low'; // احتمالية الحدوث
+  impact: 'high' | 'medium' | 'low'; // الأثر
+  preventiveAction: string; // الإجراء الوقائي / الاستجابة
+  owner: string; // المسؤول
+  status: 'active' | 'mitigated' | 'monitoring';
+  projectId: string;
 }
 
 

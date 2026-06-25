@@ -3,6 +3,7 @@ import { Users, UserPlus, Calendar, DollarSign, Save, Trash2, Check, X, FileText
 import { motion, AnimatePresence } from 'motion/react';
 import { Transaction, SiteWorker, WorkerAttendance, WorkerEmploymentType, WorkerSalaryPayment } from '../types';
 import { INITIAL_WORKERS } from '../data/initialData';
+import HrStrategyTab from './HrStrategyTab';
 
 const GOVERNORATES = [
   "القاهرة", "الإسكندرية", "الجيزة", "الدقهلية", "البحر الأحمر", "البحيرة", "الفيوم", "الغربية", "الإسماعيلية", "المنوفية", "المنيا", "القليوبية", "الوادي الجديد", "الشرقية", "السويس", "أسوان", "أسيوط", "بني سويف", "بورسعيد", "دمياط", "الأقصر", "قنا", "شمال سيناء", "سوهاج", "جنوب سيناء", "كفر الشيخ", "مطروح"
@@ -91,7 +92,9 @@ export default function SiteWorkersDashboard({
   salaryPayments,
   setSalaryPayments,
   userRole,
-  addAuditLog
+  addAuditLog,
+  contracts = [],
+  defaultTab = 'workers'
 }: { 
   transactions: Transaction[], 
   onAddTransaction: (tx: Omit<Transaction, 'id'>) => void,
@@ -102,9 +105,11 @@ export default function SiteWorkersDashboard({
   salaryPayments: WorkerSalaryPayment[],
   setSalaryPayments: React.Dispatch<React.SetStateAction<WorkerSalaryPayment[]>>,
   userRole?: string,
-  addAuditLog?: (action: string, module: string, details: string) => void
+  addAuditLog?: (action: string, module: string, details: string) => void,
+  contracts?: any[],
+  defaultTab?: 'workers' | 'settlements' | 'hr-strategy'
 }) {
-  const [activeTab, setActiveTab] = useState<'workers' | 'settlements'>('workers');
+  const [activeTab, setActiveTab] = useState<'workers' | 'settlements' | 'hr-strategy'>(defaultTab);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedWorkerType, setSelectedWorkerType] = useState<WorkerEmploymentType | 'all'>('all');
@@ -533,12 +538,15 @@ export default function SiteWorkersDashboard({
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 p-1 bg-slate-100 rounded-xl w-fit">
+      <div className="flex flex-wrap gap-2 p-1 bg-slate-100 rounded-xl w-fit">
         <button onClick={() => setActiveTab('workers')} className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-2 cursor-pointer ${activeTab === 'workers' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
           <FileText size={16} /> سجل العاملين بالموقع
         </button>
         <button onClick={() => setActiveTab('settlements')} className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-2 cursor-pointer ${activeTab === 'settlements' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
           <Calculator size={16} /> المنصرف الأسبوعي والتقطيع
+        </button>
+        <button onClick={() => setActiveTab('hr-strategy')} className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-2 cursor-pointer ${activeTab === 'hr-strategy' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
+          <ShieldCheck size={16} /> الإدارة الاستراتيجية للموارد البشرية
         </button>
       </div>
 
@@ -717,6 +725,19 @@ export default function SiteWorkersDashboard({
             </div>
           </motion.div>
         )}
+
+        {activeTab === 'hr-strategy' && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            <HrStrategyTab
+              workers={workers}
+              attendanceLogs={attendanceLogs}
+              salaryPayments={salaryPayments}
+              contracts={contracts}
+              userRole={userRole}
+              addAuditLog={addAuditLog}
+            />
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* Worker Details Modal */}
@@ -808,7 +829,7 @@ export default function SiteWorkersDashboard({
                       exit={{ height: 0, opacity: 0 }}
                       className="overflow-hidden"
                     >
-                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mt-6 border-t border-slate-100 pt-6">
+                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-6 border-t border-slate-100 pt-6">
                         <div className="bg-white border border-slate-100 p-3 rounded-2xl shadow-sm">
                           <span className="block text-[10px] text-slate-400 font-extrabold mb-1">الرقم القومى</span>
                           <span className="text-sm font-black text-slate-900 font-mono">{selectedWorker.nationalId || 'غير مسجل'}</span>
@@ -834,6 +855,20 @@ export default function SiteWorkersDashboard({
                         <div className="bg-white border border-slate-100 p-3 rounded-2xl shadow-sm">
                           <span className="block text-[10px] text-slate-400 font-extrabold mb-1">تحويل الراتب</span>
                           <span className="text-sm font-black text-indigo-600 font-mono truncate" title={selectedWorker.salaryTransferNo}>{selectedWorker.salaryTransferNo || '-'}</span>
+                        </div>
+                        <div className="bg-white border border-slate-100 p-3 rounded-2xl shadow-sm">
+                          <span className="block text-[10px] text-slate-400 font-extrabold mb-1">رقم العقد</span>
+                          {(() => {
+                            const linkedCon = contracts.find(con => con.counterparty.trim() === selectedWorker.name.trim());
+                            return linkedCon ? (
+                              <span className="text-xs font-black text-indigo-600 font-mono flex items-center gap-1" title="مربوط بشيت العقود">
+                                {linkedCon.contractNumber}
+                                <span className="bg-indigo-100 text-indigo-700 text-[8px] px-1.5 py-0.5 rounded-full font-sans font-black scale-90">مربوط</span>
+                              </span>
+                            ) : (
+                              <span className="text-xs font-bold text-slate-500 font-sans">بدون عقد</span>
+                            );
+                          })()}
                         </div>
                       </div>
                     </motion.div>

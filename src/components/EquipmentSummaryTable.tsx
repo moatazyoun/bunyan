@@ -311,58 +311,114 @@ export default function EquipmentSummaryTable({
       </div>
 
       {/* METRICS SUMMARY BAR */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-        <motion.div 
-          whileHover={{ y: -4, shadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)' }}
-          className="p-6 rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 shadow-lg flex items-center justify-between"
-        >
-          <div className="space-y-2">
-            <span className="block text-[10px] text-slate-400 font-black uppercase tracking-widest">
-              إجمالي التزامات التشغيل + المحروقات
-            </span>
-            <div className="flex items-baseline gap-1.5 font-mono">
-               <span className="text-3xl font-black text-slate-900 leading-none">
-                 {totalGeneralEquipmentCost.toLocaleString('ar-EG')}
-               </span>
-               <span className="text-sm text-slate-500 font-bold uppercase tracking-tight">ج.م</span>
-            </div>
-            <div className="flex items-center gap-3">
-               <div className="flex items-center gap-1.5 text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
-                  <Coins size={10} />
-                  <span>إيجار: {totalRentedCost.toLocaleString('ar-EG')}</span>
-               </div>
-               <div className="flex items-center gap-1.5 text-[9px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-                  <Droplet size={10} />
-                  <span>محروقات: {totalFuel.toLocaleString('ar-EG')}</span>
-               </div>
-            </div>
-          </div>
-          <div className="p-4 bg-indigo-600 text-white rounded-2xl shadow-xl shadow-indigo-100">
-            <TrendingUp size={28} />
-          </div>
-        </motion.div>
+      {(() => {
+        const totalEquipmentSpent = equipmentList.reduce((sum, e) => sum + getEquipmentSpent(e), 0);
+        const remainingLessFuel = totalRentedCost - totalEquipmentSpent;
 
-        <motion.div 
-          whileHover={{ y: -4, shadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)' }}
-          className="p-6 rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50/40 to-white shadow-lg flex items-center justify-between"
-        >
-          <div className="space-y-2">
-            <span className="block text-[10px] text-amber-600 font-black uppercase tracking-widest">
-              صافي المتبقي والمستحق للمقاولين
-            </span>
-            <div className="flex items-baseline gap-1.5 font-mono">
-               <span className="text-3xl font-black text-amber-600 leading-none">
-                 {totalRentedRemaining.toLocaleString('ar-EG')}
-               </span>
-               <span className="text-sm text-amber-500 font-bold uppercase tracking-tight">ج.م</span>
-            </div>
-            <p className="text-[10px] text-slate-400 font-bold tracking-tight">إجمالي قيمة الفروقات الميدانية المعتمدة المستحقة للسداد</p>
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-6">
+            {/* 1. التزامات التشغيل */}
+            <motion.div 
+              whileHover={{ y: -4, shadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)' }}
+              className="p-5 rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 shadow-lg flex flex-col justify-between space-y-4 text-right"
+              dir="rtl"
+            >
+              <div className="flex items-center justify-between">
+                <span className="block text-[10px] text-slate-400 font-black uppercase tracking-widest leading-relaxed">
+                  إجمالي التزامات التشغيل
+                </span>
+                <div className="p-2 bg-indigo-100 text-indigo-600 rounded-xl">
+                  <TrendingUp size={18} />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-baseline gap-1.5 font-mono">
+                  <span className="text-2xl font-black text-slate-900 leading-none">
+                    {totalRentedCost.toLocaleString('ar-EG')}
+                  </span>
+                  <span className="text-xs text-slate-500 font-bold uppercase tracking-tight">ج.م</span>
+                </div>
+                <p className="text-[9px] text-slate-400 font-medium">قيمة تشغيل المعدات المستأجرة بالكامل</p>
+              </div>
+            </motion.div>
+
+            {/* 2. المحروقات */}
+            <motion.div 
+              whileHover={{ y: -4, shadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)' }}
+              className="p-5 rounded-3xl border border-blue-100 bg-gradient-to-br from-white to-blue-50/20 shadow-lg flex flex-col justify-between space-y-4 text-right"
+              dir="rtl"
+            >
+              <div className="flex items-center justify-between">
+                <span className="block text-[10px] text-blue-600 font-black uppercase tracking-widest leading-relaxed">
+                  إجمالي المحروقات والديزل
+                </span>
+                <div className="p-2 bg-blue-100 text-blue-600 rounded-xl">
+                  <Droplet size={18} />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-baseline gap-1.5 font-mono">
+                  <span className="text-2xl font-black text-blue-700 leading-none">
+                    {totalFuel.toLocaleString('ar-EG')}
+                  </span>
+                  <span className="text-xs text-blue-500 font-bold uppercase tracking-tight">ج.م</span>
+                </div>
+                <p className="text-[9px] text-slate-400 font-medium">إجمالي تكلفة تموين بونات المحروقات للموقع</p>
+              </div>
+            </motion.div>
+
+            {/* 3. المسدد */}
+            <motion.div 
+              whileHover={{ y: -4, shadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)' }}
+              className="p-5 rounded-3xl border border-emerald-100 bg-gradient-to-br from-white to-emerald-50/20 shadow-lg flex flex-col justify-between space-y-4 text-right"
+              dir="rtl"
+            >
+              <div className="flex items-center justify-between">
+                <span className="block text-[10px] text-emerald-600 font-black uppercase tracking-widest leading-relaxed">
+                  إجمالي المسدد والمصروف
+                </span>
+                <div className="p-2 bg-emerald-100 text-emerald-600 rounded-xl">
+                  <Coins size={18} />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-baseline gap-1.5 font-mono">
+                  <span className="text-2xl font-black text-emerald-700 leading-none">
+                    {totalEquipmentSpent.toLocaleString('ar-EG')}
+                  </span>
+                  <span className="text-xs text-emerald-500 font-bold uppercase tracking-tight">ج.م</span>
+                </div>
+                <p className="text-[9px] text-slate-400 font-medium">سلف السائقين، العهد والمنصرف المالي التراكمي</p>
+              </div>
+            </motion.div>
+
+            {/* 4. المتبقي */}
+            <motion.div 
+              whileHover={{ y: -4, shadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)' }}
+              className="p-5 rounded-3xl border border-amber-200 bg-gradient-to-br from-white to-amber-50/30 shadow-lg flex flex-col justify-between space-y-4 text-right"
+              dir="rtl"
+            >
+              <div className="flex items-center justify-between">
+                <span className="block text-[10px] text-amber-700 font-black uppercase tracking-widest leading-relaxed">
+                  صافي المتبقي والمستحق
+                </span>
+                <div className="p-2 bg-amber-100 text-amber-600 rounded-xl">
+                  <Target size={18} />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-baseline gap-1.5 font-mono">
+                  <span className="text-2xl font-black text-amber-600 leading-none">
+                    {remainingLessFuel.toLocaleString('ar-EG')}
+                  </span>
+                  <span className="text-xs text-amber-500 font-bold uppercase tracking-tight">ج.م</span>
+                </div>
+                <p className="text-[9px] text-slate-400 font-bold mt-1">التزامات التشغيل - المسدد (بدون المحروقات)</p>
+              </div>
+            </motion.div>
           </div>
-          <div className="p-4 bg-amber-500 text-white rounded-2xl shadow-xl shadow-amber-100">
-            <Coins size={28} />
-          </div>
-        </motion.div>
-      </div>
+        );
+      })()}
     </div>
   );
 }

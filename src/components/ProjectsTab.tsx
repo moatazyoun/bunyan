@@ -26,7 +26,7 @@ import {
   AlertCircle,
   CheckCircle
 } from 'lucide-react';
-import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth, signInWithRedirect, GoogleAuthProvider, getRedirectResult } from 'firebase/auth';
 import { Project, BOQItem, UserItem } from '../types';
 
 interface ProjectsTabProps {
@@ -41,6 +41,14 @@ export default function ProjectsTab({ projects, setProjects, boqItems, currentUs
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Deletion Confirmation States
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const [deleteConfirmCode, setDeleteConfirmCode] = useState('');
+  const [deleteAdminPassword, setDeleteAdminPassword] = useState('');
+  const [generatedConfirmCode, setGeneratedConfirmCode] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeletingInProgress, setIsDeletingInProgress] = useState(false);
 
   // User Assignment Modal State
   const [projectForUsers, setProjectForUsers] = useState<Project | null>(null);
@@ -150,9 +158,61 @@ export default function ProjectsTab({ projects, setProjects, boqItems, currentUs
     setFormData({ name: '', assignmentNumber: '', durationMonths: 12, status: 'Active' });
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm('هل أنت متأكد من حذف هذا المشروع؟ سيتم حذف كافة البيانات المرتبطة به.')) {
-      setProjects(projects.filter(p => p.id !== id));
+  const handleOpenDeleteModal = (project: Project) => {
+    if (currentUserRole !== 'admin') {
+      alert('عذراً، صلاحية حذف المشروعات تقتصر على مدير النظام فقط.');
+      return;
+    }
+    // Generate a random 4-digit code
+    const code = Math.floor(1000 + Math.random() * 9000).toString();
+    setGeneratedConfirmCode(code);
+    setProjectToDelete(project);
+    setDeleteConfirmCode('');
+    setDeleteAdminPassword('');
+    setDeleteError(null);
+    setIsDeletingInProgress(false);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!projectToDelete) return;
+
+    if (deleteConfirmCode !== generatedConfirmCode) {
+      setDeleteError('رمز التأكيد غير صحيح.');
+      return;
+    }
+
+    if (!deleteAdminPassword) {
+      setDeleteError('يرجى إدخال الرقم السري لمدير النظام.');
+      return;
+    }
+
+    setIsDeletingInProgress(true);
+    setDeleteError(null);
+
+    try {
+      const currentUserJson = localStorage.getItem('bunyan_current_user');
+      const currentUserObj = currentUserJson ? JSON.parse(currentUserJson) : null;
+      const username = currentUserObj?.username || 'moataz';
+
+      // Verify password via POST /api/auth/login
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password: deleteAdminPassword })
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setProjects(projects.filter(p => p.id !== projectToDelete.id));
+        setProjectToDelete(null);
+        alert('تم حذف المشروع بنجاح.');
+      } else {
+        setDeleteError('الرقم السري لمدير النظام غير صحيح.');
+      }
+    } catch (err) {
+      setDeleteError('حدث خطأ أثناء التحقق، يرجى المحاولة لاحقاً.');
+    } finally {
+      setIsDeletingInProgress(false);
     }
   };
 
@@ -329,12 +389,15 @@ export default function ProjectsTab({ projects, setProjects, boqItems, currentUs
                       >
                         <Edit3 className="w-4 h-4" />
                       </button>
-                      <button 
-                        onClick={() => handleDelete(project.id)}
-                        className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {currentUserRole === 'admin' && (
+                        <button 
+                          onClick={() => handleOpenDeleteModal(project)}
+                          className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition"
+                          title="حذف المشروع"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -472,118 +535,100 @@ export default function ProjectsTab({ projects, setProjects, boqItems, currentUs
         </div>
       )}
 
-      {/* 📥 Restore from Backup Section */}
-      <div className="bg-slate-50 p-6 rounded-3xl border border-dashed border-slate-250 space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
-              <CloudDownload className="w-5 h-5 text-indigo-600" />
-              استعادة نسخة احتياطية (سحابية أو محلية)
-            </h3>
-            <p className="text-[11px] text-slate-500 font-bold mt-0.5">استورد بياناتك السابقة بالكامل من ملف محلي أو عبر Google Drive</p>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            {/* Local Restore Button */}
-            <label className="flex items-center gap-1.5 px-4 py-2 bg-white text-slate-705 border border-slate-200 rounded-xl text-xs font-black hover:bg-slate-100 transition cursor-pointer">
-              <FileUp className="w-4 h-4 text-emerald-600 animate-bounce" />
-              استعادة من ملف محلي (JSON)
-              <input 
-                type="file" 
-                accept=".json" 
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  if (window.confirm('هل أنت متأكد من استعادة النسخة الاحتياطية المحلية؟ سيتم استبدال وحذف كل البيانات الحالية للموقع النشط.')) {
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                      try {
-                        const parsed = JSON.parse(event.target?.result as string);
-                        onRestoreBackup(parsed);
-                        alert('تمت استعادة البيانات المحلية بنجاح!');
-                      } catch (err) {
-                        alert('الملف المرفق غير صالح.');
-                      }
-                    };
-                    reader.readAsText(file);
-                  }
-                }} 
-                className="hidden" 
-              />
-            </label>
+      {/* 🗑️ Custom Delete Project Modal */}
+      {projectToDelete && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-white rounded-[32px] w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border border-slate-100">
+            <div className="p-6 bg-rose-50 border-b border-rose-100 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-black text-rose-700 flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-rose-600 animate-pulse" />
+                  حذف مشروع نهائياً
+                </h3>
+                <p className="text-[10px] text-rose-500 font-bold mt-0.5">تنبيه حرج: لا يمكن التراجع عن هذه الخطوة</p>
+              </div>
+              <button onClick={() => setProjectToDelete(null)} className="p-2 hover:bg-rose-100 rounded-full text-rose-400 transition">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-            {/* Google Drive load button */}
-            <button
-              onClick={async () => {
-                try {
-                  const auth = getAuth();
-                  const provider = new GoogleAuthProvider();
-                  provider.addScope('https://www.googleapis.com/auth/drive.file');
-                  
-                  const result = await signInWithPopup(auth, provider);
-                  const credential = GoogleAuthProvider.credentialFromResult(result);
-                  if (!credential || !credential.accessToken) {
-                    alert('لم يتم استلام رمز الوصول.');
-                    return;
-                  }
-                  
-                  // Fetch files
-                  const q = encodeURIComponent("name contains 'bunyan_backup_' and trashed = false");
-                  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id, name, createdTime)&orderBy=createdTime desc`, {
-                    headers: { 'Authorization': `Bearer ${credential.accessToken}` }
-                  });
-                  
-                  if (!res.ok) throw new Error();
-                  const data = await res.json();
-                  const filesList: any[] = data.files || [];
-                  
-                  if (filesList.length === 0) {
-                    alert('لم يتم العثور على أي نسخ احتياطية مسجلة سحابياً بجوجل درايف.');
-                    return;
-                  }
-                  
-                  // Let the user pick one dynamically in a prompt or alert
-                  const optionsText = filesList.map((f, i) => `${i + 1}- ${f.name} (${new Date(f.createdTime).toLocaleDateString('ar-EG')})`).join('\n');
-                  const selection = window.prompt(
-                    `اختر رقم النسخة الاحتياطية التي تود استعادتها من Google Drive:\n\n${optionsText}\n\nاكتب الرقم هنا لمتابعة الاستعادة:`
-                  );
-                  
-                  if (selection) {
-                    const idx = parseInt(selection, 10) - 1;
-                    if (idx >= 0 && idx < filesList.length) {
-                      const selectedFile = filesList[idx];
-                      if (window.confirm(`هل أنت متأكد من استعادة النسخة الاحتياطية السحابية "${selectedFile.name}"؟ سيؤدي ذلك لخطوة استبدال كافة السجلات الحالية.`)) {
-                        const dlRes = await fetch(`https://www.googleapis.com/drive/v3/files/${selectedFile.id}?alt=media`, {
-                          headers: { 'Authorization': `Bearer ${credential.accessToken}` }
-                        });
-                        if (dlRes.ok) {
-                          const backupData = await dlRes.json();
-                          onRestoreBackup(backupData);
-                          alert('تمت استعادة كافة البيانات والملفات السحابية بنجاح!');
-                        } else {
-                          alert('فشل تحميل محتوى الملف السحابي.');
-                        }
-                      }
-                    } else {
-                      alert('رقم اختيار غير صحيح.');
-                    }
-                  }
-                } catch (err: any) {
-                  if (err && err.code === 'auth/popup-closed-by-user') {
-                    alert('تنبيه بيئة المعاينة (Iframe): تم إغلاق نافذة المصادقة. نظراً لقيود المتصفح الأمنية داخل الإطار، يُرجى فتح الحساب في نافذة جديدة (Open in new tab) من الأعلى للتوافق الكامل مع مصادقة Google.');
-                  } else {
-                    alert('حدث خطأ أثناء الاتصال بجوجل والتجول عبر الملفات.');
-                  }
-                }
-              }}
-              className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black hover:bg-slate-800 transition"
-            >
-              <CloudDownload className="w-4 h-4 text-indigo-400" />
-              استعراض واستعادة من Google Drive
-            </button>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-slate-600 leading-relaxed font-bold">
+                أنت على وشك حذف المشروع: <span className="text-slate-900 font-black">"{projectToDelete.name}"</span>. 
+                سيؤدي هذا الإجراء إلى حذف جميع البنود والمستندات والعمليات المرتبطة بهذا المشروع من قاعدة البيانات بشكل نهائي.
+              </p>
+
+              {/* Confirmation Code Section */}
+              <div className="bg-slate-50 p-4 rounded-2xl space-y-2 border border-slate-100">
+                <label className="block text-[11px] font-black text-slate-500">رمز التأكيد المطلوب</label>
+                <div className="flex items-center justify-between bg-white px-4 py-2.5 rounded-xl border border-slate-200 font-mono">
+                  <span className="text-xs font-bold text-slate-500">أدخل الرمز التالي لإثبات رغبتك:</span>
+                  <span className="text-sm font-black text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded border border-indigo-100 select-all">
+                    {generatedConfirmCode}
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  maxLength={4}
+                  placeholder="أدخل رمز التأكيد المكون من 4 أرقام..."
+                  value={deleteConfirmCode}
+                  onChange={(e) => setDeleteConfirmCode(e.target.value.trim())}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-black text-center tracking-widest focus:border-indigo-400 outline-none transition font-mono"
+                />
+              </div>
+
+              {/* Password Section */}
+              <div className="space-y-1">
+                <label className="block text-[11px] font-black text-slate-500 mr-2">الرقم السري لمدير النظام</label>
+                <input
+                  type="password"
+                  placeholder="أدخل كلمتك السرية لتأكيد الهوية..."
+                  value={deleteAdminPassword}
+                  onChange={(e) => setDeleteAdminPassword(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm font-black focus:border-rose-400 outline-none transition text-center"
+                />
+              </div>
+
+              {deleteError && (
+                <div className="flex items-center gap-2 p-3 bg-rose-50 text-rose-600 rounded-xl text-xs font-black border border-rose-100">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{deleteError}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
+              <button
+                disabled={isDeletingInProgress || !deleteConfirmCode || !deleteAdminPassword}
+                onClick={handleConfirmDelete}
+                className={`flex-1 rounded-2xl py-3.5 font-black shadow-lg transition flex items-center justify-center gap-2 ${
+                  isDeletingInProgress || !deleteConfirmCode || !deleteAdminPassword
+                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                    : 'bg-rose-600 text-white hover:bg-rose-700 shadow-rose-600/10'
+                }`}
+              >
+                {isDeletingInProgress ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>جاري التحقق والحذف...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>تأكيد الحذف النهائي</span>
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => setProjectToDelete(null)}
+                className="px-6 bg-white border border-slate-200 text-slate-600 rounded-2xl py-3.5 font-black hover:bg-slate-50 transition"
+              >
+                إلغاء
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -38,6 +38,7 @@ export default function NotificationsTab({ currentUser, selectedSite, dbConnecte
   const [notifTitle, setNotifTitle] = useState('');
   const [notifContent, setNotifContent] = useState('');
   const [notifScope, setNotifScope] = useState('all');
+  const [targetUsers, setTargetUsers] = useState(''); // New state
   const [isSending, setIsSending] = useState(false);
   
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -106,13 +107,15 @@ export default function NotificationsTab({ currentUser, selectedSite, dbConnecte
         senderName: currentUser?.nameAr || 'إدارة البرنامج',
         senderUsername: currentUser?.username || 'system',
         timestamp: new Date().toISOString(),
-        dismissedBy: []
+        dismissedBy: [],
+        targetUsers: targetUsers.trim() ? targetUsers.split(',').map(u => u.trim()) : []
       };
 
       await addDoc(collection(db, 'notifications'), newNotif);
       setSuccessMsg('تم بث الإشعار الإداري العاجل بنجاح تام! سيظهر للمستهدفين فوراً ولا يختفي حتى تصفحه والإقرار بالفهم.');
       setNotifTitle('');
       setNotifContent('');
+      setTargetUsers('');
     } catch (err: any) {
       console.error(err);
       setErrorMsg('فشل إرسال الإشعار: ' + (err.message || err));
@@ -169,7 +172,21 @@ export default function NotificationsTab({ currentUser, selectedSite, dbConnecte
   // Filter notifications for display
   const targetedNotifications = notifications.filter(n => {
     // Show only the ones relevant to this user's current site (or 'all' global ones)
-    return n.siteId === 'all' || (selectedSite && n.siteId === selectedSite.id);
+    let isSiteRelevant = n.siteId === 'all' || (selectedSite && n.siteId === selectedSite.id);
+    
+    // Filter out notifications created before user was created
+    let isCreatedAfterUser = true;
+    if (currentUser?.createdAt && n.timestamp) {
+       isCreatedAfterUser = new Date(n.timestamp).getTime() >= new Date(currentUser.createdAt).getTime();
+    }
+    
+    // If specific users are targeted, only show if current user is one of them
+    let isTargeted = true;
+    if (n.targetUsers && n.targetUsers.length > 0) {
+        isTargeted = currentUser ? n.targetUsers.includes(currentUser.username) : false;
+    }
+    
+    return isSiteRelevant && isCreatedAfterUser && isTargeted;
   });
 
   return (
@@ -409,6 +426,16 @@ export default function NotificationsTab({ currentUser, selectedSite, dbConnecte
                       <option value={selectedSite.id}>موقع ومشروع ({selectedSite.nameAr}) الحالي فقط 📍</option>
                     )}
                   </select>
+                </div>
+                <div>
+                   <label className="block text-xs font-bold text-slate-600 mb-2">المستخدمين المستهدفين (اسم المستخدم، مفصولين بفاصلة. اتركها فارغة للجميع)</label>
+                   <input
+                    type="text"
+                    placeholder="مثال: ahmed, mohamed"
+                    value={targetUsers}
+                    onChange={(e) => setTargetUsers(e.target.value)}
+                    className="w-full p-4 bg-white border border-slate-200 rounded-2xl text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition shadow-sm"
+                   />
                 </div>
               </div>
 

@@ -16,7 +16,8 @@ import {
   Truck,
   Hash,
   Users,
-  X
+  X,
+  Printer
 } from 'lucide-react';
 import { CubicCertificate, SupplyRecord, SupplyItem, SiteWorker } from '../types';
 
@@ -75,6 +76,242 @@ export default function SuppliesCubicTab({
 
   // Keep track of checked ticket IDs in the custom creation view
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
+
+  // Print States
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [printTargetCert, setPrintTargetCert] = useState<CubicCertificate | null>(null);
+  const [printPaperSize, setPrintPaperSize] = useState<'A4' | 'A3'>('A4');
+  const [printOrientation, setPrintOrientation] = useState<'portrait' | 'landscape'>('portrait');
+
+  const handlePrintCertificate = (c: CubicCertificate, paperSize: 'A4' | 'A3', orientation: 'portrait' | 'landscape') => {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (!doc) return;
+
+    const dateStr = new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    const supplier = suppliers.find(s => s.deliveryMethods?.some((dm: any) => dm.id === c.dumperId));
+    const dumper = supplier?.deliveryMethods?.find((dm: any) => dm.id === c.dumperId);
+
+    const attachedRecords = supplyRecords.filter(r => c.attachedTicketIds.includes(r.id) || r.cubicCertificateId === c.id);
+
+    const ticketRows = attachedRecords.length === 0 ? `
+      <tr>
+        <td colspan="7" class="p-3 border border-slate-400 text-center text-slate-500 font-bold">لا توجد بونات توريد مسواة ومقترنة بهذا المحضر حالياً.</td>
+      </tr>
+    ` : attachedRecords.map((r, index) => {
+      const matchItem = supplyItems.find(i => i.code === r.itemCode);
+      return `
+        <tr class="border-b border-slate-300 text-xs text-slate-850 text-center">
+          <td class="p-1.5 border border-slate-400 font-bold">${index + 1}</td>
+          <td class="p-1.5 border border-slate-400 font-bold font-mono text-indigo-700">${r.ticketNo}</td>
+          <td class="p-1.5 border border-slate-400 font-mono">${r.date}</td>
+          <td class="p-1.5 border border-slate-400 text-right font-medium">${matchItem?.name || r.itemCode}</td>
+          <td class="p-1.5 border border-slate-400 font-mono">${r.rawQuantity.toLocaleString()} م٣</td>
+          <td class="p-1.5 border border-slate-400 font-black font-mono text-indigo-900">${r.netQuantity.toLocaleString()} م٣</td>
+          <td class="p-1.5 border border-slate-400 text-right text-[11px]">${r.notes || '---'}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const totalRaw = attachedRecords.reduce((sum, r) => sum + r.rawQuantity, 0);
+    const totalNet = attachedRecords.reduce((sum, r) => sum + r.netQuantity, 0);
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <title>محضر تكعيب هندسي</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+        <script>
+          tailwind.config = {
+            theme: {
+              extend: {
+                fontFamily: {
+                  sans: ['Tajawal', 'sans-serif'],
+                }
+              }
+            }
+          }
+        </script>
+        <style>
+          @page {
+            size: ${paperSize} ${orientation};
+            margin: 15mm;
+          }
+          @media print {
+            body {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+              background-color: white !important;
+            }
+          }
+          body {
+            font-family: 'Tajawal', sans-serif;
+            background-color: white;
+          }
+        </style>
+      </head>
+      <body class="p-4 bg-white text-slate-900">
+        <div class="border-4 border-double border-slate-700 p-6 min-h-full flex flex-col justify-between">
+          <div>
+            <!-- Header Block -->
+            <div class="flex items-center justify-between border-b-2 border-slate-800 pb-4 mb-6">
+              <div class="text-right space-y-1">
+                <h1 class="text-sm font-black text-slate-800">شركة بنيان للتشييد والتطوير العقاري</h1>
+                <p class="text-[10px] font-bold text-slate-500">إدارة المشروعات والرقابة الهندسية والتوريدات</p>
+                <p class="text-[9px] text-slate-400">تاريخ الطباعة: ${dateStr}</p>
+              </div>
+              
+              <div class="text-center">
+                <div class="border-2 border-slate-800 px-4 py-2 bg-slate-50 rounded-lg">
+                  <span class="text-xs font-black text-slate-800 block">شعار بنيان</span>
+                  <span class="text-[10px] font-bold text-slate-400">BUNYAN CO.</span>
+                </div>
+              </div>
+
+              <div class="text-left text-xs space-y-1">
+                <p class="font-bold">الموقع: <span class="font-black text-indigo-750">مشروع برج العرب الجديدة</span></p>
+                <p class="font-bold text-[10px] text-slate-500">مستند تسوية: محضر جرد وتكعيب هندسي</p>
+              </div>
+            </div>
+
+            <!-- Title -->
+            <div class="text-center my-6">
+              <h2 class="text-lg font-black text-slate-900 border-b-4 border-indigo-600 inline-block pb-1 px-6 uppercase tracking-wider">
+                محضر معاينة وتكعيب هندسي معتمد لسيارات التوريد
+              </h2>
+              <p class="text-[11px] font-bold text-slate-500 mt-2">مرجع التكويد والمقايسات الفنية للموقع</p>
+            </div>
+
+            <!-- Block 1: Vehicle Technical Specifications -->
+            <div class="grid grid-cols-2 gap-6 mt-4">
+              <div class="border border-slate-400 p-4 rounded-xl bg-slate-50/50 space-y-2">
+                <h3 class="text-xs font-black text-slate-900 border-b pb-1">البيانات الإدارية والتعاقدية للمركبة</h3>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                  <span class="text-slate-500">المقاول المورد:</span>
+                  <span class="font-bold text-slate-900">${supplier?.name || 'غير حدد'}</span>
+                  
+                  <span class="text-slate-500">اسم سائق الشاحنة:</span>
+                  <span class="font-bold text-slate-900">${dumper?.driverName || '---'}</span>
+
+                  <span class="text-slate-500">رقم رخصة القلاب:</span>
+                  <span class="font-bold text-slate-900 font-mono">${dumper?.dumperNumber || '---'}</span>
+
+                  <span class="text-slate-500">رقم لوحة السيارة:</span>
+                  <span class="font-bold text-slate-900 font-mono">${dumper?.truckNumber || '---'}</span>
+                </div>
+              </div>
+
+              <div class="border border-slate-400 p-4 rounded-xl bg-indigo-50/20 space-y-2">
+                <h3 class="text-xs font-black text-indigo-950 border-b border-indigo-200 pb-1">المقاييس والأحجام الهندسية المعتمدة</h3>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                  <span class="text-indigo-900/70">سعة القلاب الفنية:</span>
+                  <span class="font-mono font-bold text-indigo-950">${c.dumperCubic?.toFixed(2) || '0.00'} م٣</span>
+                  
+                  <span class="text-indigo-900/70">سعة المقطورة (إن وجدت):</span>
+                  <span class="font-mono font-bold text-indigo-950">${c.trailerCubic?.toFixed(2) || '0.00'} م٣</span>
+
+                  <span class="text-red-700/80">الخصم الإلزامي المعتمد:</span>
+                  <span class="font-mono font-bold text-red-700">-${c.discounts?.toFixed(2) || '0.00'} م٣</span>
+
+                  <span class="text-emerald-850 font-black">صافي سعة المركبة للتوريد:</span>
+                  <span class="font-mono font-black text-emerald-700 underline">${(c.netCubic ?? c.approvedVolume).toFixed(2)} م٣</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Period of validity -->
+            <div class="my-4 p-3 bg-slate-50 border border-slate-300 rounded-xl text-center text-xs">
+              <p class="font-black text-slate-800">
+                فترة سريان التكعيب: <span class="text-indigo-700">من ${c.startDate || 'بداية المشروع'}</span> إلى <span class="text-indigo-700">تاريخ ${c.endDate || 'الآن'}</span>
+              </p>
+            </div>
+
+            <!-- Block 2: Attached Tickets List -->
+            <div class="mt-6">
+              <h3 class="text-xs font-black text-slate-850 border-r-4 border-indigo-500 pr-2 mb-2">بيان البونات والمشاحنات التي تمت تسويتها بموجب هذا المحضر</h3>
+              <table class="w-full text-right text-xs border-collapse border border-slate-400">
+                <thead>
+                  <tr class="bg-slate-100 text-slate-900 font-black text-center text-xs">
+                    <th class="p-2 border border-slate-400 w-12">م</th>
+                    <th class="p-2 border border-slate-400">رقم البون الورقي</th>
+                    <th class="p-2 border border-slate-400">تاريخ التوريد</th>
+                    <th class="p-2 border border-slate-400">نوع الخامة</th>
+                    <th class="p-2 border border-slate-400 font-mono">الكمية المقدرة</th>
+                    <th class="p-2 border border-slate-400 font-mono">الكمية المعتمدة بالصافي</th>
+                    <th class="p-2 border border-slate-400 text-right">ملاحظات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${ticketRows}
+                  <tr class="bg-slate-50 font-black text-center">
+                    <td colspan="4" class="p-2 border border-slate-400 text-right">إجمالي التسوية للحركات المذكورة أعلاه:</td>
+                    <td class="p-2 border border-slate-400 font-mono">${totalRaw.toLocaleString()} م٣</td>
+                    <td class="p-2 border border-slate-400 font-mono text-indigo-700">${totalNet.toLocaleString()} م٣</td>
+                    <td class="p-2 border border-slate-400">---</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Notes -->
+            ${c.notes ? `
+            <div class="mt-4 p-3 bg-amber-50/50 border border-amber-300 rounded-xl text-xs text-amber-850">
+              <strong>ملاحظات لجنة القياس الهندسية:</strong> ${c.notes}
+            </div>
+            ` : ''}
+          </div>
+
+          <!-- Signature block -->
+          <div class="grid grid-cols-4 gap-4 text-center text-[10px] font-black text-slate-700 mt-16 border-t border-slate-300 pt-6">
+            <div class="space-y-12">
+              <p>مراقب القياس الميداني</p>
+              <p class="border-t border-dashed border-slate-400 pt-1.5 w-3/4 mx-auto">توقيع: ${c.personPerformingMeasurement || '.....................'}</p>
+            </div>
+            <div class="space-y-12">
+              <p>المكتب الفني ومراجع التكعيب</p>
+              <p class="border-t border-dashed border-slate-400 pt-1.5 w-3/4 mx-auto">الاسم والتوقيع: .....................</p>
+            </div>
+            <div class="space-y-12">
+              <p>اعتماد مهندس الرقابة الهندسية</p>
+              <p class="border-t border-dashed border-slate-400 pt-1.5 w-3/4 mx-auto">توقيع: ${c.approverOfMeasurement || '.....................'}</p>
+            </div>
+            <div class="space-y-12">
+              <p>اعتماد مدير عام المشروع</p>
+              <p class="border-t border-dashed border-slate-400 pt-1.5 w-3/4 mx-auto">الاسم والتوقيع: .....................</p>
+            </div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+              setTimeout(function() {
+                window.frameElement.remove();
+              }, 500);
+            }, 1000);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+  };
 
   // All delivery methods across all suppliers for lookups
   const allDeliveryMethods = useMemo(() => 
@@ -527,6 +764,17 @@ export default function SuppliesCubicTab({
                   </div>
                   <div className="flex gap-2 justify-end">
                     <button
+                      onClick={() => {
+                        setPrintTargetCert(c);
+                        setShowPrintModal(true);
+                      }}
+                      className="flex-1 sm:flex-initial p-2 px-4 border border-indigo-200 bg-indigo-50/50 hover:bg-indigo-50 rounded-xl text-xs font-black text-indigo-700 transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                      title="طباعة المحضر"
+                    >
+                      <Printer className="h-4 w-4 text-indigo-600" />
+                      طباعة
+                    </button>
+                    <button
                       onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية التعديل') : () => handleOpenEdit(c)}
                       className={`flex-1 sm:flex-initial p-2 px-4 border rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer ${
                         userRole === 'viewer'
@@ -896,6 +1144,89 @@ export default function SuppliesCubicTab({
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirmId(null)}
       />
+
+      {/* Print Settings Modal */}
+      {showPrintModal && printTargetCert && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in text-right" dir="rtl">
+          <div className="bg-white border border-slate-200 rounded-[2rem] w-full max-w-md p-6 shadow-2xl space-y-6">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <Printer className="h-5 w-5 text-indigo-600" />
+                إعدادات طباعة محضر التكعيب
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPrintModal(false);
+                  setPrintTargetCert(null);
+                }}
+                className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-black text-slate-500 mb-2">نوع التقرير للطباعة:</p>
+                <div className="p-3 bg-slate-50 border rounded-xl text-xs font-bold text-indigo-900">
+                  محضر جرد وتكعيب هندسي معتمد لسيارة توريد مع بيان البونات المسواة
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">حجم الورقة:</label>
+                  <select
+                    value={printPaperSize}
+                    onChange={(e: any) => setPrintPaperSize(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20"
+                  >
+                    <option value="A4">A4 (قياسي)</option>
+                    <option value="A3">A3 (كبير جداً)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">اتجاه الصفحة:</label>
+                  <select
+                    value={printOrientation}
+                    onChange={(e: any) => setPrintOrientation(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20"
+                  >
+                    <option value="portrait">رأسي (Portrait)</option>
+                    <option value="landscape">أفقي (Landscape)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  handlePrintCertificate(printTargetCert, printPaperSize, printOrientation);
+                  setShowPrintModal(false);
+                  setPrintTargetCert(null);
+                }}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl shadow-lg transition text-center text-xs"
+              >
+                تأكيد وأمر الطباعة
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPrintModal(false);
+                  setPrintTargetCert(null);
+                }}
+                className="px-4 bg-slate-50 hover:bg-slate-100 text-slate-500 font-bold py-3 rounded-xl transition text-xs"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

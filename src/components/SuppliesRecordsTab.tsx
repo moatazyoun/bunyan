@@ -17,7 +17,8 @@ import {
   FileCheck,
   ArrowUp,
   ArrowDown,
-  ArrowUpDown
+  ArrowUpDown,
+  Printer
 } from 'lucide-react';
 import { SupplyRecord, SupplyItem } from '../types';
 import { parseArabicNumber } from '../utils/numbers';
@@ -54,6 +55,201 @@ export default function SuppliesRecordsTab({
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Print States
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [printPaperSize, setPrintPaperSize] = useState<'A4' | 'A3'>('A4');
+  const [printOrientation, setPrintOrientation] = useState<'portrait' | 'landscape'>('landscape');
+
+  const handlePrintRecords = (paperSize: 'A4' | 'A3', orientation: 'portrait' | 'landscape') => {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (!doc) return;
+
+    const dateStr = new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    const rows = sortedRecords.map((r, index) => {
+      const matchItem = supplyItems.find(i => i.code === r.itemCode);
+      return `
+        <tr class="border-b border-slate-300 text-[10px] text-slate-850 text-center">
+          <td class="p-1.5 border border-slate-400 font-bold">${index + 1}</td>
+          <td class="p-1.5 border border-slate-400 font-bold font-mono text-indigo-700">${r.ticketNo}</td>
+          <td class="p-1.5 border border-slate-400 font-mono">${r.date}</td>
+          <td class="p-1.5 border border-slate-400 text-right font-black">${r.supplierName}</td>
+          <td class="p-1.5 border border-slate-400 text-right font-medium">${matchItem?.name || r.itemName || r.itemCode}</td>
+          <td class="p-1.5 border border-slate-400 font-bold font-mono">${r.truckPlate} ${r.trailerPlate ? ' / ' + r.trailerPlate : ''}</td>
+          <td class="p-1.5 border border-slate-400 font-mono">${r.rawQuantity.toLocaleString()} م٣</td>
+          <td class="p-1.5 border border-slate-400 font-black font-mono text-indigo-900">${r.netQuantity.toLocaleString()} م٣</td>
+          <td class="p-1.5 border border-slate-400 font-bold font-mono">${(r.unitPrice || 0).toLocaleString()} ج.م</td>
+          <td class="p-1.5 border border-slate-400 font-black font-mono text-slate-900">${(r.totalCost || 0).toLocaleString()} ج.م</td>
+        </tr>
+      `;
+    }).join('');
+
+    const totalRaw = sortedRecords.reduce((sum, r) => sum + r.rawQuantity, 0);
+    const totalNet = sortedRecords.reduce((sum, r) => sum + r.netQuantity, 0);
+    const totalCost = sortedRecords.reduce((sum, r) => sum + (r.totalCost || 0), 0);
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <title>بيان حركات التوريدات</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+        <script>
+          tailwind.config = {
+            theme: {
+              extend: {
+                fontFamily: {
+                  sans: ['Tajawal', 'sans-serif'],
+                }
+              }
+            }
+          }
+        </script>
+        <style>
+          @page {
+            size: ${paperSize} ${orientation};
+            margin: 10mm;
+          }
+          @media print {
+            body {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+              background-color: white !important;
+            }
+          }
+          body {
+            font-family: 'Tajawal', sans-serif;
+            background-color: white;
+          }
+        </style>
+      </head>
+      <body class="p-2 bg-white text-slate-900">
+        <div class="border-4 border-double border-slate-700 p-4 min-h-full flex flex-col justify-between">
+          <div>
+            <!-- Header Block -->
+            <div class="flex items-center justify-between border-b-2 border-slate-800 pb-3 mb-4">
+              <div class="text-right space-y-1">
+                <h1 class="text-xs font-black text-slate-800">شركة بنيان للتشييد والتطوير العقاري</h1>
+                <p class="text-[9px] font-bold text-slate-500">إدارة المشروعات والرقابة الهندسية والتوريدات</p>
+                <p class="text-[8px] text-slate-400">تاريخ الطباعة: ${dateStr}</p>
+              </div>
+              
+              <div class="text-center">
+                <div class="border border-slate-800 px-3 py-1.5 bg-slate-50 rounded-lg">
+                  <span class="text-[10px] font-black text-slate-800 block">شعار بنيان</span>
+                  <span class="text-[8px] font-bold text-slate-400">BUNYAN CO.</span>
+                </div>
+              </div>
+
+              <div class="text-left text-xs space-y-0.5">
+                <p class="font-bold">الموقع: <span class="font-black text-indigo-750">مشروع برج العرب الجديدة</span></p>
+                <p class="font-bold text-[10px] text-slate-500">مستند جرد: بيان حركة التوريدات اليومية</p>
+              </div>
+            </div>
+
+            <!-- Title -->
+            <div class="text-center my-4">
+              <h2 class="text-base font-black text-slate-900 border-b-2 border-indigo-600 inline-block pb-0.5 px-4 uppercase tracking-wider">
+                بيان حركة توريدات الخامات والمواد الموقعية
+              </h2>
+              <p class="text-[10px] font-bold text-slate-500 mt-1">
+                الفلترة النشطة: المورد [${filterSupplier === 'all' ? 'الكل' : filterSupplier}] - الخامة [${filterItem === 'all' ? 'الكل' : filterItem}]
+              </p>
+            </div>
+
+            <!-- Table -->
+            <div class="mt-2">
+              <table class="w-full text-right text-[10px] border-collapse border border-slate-400">
+                <thead>
+                  <tr class="bg-slate-100 text-slate-900 font-black text-center text-[10px]">
+                    <th class="p-2 border border-slate-400 w-10">م</th>
+                    <th class="p-2 border border-slate-400">رقم البون</th>
+                    <th class="p-2 border border-slate-400">التاريخ</th>
+                    <th class="p-2 border border-slate-400 text-right">اسم المورد</th>
+                    <th class="p-2 border border-slate-400 text-right">الخامة الموردة</th>
+                    <th class="p-2 border border-slate-400">رقم السيارة/المقطورة</th>
+                    <th class="p-2 border border-slate-400">الكمية المقدرة</th>
+                    <th class="p-2 border border-slate-400">الكمية الصافية</th>
+                    <th class="p-2 border border-slate-400">سعر الوحدة</th>
+                    <th class="p-2 border border-slate-400">التكلفة الإجمالية</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rows}
+                  <!-- Totals Row -->
+                  <tr class="bg-slate-50 border-t-2 border-slate-800 text-[10px] font-black text-center">
+                    <td colspan="6" class="p-2 border border-slate-400 text-right text-slate-900">
+                      الإجمالي العام للحركات المفلترة (${sortedRecords.length} بون توريد):
+                    </td>
+                    <td class="p-2 border border-slate-400 font-mono text-slate-900">
+                      ${totalRaw.toLocaleString()} م٣
+                    </td>
+                    <td class="p-2 border border-slate-400 font-mono text-indigo-750">
+                      ${totalNet.toLocaleString()} م٣
+                    </td>
+                    <td class="p-2 border border-slate-400 font-mono text-slate-500">
+                      ---
+                    </td>
+                    <td class="p-2 border border-slate-400 font-mono text-slate-900">
+                      ${totalCost.toLocaleString()} ج.م
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Signature block -->
+          <div class="grid grid-cols-4 gap-4 text-center text-[9px] font-black text-slate-700 mt-12 border-t border-slate-300 pt-4">
+            <div class="space-y-10">
+              <p>مستلم البونات والموقع</p>
+              <p class="border-t border-dashed border-slate-400 pt-1 w-3/4 mx-auto">الاسم والتوقيع: .....................</p>
+            </div>
+            <div class="space-y-10">
+              <p>المكتب الفني ومراجع الكميات</p>
+              <p class="border-t border-dashed border-slate-400 pt-1 w-3/4 mx-auto">الاسم والتوقيع: .....................</p>
+            </div>
+            <div class="space-y-10">
+              <p>المدير المالي للموقع</p>
+              <p class="border-t border-dashed border-slate-400 pt-1 w-3/4 mx-auto">الاسم والتوقيع: .....................</p>
+            </div>
+            <div class="space-y-10">
+              <p>اعتماد مدير المشروع</p>
+              <p class="border-t border-dashed border-slate-400 pt-1 w-3/4 mx-auto">الاسم والتوقيع: .....................</p>
+            </div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+              setTimeout(function() {
+                window.frameElement.remove();
+              }, 500);
+            }, 1000);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+  };
 
   const [formState, setFormState] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -298,18 +494,27 @@ export default function SuppliesRecordsTab({
             </div>
           </div>
           
-          <button 
-            onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية تسجيل توريدات جديدة') : handleOpenAdd}
-            disabled={userRole === 'viewer'}
-            className={`group font-black text-sm py-4 px-8 rounded-2xl flex items-center gap-3 transition-all shadow-lg active:scale-95 ${
-              userRole === 'viewer'
-                ? 'bg-slate-300 text-slate-100 cursor-not-allowed shadow-none'
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/20'
-            }`}
-          >
-            <Plus className="h-4 w-4" />
-            إضافة بون جديد
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setShowPrintModal(true)}
+              className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs py-4 px-6 rounded-2xl flex items-center gap-2 transition-all shadow active:scale-95 border border-slate-200"
+            >
+              <Printer className="h-4 w-4 text-slate-600" />
+              طباعة البيان المفلتر
+            </button>
+            <button 
+              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية تسجيل توريدات جديدة') : handleOpenAdd}
+              disabled={userRole === 'viewer'}
+              className={`group font-black text-xs py-4 px-8 rounded-2xl flex items-center gap-3 transition-all shadow-lg active:scale-95 ${
+                userRole === 'viewer'
+                  ? 'bg-slate-300 text-slate-100 cursor-not-allowed shadow-none'
+                  : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/20'
+              }`}
+            >
+              <Plus className="h-4 w-4" />
+              إضافة بون جديد
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-slate-50 rounded-3xl border border-slate-100 shadow-inner">
@@ -724,6 +929,82 @@ export default function SuppliesRecordsTab({
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirmId(null)}
       />
+
+      {/* Print Settings Modal */}
+      {showPrintModal && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in text-right" dir="rtl">
+          <div className="bg-white border border-slate-200 rounded-[2rem] w-full max-w-md p-6 shadow-2xl space-y-6">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <Printer className="h-5 w-5 text-indigo-600" />
+                إعدادات طباعة بيان التوريدات
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowPrintModal(false)}
+                className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-black text-slate-500 mb-2">نوع التقرير للطباعة:</p>
+                <div className="p-3 bg-slate-50 border rounded-xl text-xs font-bold text-indigo-900">
+                  كشف بيان حركة التوريدات اليومية والكلية (المفلترة والمفرزة حالياً)
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">حجم الورقة:</label>
+                  <select
+                    value={printPaperSize}
+                    onChange={(e: any) => setPrintPaperSize(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20"
+                  >
+                    <option value="A4">A4 (قياسي)</option>
+                    <option value="A3">A3 (كبير جداً)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">اتجاه الصفحة:</label>
+                  <select
+                    value={printOrientation}
+                    onChange={(e: any) => setPrintOrientation(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20"
+                  >
+                    <option value="portrait">رأسي (Portrait)</option>
+                    <option value="landscape">أفقي (Landscape)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  handlePrintRecords(printPaperSize, printOrientation);
+                  setShowPrintModal(false);
+                }}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl shadow-lg transition text-center text-xs"
+              >
+                تأكيد وأمر الطباعة
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPrintModal(false)}
+                className="px-4 bg-slate-50 hover:bg-slate-100 text-slate-500 font-bold py-3 rounded-xl transition text-xs"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

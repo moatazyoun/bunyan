@@ -19,7 +19,8 @@ import {
   Briefcase,
   Upload,
   Sparkles,
-  Loader2
+  Loader2,
+  Printer
 } from 'lucide-react';
 import { BOQItem, Project } from '../types';
 
@@ -64,6 +65,274 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
     quantity: 0,
     price: 0
   });
+
+  // Print Settings States
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [printPaperSize, setPrintPaperSize] = useState<'A4' | 'A3'>('A4');
+  const [printOrientation, setPrintOrientation] = useState<'portrait' | 'landscape'>('portrait');
+
+  // helper to convert number to Arabic words (Tafqit)
+  const tafqitArabic = (num: number): string => {
+    if (num === 0) return 'صفر جنيه مصري';
+    
+    const ones = ['', 'واحد', 'اثنان', 'ثلاثة', 'أربعة', 'خمسة', 'ستة', 'سبعة', 'ثمانية', 'تسعة', 'عشرة', 'أحد عشر', 'اثنا عشر', 'ثلاثة عشر', 'أربعة عشر', 'خمسة عشر', 'ستة عشر', 'سبعة عشر', 'ثمانية عشر', 'تسعة عشر'];
+    const tens = ['', 'عشرة', 'عشرون', 'ثلاثون', 'أربعون', 'خمسون', 'ستون', 'سبعون', 'ثمانون', 'تسعون'];
+    const hundreds = ['', 'مائة', 'مائتان', 'ثلاثمائة', 'أربعمائة', 'خمسمائة', 'ستمائة', 'سبعمائة', 'ثمانمائة', 'تسعمائة'];
+    
+    const getUnderThousand = (n: number): string => {
+      let result = '';
+      const h = Math.floor(n / 100);
+      const rem = n % 100;
+      
+      if (h > 0) {
+        result += hundreds[h];
+      }
+      
+      if (rem > 0) {
+        if (result) result += ' و ';
+        if (rem < 20) {
+          result += ones[rem];
+        } else {
+          const t = Math.floor(rem / 10);
+          const o = rem % 10;
+          if (o > 0) {
+            result += ones[o] + ' و ' + tens[t];
+          } else {
+            result += tens[t];
+          }
+        }
+      }
+      return result;
+    };
+
+    const parts: string[] = [];
+    let temp = Math.floor(num);
+    
+    // Millions
+    const millions = Math.floor(temp / 1000000);
+    temp %= 1000000;
+    if (millions > 0) {
+      if (millions === 1) parts.push('مليون');
+      else if (millions === 2) parts.push('مليونان');
+      else if (millions >= 3 && millions <= 10) parts.push(getUnderThousand(millions) + ' ملايين');
+      else parts.push(getUnderThousand(millions) + ' مليون');
+    }
+    
+    // Thousands
+    const thousands = Math.floor(temp / 1000);
+    temp %= 1000;
+    if (thousands > 0) {
+      if (thousands === 1) parts.push('ألف');
+      else if (thousands === 2) parts.push('ألفان');
+      else if (thousands >= 3 && thousands <= 10) parts.push(getUnderThousand(thousands) + ' آلاف');
+      else parts.push(getUnderThousand(thousands) + ' ألف');
+    }
+    
+    // Ones
+    if (temp > 0) {
+      parts.push(getUnderThousand(temp));
+    }
+    
+    let formatted = parts.join(' و ');
+    const piastres = Math.round((num % 1) * 100);
+    let piastresText = '';
+    if (piastres > 0) {
+      piastresText = ` و ${getUnderThousand(piastres)} قرشاً`;
+    }
+    
+    return 'فقط وقدره ' + formatted + ' جنيهاً مصرياً لا غير' + piastresText;
+  };
+
+  const handlePrintBOQ = (paperSize: 'A4' | 'A3', orientation: 'portrait' | 'landscape') => {
+    // Create an iframe to hold the printable content
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (!doc) return;
+
+    const itemsRows = activeBoqItems.map((item, index) => `
+      <tr class="border-b border-slate-300 text-slate-800 text-xs">
+        <td class="p-2.5 text-center font-bold border border-slate-400">${index + 1}</td>
+        <td class="p-2.5 text-center font-bold font-mono text-indigo-700 border border-slate-400">${item.code}</td>
+        <td class="p-2.5 text-right font-medium leading-relaxed max-w-[400px] border border-slate-400">${item.description}</td>
+        <td class="p-2.5 text-center font-bold border border-slate-400">${item.unit}</td>
+        <td class="p-2.5 text-center font-bold font-mono border border-slate-400">${item.quantity.toLocaleString('en-US')}</td>
+        <td class="p-2.5 text-center font-bold font-mono text-emerald-700 border border-slate-400">${item.price.toLocaleString('en-US')}</td>
+        <td class="p-2.5 text-center font-black font-mono text-slate-900 border border-slate-400">${(item.quantity * item.price).toLocaleString('en-US')}</td>
+      </tr>
+    `).join('');
+
+    const formattedTotal = totalBoqValue.toLocaleString('en-US');
+    const writtenTotal = tafqitArabic(totalBoqValue);
+    const dateStr = new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <title>طباعة جدول الكميات والمقايسة</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+        <script>
+          tailwind.config = {
+            theme: {
+              extend: {
+                fontFamily: {
+                  sans: ['Tajawal', 'sans-serif'],
+                }
+              }
+            }
+          }
+        </script>
+        <style>
+          @page {
+            size: ${paperSize} ${orientation};
+            margin: 15mm 15mm 15mm 15mm;
+          }
+          @media print {
+            body {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+              background-color: white !important;
+            }
+          }
+          body {
+            font-family: 'Tajawal', sans-serif;
+            background-color: white;
+          }
+        </style>
+      </head>
+      <body class="p-4 bg-white text-slate-900 selection:bg-indigo-50">
+        <!-- Outer Frame -->
+        <div class="border-4 border-double border-slate-700 p-6 min-h-full flex flex-col justify-between">
+          <div>
+            <!-- Header Block -->
+            <div class="flex items-center justify-between border-b-2 border-slate-800 pb-4 mb-6">
+              <div class="text-right space-y-1">
+                <h1 class="text-sm font-black text-slate-800">شركة بنيان للتشييد والتطوير العقاري</h1>
+                <p class="text-[10px] font-bold text-slate-500">إدارة المشروعات والرقابة الهندسية والمقايسات</p>
+                <p class="text-[9px] text-slate-400">تاريخ الطباعة: ${dateStr}</p>
+              </div>
+              
+              <div class="text-center">
+                <div class="border-2 border-slate-800 px-4 py-2 bg-slate-50 rounded-lg">
+                  <span class="text-xs font-black text-slate-800 block">شعار بنيان</span>
+                  <span class="text-[10px] font-bold text-slate-400">BUNYAN CO.</span>
+                </div>
+              </div>
+
+              <div class="text-left text-xs space-y-1">
+                <p class="font-bold">الموقع النشط: <span class="font-black text-indigo-700">${activeProject?.name || '---'}</span></p>
+                <p class="font-bold text-[10px] text-slate-500">كود الإسناد: ${activeProject?.assignmentNumber || '---'}</p>
+                <p class="font-bold text-[10px] text-slate-500">تاريخ الإسناد: ${activeProject ? new Date(activeProject.assignmentDate).toLocaleDateString('ar-EG') : '---'}</p>
+              </div>
+            </div>
+
+            <!-- Page Title -->
+            <div class="text-center my-6">
+              <h2 class="text-lg font-black text-slate-900 border-b-4 border-indigo-600 inline-block pb-1 px-6 uppercase tracking-wider">
+                جدول الكميات وفئات الأعمال (المقايسة المعتمدة)
+              </h2>
+              <p class="text-[11px] font-bold text-slate-500 mt-2">عقد إسناد رقم: ${activeProject?.assignmentNumber || '---'}</p>
+            </div>
+
+            <!-- BOQ Table -->
+            <div class="mt-4">
+              <table class="w-full text-right text-xs border-collapse border border-slate-400">
+                <thead>
+                  <tr class="bg-slate-100 border-b border-slate-400 text-slate-900">
+                    <th class="p-2.5 border border-slate-400 text-center font-black w-10">م</th>
+                    <th class="p-2.5 border border-slate-400 text-center font-black w-20">بند</th>
+                    <th class="p-2.5 border border-slate-400 font-black text-right">بيان الأعمال والمواصفات الفنية المعتمدة</th>
+                    <th class="p-2.5 border border-slate-400 text-center font-black w-12">الوحدة</th>
+                    <th class="p-2.5 border border-slate-400 text-center font-black w-24">الكمية</th>
+                    <th class="p-2.5 border border-slate-400 text-center font-black w-24">الفئة (ج.م)</th>
+                    <th class="p-2.5 border border-slate-400 text-center font-black w-28">الإجمالي (ج.م)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${itemsRows}
+                  <!-- Total Row -->
+                  <tr class="bg-slate-50 border-t-2 border-slate-800 text-xs font-black">
+                    <td colspan="4" class="p-3 border border-slate-400 text-right text-slate-900 font-black">
+                      إجمالي قيمة المقايسة المعتمدة:
+                    </td>
+                    <td colspan="2" class="p-3 border border-slate-400 text-center text-indigo-700 font-mono text-sm">
+                      ${formattedTotal} ج.م
+                    </td>
+                    <td class="p-3 border border-slate-400 text-center text-slate-900 font-mono text-sm">
+                      ${formattedTotal}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Tafqit box -->
+            <div class="mt-4 p-4 bg-slate-50 border border-slate-300 rounded-xl">
+              <p class="text-xs font-black text-slate-800 leading-relaxed">
+                <span class="text-indigo-700">فقط وقدره:</span> ${writtenTotal}
+              </p>
+            </div>
+
+            <!-- Important Notes -->
+            <div class="mt-6 text-[10px] text-slate-500 space-y-1 leading-relaxed">
+              <p class="font-bold">ملاحظات هامة للجهات الفنية والمالية:</p>
+              <ul class="list-disc list-inside space-y-0.5 pr-2">
+                <li>تعتمد هذه المقايسة كمرجع أساسي لحصر كميات الأعمال المنفذة على الطبيعة وصرف المستخلصات الجارية والختامية لمهندسي الموقع.</li>
+                <li>تخضع فئات الأسعار المدرجة أعلاه لشروط عقد التكلفة المتفق عليه مع الإدارة المركزية لشركة بنيان.</li>
+                <li>لا يجوز تخطي الكميات التعاقدية دون موافقة كتابية رسمية من قطاع الدعم الفني والمكتب الفني بالمركز الرئيسي.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Signatures Section -->
+          <div class="mt-12 grid grid-cols-4 gap-4 text-center text-[10px] font-bold text-slate-700 pt-8 border-t border-slate-200">
+            <div class="space-y-12">
+              <p>مهندس موقع التنفيذ</p>
+              <p class="border-t border-dashed border-slate-400 pt-1.5 w-3/4 mx-auto">الاسم والتوقيع: .....................</p>
+            </div>
+            <div class="space-y-12">
+              <p>المكتب الفني ومراجع التكاليف</p>
+              <p class="border-t border-dashed border-slate-400 pt-1.5 w-3/4 mx-auto">الاسم والتوقيع: .....................</p>
+            </div>
+            <div class="space-y-12">
+              <p>مدير المشروع الميداني</p>
+              <p class="border-t border-dashed border-slate-400 pt-1.5 w-3/4 mx-auto">الاسم والتوقيع: .....................</p>
+            </div>
+            <div class="space-y-12">
+              <p>اعتماد مدير عام المشروعات</p>
+              <p class="border-t border-dashed border-slate-400 pt-1.5 w-3/4 mx-auto">الاسم والتوقيع: .....................</p>
+            </div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+              setTimeout(function() {
+                window.frameElement.remove();
+              }, 500);
+            }, 1000);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+  };
 
   const activeProject = useMemo(() => projects.find(p => p.id === selectedProjectId), [projects, selectedProjectId]);
   const activeBoqItems = boqItems.filter(item => item.projectId === selectedProjectId);
@@ -151,11 +420,28 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
         });
 
         if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "فشل تحليل المستند.");
+          let errData;
+          try { errData = await res.json(); } catch(e) {}
+          throw new Error((errData && errData.error) || "فشل تحليل المستند.");
         }
 
-        const data = await res.json();
+        const streamReader = res.body?.getReader();
+        const decoder = new TextDecoder();
+        let resultText = '';
+        if (streamReader) {
+          while (true) {
+            const { done, value } = await streamReader.read();
+            if (done) break;
+            resultText += decoder.decode(value, { stream: true });
+          }
+        }
+        
+        let data: any = {};
+        try {
+          data = JSON.parse(resultText);
+        } catch (e) {
+          throw new Error("فشل في تحليل المخرجات الواردة من الذكاء الاصطناعي.");
+        }
         if (data.items && Array.isArray(data.items)) {
           const mapped = data.items.map((it: any, index: number) => ({
             id: `temp-${Date.now()}-${index}`,
@@ -344,6 +630,14 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
             >
               {showAiUploader ? <X className="w-4 h-4" /> : <Sparkles className="w-4 h-4 animate-pulse" />}
               {showAiUploader ? 'إلغاء الذكاء الاصطناعي' : 'رفع وتحليل بالذكاء الاصطناعي ✦'}
+            </button>
+
+            <button 
+              onClick={() => setShowPrintModal(true)}
+              className="p-2.5 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-lg flex items-center gap-2 text-xs font-black cursor-pointer"
+            >
+              <Printer className="w-4 h-4" />
+              طباعة المقايسة بالكامل
             </button>
           </div>
           <div className="flex items-center gap-2 text-xs font-black text-slate-400 px-3 py-1.5 bg-slate-50 rounded-xl">
@@ -732,6 +1026,122 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
           </table>
         </div>
       </div>
+
+      {/* 🖨️ Print BOQ Settings Modal */}
+      {showPrintModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4 animate-in fade-in duration-200" dir="rtl">
+          <div className="bg-white rounded-[32px] w-full max-w-md overflow-hidden shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
+                  <Printer className="w-5 h-5 text-indigo-600 animate-pulse" />
+                  خيارات طباعة المقايسة
+                </h3>
+                <p className="text-[10px] text-slate-400 font-bold mt-0.5">خصص أبعاد واتجاه صفحة الطباعة للتصميم الهندسي المعتمد</p>
+              </div>
+              <button 
+                onClick={() => setShowPrintModal(false)} 
+                className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body Options */}
+            <div className="p-6 space-y-5">
+              {/* Paper Size Option */}
+              <div className="space-y-2">
+                <label className="block text-[11px] font-black text-slate-500 mr-1">مقاس الورقة (Paper Size)</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPrintPaperSize('A4')}
+                    className={`p-4 rounded-2xl border text-center transition flex flex-col items-center justify-center gap-1.5 ${
+                      printPaperSize === 'A4'
+                        ? 'border-indigo-600 bg-indigo-50/40 text-indigo-900 font-black'
+                        : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold'
+                    }`}
+                  >
+                    <span className="text-sm">A4 (افتراضي)</span>
+                    <span className="text-[10px] opacity-60">مناسب للطباعة السريعة والملفات العادية</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPrintPaperSize('A3')}
+                    className={`p-4 rounded-2xl border text-center transition flex flex-col items-center justify-center gap-1.5 ${
+                      printPaperSize === 'A3'
+                        ? 'border-indigo-600 bg-indigo-50/40 text-indigo-900 font-black'
+                        : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold'
+                    }`}
+                  >
+                    <span className="text-sm">A3 (لوحة عريضة)</span>
+                    <span className="text-[10px] opacity-60">مثالي لجداول الأعمال الكثيرة واللوحات الفنية</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Page Orientation Option */}
+              <div className="space-y-2">
+                <label className="block text-[11px] font-black text-slate-500 mr-1">اتجاه الصفحة (Orientation)</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPrintOrientation('portrait')}
+                    className={`p-4 rounded-2xl border text-center transition flex flex-col items-center justify-center gap-1 ${
+                      printOrientation === 'portrait'
+                        ? 'border-indigo-600 bg-indigo-50/40 text-indigo-900 font-black'
+                        : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold'
+                    }`}
+                  >
+                    <span className="text-sm">رأسي (Portrait)</span>
+                    <span className="text-[10px] opacity-60">تخطيط عمودي تقليدي</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPrintOrientation('landscape')}
+                    className={`p-4 rounded-2xl border text-center transition flex flex-col items-center justify-center gap-1 ${
+                      printOrientation === 'landscape'
+                        ? 'border-indigo-600 bg-indigo-50/40 text-indigo-900 font-black'
+                        : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold'
+                    }`}
+                  >
+                    <span className="text-sm">أفقي (Landscape)</span>
+                    <span className="text-[10px] opacity-60">تخطيط عرضي للجداول الواسعة</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Summary of what will be printed */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-[11px] text-slate-600 leading-relaxed font-bold">
+                <p>💡 سيتم تحويل المقايسة الحالية المكونة من <span className="text-indigo-600 font-black">({activeBoqItems.length})</span> بنداً إلى ملف جاهز للطباعة مباشرة بمقاس <span className="text-indigo-600 font-black">{printPaperSize}</span> بالاتجاه <span className="text-indigo-600 font-black">{printOrientation === 'portrait' ? 'الرأسي' : 'الأفقي'}</span> شامل الترويسة والتفقيط والاعتمادات الرسمية.</p>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
+              <button
+                onClick={() => {
+                  handlePrintBOQ(printPaperSize, printOrientation);
+                  setShowPrintModal(false);
+                }}
+                className="flex-1 rounded-2xl bg-indigo-600 text-white py-3.5 font-black shadow-lg shadow-indigo-600/10 hover:bg-indigo-700 hover:shadow-indigo-600/20 active:scale-95 transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>إصدار للطباعة الآن</span>
+              </button>
+              <button
+                onClick={() => setShowPrintModal(false)}
+                className="px-6 bg-white border border-slate-200 text-slate-600 rounded-2xl py-3.5 font-bold hover:bg-slate-100 transition cursor-pointer"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

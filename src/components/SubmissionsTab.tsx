@@ -14,7 +14,20 @@ import {
   MapPin, 
   FileText,
   FileCheck,
-  Building
+  Building,
+  BookOpen,
+  Award,
+  ShieldCheck,
+  Layers,
+  Zap,
+  CheckSquare,
+  Database,
+  Calendar,
+  Camera,
+  BarChart3,
+  XCircle,
+  TrendingUp,
+  FileSpreadsheet
 } from 'lucide-react';
 import { Submission, SubmissionWorkDetails, SubmissionSignatories } from '../types';
 
@@ -602,158 +615,173 @@ export default function SubmissionsTab({
 
   return (
     <div className="space-y-6" id="cloud-extracts-submissions-tab">
-      {/* Top action dashboard */}
+      {/* Header at the top (only shown when not editing) */}
       {!isEditing && (
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm" id="sub-management-controls">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
-            <input 
-              type="text"
-              placeholder="البحث برقم الطلب، أو البند، أو الشركة المنفذة..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-4 pr-10 py-2 rounded-xl text-xs md:text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 transition"
-            />
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm" dir="rtl">
+          <div>
+            <h1 className="text-lg md:text-xl font-black text-slate-900 flex items-center gap-2">
+              <ShieldCheck className="text-indigo-600" size={22} />
+              <span>نظام إدارة ولوج طلبات فحص الموقع وتسليمات الأعمال</span>
+            </h1>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              البوابة الشاملة للتحكم في جودة البنية التحتية، حوكمة استلامات البنود، وتكامل الفحوصات الهندسية (IR/WIR) حياً مع المقايسة
+            </p>
           </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-slate-500 text-xs font-semibold ml-1">تصفية الحالة:</span>
-            {['All', 'Pending', 'Approved', 'ApprovedWithRemarks', 'Rejected'].map(s => {
-              const label = 
-                s === 'All' ? 'الكل' :
-                s === 'Pending' ? 'قيد الانتظار' :
-                s === 'Approved' ? 'معتمد وموافق' :
-                s === 'ApprovedWithRemarks' ? 'موافق بملاحظات' : 'مرفوض';
-              return (
-                <button
-                  key={s}
-                  onClick={() => setStatusFilter(s)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all duration-200 ${
-                    statusFilter === s 
-                      ? 'bg-slate-900 text-white shadow-sm border border-slate-900' 
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-
-          <button 
-            onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية إضافة طلبات فحص جديدة') : handleAddNewClick}
-            disabled={userRole === 'viewer'}
-            className={`flex items-center gap-1.5 px-4 py-2 text-white font-extrabold text-xs md:text-sm rounded-xl shadow-md transition-all duration-250 self-start md:self-auto ${
-              userRole === 'viewer' 
-                ? 'bg-slate-400 cursor-not-allowed opacity-70' 
-                : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/10 hover:-translate-y-0.5 active:translate-y-0'
-            }`}
-          >
-            <Plus size={16} />
-            <span>تسجيل طلب فحص / تسليم جديد</span>
-          </button>
         </div>
       )}
 
-      {/* Main Listing View */}
       {!isEditing ? (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-1">
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-            <h2 className="font-extrabold text-sm md:text-base text-slate-900 flex items-center gap-2">
-              <FileCheck className="text-indigo-600" size={18} />
-              <span>جدول طلبات تسليمات الأعمال وفحص الجودة بالموقع</span>
-              <span className="bg-indigo-50 text-indigo-700 text-[11px] font-black px-2 py-0.5 rounded-md border border-indigo-100">
-                {filteredSubs.length} سجلات
-              </span>
-            </h2>
+        <>
+          {/* Top action dashboard */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm" id="sub-management-controls">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
+              <input 
+                type="text"
+                placeholder="البحث برقم الطلب، أو البند، أو الشركة المنفذة..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-4 pr-10 py-2 rounded-xl text-xs md:text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 transition text-right"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-slate-500 text-xs font-semibold ml-1">تصفية الحالة:</span>
+              {['All', 'Pending', 'Approved', 'ApprovedWithRemarks', 'Rejected'].map(s => {
+                const label = 
+                  s === 'All' ? 'الكل' :
+                  s === 'Pending' ? 'قيد الانتظار' :
+                  s === 'Approved' ? 'معتمد وموافق' :
+                  s === 'ApprovedWithRemarks' ? 'موافق بملاحظات' : 'مرفوض';
+                return (
+                  <button
+                    key={s}
+                    onClick={() => setStatusFilter(s)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all duration-200 ${
+                      statusFilter === s 
+                        ? 'bg-slate-900 text-white shadow-sm border border-slate-900' 
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button 
+              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية إضافة طلبات فحص جديدة') : handleAddNewClick}
+              disabled={userRole === 'viewer'}
+              className={`flex items-center gap-1.5 px-4 py-2 text-white font-extrabold text-xs md:text-sm rounded-xl shadow-md transition-all duration-250 self-start md:self-auto ${
+                userRole === 'viewer' 
+                  ? 'bg-slate-400 cursor-not-allowed opacity-70' 
+                  : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/10 hover:-translate-y-0.5 active:translate-y-0'
+              }`}
+            >
+              <Plus size={16} />
+              <span>تسجيل طلب فحص / تسليم جديد</span>
+            </button>
           </div>
 
-          {filteredSubs.length === 0 ? (
-            <div className="p-12 text-center">
-              <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-500 mx-auto mb-4 border border-indigo-150">
-                <FileText size={26} />
+          {/* Main Listing View */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-1">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="font-extrabold text-sm md:text-base text-slate-900 flex items-center gap-2">
+                <FileCheck className="text-indigo-600" size={18} />
+                <span>جدول طلبات تسليمات الأعمال وفحص الجودة بالموقع</span>
+                <span className="bg-indigo-50 text-indigo-700 text-[11px] font-black px-2 py-0.5 rounded-md border border-indigo-100">
+                  {filteredSubs.length} سجلات
+                </span>
+              </h2>
+            </div>
+
+            {filteredSubs.length === 0 ? (
+              <div className="p-12 text-center">
+                <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-500 mx-auto mb-4 border border-indigo-150">
+                  <FileText size={26} />
+                </div>
+                <p className="text-slate-500 text-sm font-bold">لا توجد طلبات تسليم مسجلة حالياً.</p>
+                <p className="text-slate-400 text-xs mt-1">ابدأ بالنقر على "تسجيل طلب فحص / تسليم جديد" لإضافة أحدث الأعمال الموقعية.</p>
               </div>
-              <p className="text-slate-500 text-sm font-bold">لا توجد طلبات تسليم مسجلة حالياً.</p>
-              <p className="text-slate-400 text-xs mt-1">ابدأ بالنقر على "تسجيل طلب فحص / تسليم جديد" لإضافة أحدث الأعمال الموقعية.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-right border-collapse text-xs md:text-sm">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-600 font-extrabold h-11 border-b border-slate-200">
-                    <th className="pr-4 py-2 text-right">رقم الطلب</th>
-                    <th className="py-2 text-right">بند العمل</th>
-                    <th className="py-2 text-center">المحطة (الاستيشن)</th>
-                    <th className="py-2 text-center">الاتجاه</th>
-                    <th className="py-2 text-center">التاريخ</th>
-                    <th className="py-2 text-center">التكرار</th>
-                    <th className="py-2 text-center">الحالة النهائية</th>
-                    <th className="pl-4 py-2 text-center w-36">التحكم والطباعة</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-black">
-                  {filteredSubs.map((sub) => (
-                    <tr key={sub.id} className="h-14 hover:bg-slate-50/50 transition">
-                      <td className="pr-4 py-2 font-mono text-indigo-600">{sub.submissionNumber}</td>
-                      <td className="py-2 max-w-xs truncate font-bold text-slate-800">
-                        <div>{sub.itemDescription}</div>
-                        <div className="font-mono text-[9px] text-slate-400 font-normal mt-0.5">{sub.executingContractor}</div>
-                      </td>
-                      <td className="py-2 text-center font-mono text-slate-705">
-                        <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">من {sub.stationFrom}</span>
-                        <span className="mx-1 font-normal text-slate-400">إلى</span>
-                        <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{sub.stationTo}</span>
-                      </td>
-                      <td className="py-2 text-center">
-                        <span className="text-[11px] font-extrabold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
-                          {sub.direction}
-                        </span>
-                      </td>
-                      <td className="py-2 text-center font-mono text-slate-500">{sub.date}</td>
-                      <td className="py-2 text-center">
-                        <span className="text-[10px] text-indigo-700 bg-indigo-50 font-black px-1.5 py-0.5 rounded-md border border-indigo-100/40">
-                          {sub.submissionCount === 1 ? 'الأولى' : `تكرار ${sub.submissionCount}`}
-                        </span>
-                      </td>
-                      <td className="py-2 text-center">{getStatusBadge(sub.status)}</td>
-                      <td className="pl-4 py-2">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية تعديل الطلبات') : () => handleEditClick(sub)}
-                            className={`p-1.5 rounded-lg transition ${
-                              userRole === 'viewer' 
-                                ? 'text-slate-300 cursor-not-allowed' 
-                                : 'text-slate-500 hover:text-indigo-600 hover:bg-indigo-50'
-                            }`}
-                            title="تعديل تفاصيل الطلب"
-                          >
-                            <Edit size={14} />
-                          </button>
-                          <button
-                            onClick={() => printDocument(sub)}
-                            className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
-                            title="تصدير وطباعة طلب الفحص المعتمد"
-                          >
-                            <Printer size={14} />
-                          </button>
-                          {userRole === 'admin' && (
-                            <button
-                              onClick={() => handleDelete(sub.id)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                              title="حذف نهائياً"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-right border-collapse text-xs md:text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-600 font-extrabold h-11 border-b border-slate-200">
+                      <th className="pr-4 py-2 text-right">رقم الطلب</th>
+                      <th className="py-2 text-right">بند العمل</th>
+                      <th className="py-2 text-center">المحطة (الاستيشن)</th>
+                      <th className="py-2 text-center">الاتجاه</th>
+                      <th className="py-2 text-center">التاريخ</th>
+                      <th className="py-2 text-center">التكرار</th>
+                      <th className="py-2 text-center">الحالة النهائية</th>
+                      <th className="pl-4 py-2 text-center w-36">التحكم والطباعة</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-black">
+                    {filteredSubs.map((sub) => (
+                      <tr key={sub.id} className="h-14 hover:bg-slate-50/50 transition">
+                        <td className="pr-4 py-2 font-mono text-indigo-600">{sub.submissionNumber}</td>
+                        <td className="py-2 max-w-xs truncate font-bold text-slate-800">
+                          <div>{sub.itemDescription}</div>
+                          <div className="font-mono text-[9px] text-slate-400 font-normal mt-0.5">{sub.executingContractor}</div>
+                        </td>
+                        <td className="py-2 text-center font-mono text-slate-705">
+                          <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">من {sub.stationFrom}</span>
+                          <span className="mx-1 font-normal text-slate-400">إلى</span>
+                          <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{sub.stationTo}</span>
+                        </td>
+                        <td className="py-2 text-center">
+                          <span className="text-[11px] font-extrabold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
+                            {sub.direction}
+                          </span>
+                        </td>
+                        <td className="py-2 text-center font-mono text-slate-500">{sub.date}</td>
+                        <td className="py-2 text-center">
+                          <span className="text-[10px] text-indigo-700 bg-indigo-50 font-black px-1.5 py-0.5 rounded-md border border-indigo-100/40">
+                            {sub.submissionCount === 1 ? 'الأولى' : `تكرار ${sub.submissionCount}`}
+                          </span>
+                        </td>
+                        <td className="py-2 text-center">{getStatusBadge(sub.status)}</td>
+                        <td className="pl-4 py-2">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية تعديل الطلبات') : () => handleEditClick(sub)}
+                              className={`p-1.5 rounded-lg transition ${
+                                userRole === 'viewer' 
+                                  ? 'text-slate-300 cursor-not-allowed' 
+                                  : 'text-slate-500 hover:text-indigo-600 hover:bg-indigo-50'
+                              }`}
+                              title="تعديل تفاصيل الطلب"
+                            >
+                              <Edit size={14} />
+                            </button>
+                            <button
+                              onClick={() => printDocument(sub)}
+                              className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                              title="تصدير وطباعة طلب الفحص المعتمد"
+                            >
+                              <Printer size={14} />
+                            </button>
+                            {userRole === 'admin' && (
+                              <button
+                                onClick={() => handleDelete(sub.id)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                                title="حذف نهائياً"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
       ) : (
         /* Edit / Add New Form View */
         <form onSubmit={handleSave} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-5 space-y-6" id="sub-form">

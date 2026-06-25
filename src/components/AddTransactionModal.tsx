@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { X, Save, AlertCircle, Plus, CreditCard, ArrowRightLeft, Coins } from 'lucide-react';
-import { Transaction, ProjectCategory, TransactionType, TransactionNature, PaymentMethod, Subcontractor, EquipmentSummary } from '../types';
+import { X, Save, AlertCircle, Plus, CreditCard, ArrowRightLeft, Coins, HardHat, Package, Tractor, Fuel, Briefcase, HelpCircle, ChevronDown } from 'lucide-react';
+import { Transaction, ProjectCategory, TransactionType, TransactionNature, PaymentMethod, Subcontractor, EquipmentSummary, SiteWorker, FuelStation } from '../types';
 
 interface AddTransactionModalProps {
   onClose: () => void;
@@ -13,6 +13,10 @@ interface AddTransactionModalProps {
   subcontractors: Subcontractor[];
   setSubcontractors: React.Dispatch<React.SetStateAction<Subcontractor[]>>;
   equipmentList: EquipmentSummary[];
+  contractorsReport?: any[];
+  setContractorsReport?: React.Dispatch<React.SetStateAction<any[]>>;
+  workers?: SiteWorker[];
+  fuelStations?: FuelStation[];
 }
 
 export default function AddTransactionModal({ 
@@ -20,16 +24,54 @@ export default function AddTransactionModal({
   onSave,
   subcontractors = [],
   setSubcontractors,
-  equipmentList = []
+  equipmentList = [],
+  contractorsReport = [],
+  setContractorsReport,
+  workers = [],
+  fuelStations = []
 }: AddTransactionModalProps) {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [category, setCategory] = useState<ProjectCategory>('contractors');
+  const [selectedCategoryKey, setSelectedCategoryKey] = useState<string>('contractors');
+
+  // Custom Category Dropdown Menu States
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const container = document.getElementById('category-select-container');
+      if (container && !container.contains(e.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    if (isDropdownOpen) {
+      document.addEventListener('click', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('click', handleOutsideClick);
+    };
+  }, [isDropdownOpen]);
+
+  // List of Categories with SVG/Lucide Icons
+  const CATEGORY_ITEMS = [
+    { key: 'contractors', label: 'مقاولين الباطن', category: 'contractors', icon: HardHat, colorClass: 'text-indigo-600', bgColorClass: 'bg-indigo-50 border-indigo-100' },
+    { key: 'supplies', label: 'التوريدات والمواد', category: 'supplies', icon: Package, colorClass: 'text-amber-600', bgColorClass: 'bg-amber-50 border-amber-100' },
+    { key: 'equipment', label: 'المعدات', category: 'equipment', icon: Tractor, colorClass: 'text-emerald-600', bgColorClass: 'bg-emerald-50 border-emerald-100' },
+    { key: 'fuel', label: 'المحروقات والسولار', category: 'fuel', icon: Fuel, colorClass: 'text-rose-600', bgColorClass: 'bg-rose-50 border-rose-100' },
+    { key: 'custody', label: 'العهد المالية بالموقع', category: 'custody', icon: Briefcase, colorClass: 'text-slate-700', bgColorClass: 'bg-slate-50 border-slate-100' },
+    { key: 'other', label: 'مصاريف أخرى متنوعة', category: 'other', icon: HelpCircle, colorClass: 'text-blue-600', bgColorClass: 'bg-blue-50 border-blue-100' },
+    { key: 'custom_external', label: 'بند خارجى مخصص', category: 'other', icon: Plus, colorClass: 'text-purple-600', bgColorClass: 'bg-purple-50 border-purple-100' },
+  ];
+  const [customCategoryName, setCustomCategoryName] = useState<string>('');
   const [type, setType] = useState<TransactionType>('spent');
   const [nature, setNature] = useState<TransactionNature>('inside_custody');
   const [amount, setAmount] = useState('');
   
   // Equipment selection state
   const [equipmentId, setEquipmentId] = useState('');
+  
+  // Fuel station selection state (for adding balance to a gas station)
+  const [fuelStationId, setFuelStationId] = useState('');
   
   // Beneficiary details
   const [recipient, setRecipient] = useState('');
@@ -43,16 +85,20 @@ export default function AddTransactionModal({
 
   useEffect(() => {
     // Load existing suppliers
-    const savedSuppliers = localStorage.getItem('bunyan_contractors_report');
-    if (savedSuppliers) {
-      setKnownSuppliers(JSON.parse(savedSuppliers));
+    if (contractorsReport && contractorsReport.length > 0) {
+      setKnownSuppliers(contractorsReport);
     } else {
-      setKnownSuppliers([
-        { id: 'c1', name: 'صلاح العجاري' },
-        { id: 'c2', name: 'حكيم' }
-      ]);
+      const savedSuppliers = localStorage.getItem('bunyan_contractors_report');
+      if (savedSuppliers) {
+        setKnownSuppliers(JSON.parse(savedSuppliers));
+      } else {
+        setKnownSuppliers([
+          { id: 'c1', name: 'صلاح العجاري' },
+          { id: 'c2', name: 'حكيم' }
+        ]);
+      }
     }
-  }, []);
+  }, [contractorsReport]);
 
   const getCategoryLabel = (cat: string) => {
     switch (cat) {
@@ -60,13 +106,15 @@ export default function AddTransactionModal({
       case 'equipment': return 'المعدات';
       case 'contractors': return 'مقاولين الباطن';
       case 'fuel': return 'المحروقات والسولار';
-      case 'custody': return 'العهد الموقعية';
+      case 'custody': return 'العهد المالية بالموقع';
+      case 'other': return 'مصاريف أخرى متنوعة';
       default: return cat;
     }
   };
 
   const currentRecipient = isNewRecipient ? newRecipientName : recipient;
-  const autoDescription = `${getCategoryLabel(category)} | ${currentRecipient || 'بدون محدد'}`;
+  const categoryLabelWithCustom = selectedCategoryKey === 'custom_external' ? `بند خارجي: ${customCategoryName}` : getCategoryLabel(category);
+  const autoDescription = `${categoryLabelWithCustom} | ${currentRecipient || 'بدون محدد'}`;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,6 +123,11 @@ export default function AddTransactionModal({
     const numericAmount = parseFloat(amount);
     if (isNaN(numericAmount) || numericAmount <= 0) {
       setError('يرجى إدخال مبلغ صحيح أكبر من الصفر.');
+      return;
+    }
+
+    if (selectedCategoryKey === 'custom_external' && !customCategoryName.trim()) {
+      setError('يرجى تحديد وكتابة اسم البند الخارجي المخصص.');
       return;
     }
 
@@ -89,13 +142,21 @@ export default function AddTransactionModal({
       
       if (category === 'supplies') {
         const newSupplier = {
-          id: `c-dyn-${Date.now()}`,
+          id: `sup-${Date.now()}`,
+          referenceNo: `SUP-${Date.now().toString().slice(-6)}`,
           name: finalRecipient,
-          quantity: 0, cost: 0, paidOffice: 0, paidCustody: 0, paperSettlements: 0, remaining: 0, notes: 'أضيف تلقائياً من شاشة الحركات المباشرة كمورد'
+          materialCode: '',
+          phone: '',
+          contractNumber: '',
+          notes: 'أضيف تلقائياً من شاشة الحركات المباشرة كمورد',
+          deliveryMethods: []
         };
         const updatedList = [...knownSuppliers, newSupplier];
         localStorage.setItem('bunyan_contractors_report', JSON.stringify(updatedList));
         setKnownSuppliers(updatedList);
+        if (setContractorsReport) {
+          setContractorsReport(updatedList);
+        }
       } else if (category === 'contractors') {
         const newSubcontractor: Subcontractor = {
           id: `sub-dyn-${Date.now()}`,
@@ -124,6 +185,7 @@ export default function AddTransactionModal({
       paymentMethod: type === 'spent' ? paymentMethod : undefined,
       referenceNo: referenceNo.trim() || undefined,
       equipmentId: category === 'equipment' ? equipmentId : undefined,
+      fuelStationId: category === 'fuel' && fuelStationId ? fuelStationId : undefined,
       description: autoDescription
     });
   };
@@ -134,111 +196,178 @@ export default function AddTransactionModal({
   const isStep3Done = isStep2Done && (type !== 'spent' || paymentMethod);
 
   return (
-    <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto" dir="rtl">
+    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto" dir="rtl">
       <div 
-        className="bg-white border border-slate-200 rounded-[2.5rem] w-full max-w-5xl shadow-2xl flex flex-col md:flex-row max-h-[90vh] overflow-hidden text-right"
+        className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-5xl shadow-2xl flex flex-col md:flex-row max-h-[95vh] overflow-hidden text-right"
         id="add-transaction-modal-inner"
       >
         
         {/* Sidebar Visual - Matches the requested card style */}
-        <div className="hidden md:flex md:w-64 bg-slate-50 p-8 flex-col justify-between border-l border-slate-100 flex-shrink-0">
+        <div className="w-full md:w-1/3 bg-indigo-600 p-8 text-white flex flex-col justify-between flex-shrink-0">
           <div>
-            <div className="bg-white p-3 rounded-2xl border border-slate-100 w-fit mb-6 shadow-sm">
-              <CreditCard className="h-10 w-10 text-indigo-600" />
-            </div>
-            <h3 className="text-xl font-black mb-2 text-slate-800 leading-tight">تسجيل حركة</h3>
-            <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+            <CreditCard size={48} className="text-indigo-200 mb-6" />
+            <h4 className="text-xl font-black mb-2">تسجيل حركة مالية</h4>
+            <p className="text-sm text-indigo-100 leading-relaxed">
               نظام الضبط المالي والقيود المباشرة لموازنة حسابات التوريد والعهد بدقة كاملة.
             </p>
           </div>
 
           {/* Connected Stepper with precise active boundaries */}
-          <div className="space-y-4 text-[10px] font-black text-slate-400">
-            <div className={`flex items-center gap-2 border-r-2 pr-2 transition-colors duration-150 ${isStep1Done ? 'border-emerald-500 text-emerald-600' : 'border-indigo-500 text-indigo-600'}`}>
+          <div className="space-y-4 text-xs font-black text-indigo-200 my-6">
+            <div className={`flex items-center gap-2 border-r-2 pr-2 transition-colors duration-150 ${isStep1Done ? 'border-emerald-400 text-emerald-200' : 'border-white text-white'}`}>
               1. طبيعة وتاريخ الحركة
             </div>
-            <div className={`flex items-center gap-2 border-r-2 pr- pr-2 transition-colors duration-150 ${isStep2Done ? 'border-emerald-500 text-emerald-600' : isStep1Done ? 'border-indigo-400 text-slate-700' : 'border-slate-200'}`}>
+            <div className={`flex items-center gap-2 border-r-2 pr-2 transition-colors duration-150 ${isStep2Done ? 'border-emerald-400 text-emerald-200' : isStep1Done ? 'border-white text-white' : 'border-indigo-400 text-indigo-300'}`}>
               2. جهة المستفيد والمبلغ
             </div>
-            <div className={`flex items-center gap-2 border-r-2 pr-2 transition-colors duration-150 ${isStep3Done ? 'border-emerald-500 text-emerald-600' : isStep2Done ? 'border-indigo-400 text-slate-700' : 'border-slate-200'}`}>
+            <div className={`flex items-center gap-2 border-r-2 pr-2 transition-colors duration-150 ${isStep3Done ? 'border-emerald-400 text-emerald-200' : isStep2Done ? 'border-white text-white' : 'border-indigo-400 text-indigo-300'}`}>
               3. طريقة السداد والتكويد
             </div>
+          </div>
+
+          <div className="text-[10px] text-indigo-300">
+            نظام الضبط المالي
           </div>
         </div>
 
         {/* Main Content Form Panel */}
-        <div className="flex-1 flex flex-col min-h-0 bg-white">
+        <div className="flex-1 flex flex-col min-h-0 bg-slate-900">
           
           {/* Header */}
-          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white flex-shrink-0">
-            <h3 className="text-lg font-black text-slate-900">تسجيل قيد أو حركة مالية جديدة</h3>
+          <div className="p-6 border-b border-slate-700 flex justify-between items-center bg-slate-900 flex-shrink-0">
+            <h3 className="text-lg font-black text-white">تسجيل قيد أو حركة مالية جديدة</h3>
             <button 
               type="button"
               onClick={onClose} 
-              className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 hover:text-slate-700 transition"
+              className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition"
             >
               <X size={20} />
             </button>
           </div>
 
           {/* Form Scrollable Content */}
-          <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-slate-50/30">
+          <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-slate-900">
             <form id="transaction-form" onSubmit={handleSubmit} className="space-y-8">
               
               {error && (
-                <div className="bg-rose-50 border border-rose-200/60 p-4 rounded-2xl flex items-center gap-2.5 text-rose-700 text-xs font-semibold animate-fadeIn">
-                  <AlertCircle size={18} className="shrink-0 text-rose-500" />
+                <div className="bg-rose-950/40 border border-rose-800 p-4 rounded-2xl flex items-center gap-2.5 text-rose-200 text-xs font-semibold animate-fadeIn">
+                  <AlertCircle size={18} className="shrink-0 text-rose-400" />
                   <span>{error}</span>
                 </div>
               )}
 
               {/* Section 1: طبيعة الحركة والبند */}
               <div className="space-y-4">
-                <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest border-r-4 border-indigo-500 pr-3">
+                <h4 className="text-xs font-black text-indigo-400 uppercase tracking-widest border-r-4 border-indigo-500 pr-3">
                   تاريخ وطبيعة الحركة المالية
                 </h4>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Transaction Date */}
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-500 mr-1">تاريخ الحركة *</label>
+                    <label className="block text-[10px] font-black text-slate-400 mb-1.5 mr-1 uppercase tracking-widest">تاريخ الحركة *</label>
                     <input
                       type="date"
                       required
                       value={date}
                       onChange={(e) => setDate(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-xs font-black text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      className="w-full text-xs p-3.5 bg-slate-800 border border-slate-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold text-white outline-none"
                     />
                   </div>
 
                   {/* Category Selection */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-500 mr-1">البند / التصنيف الفرعي *</label>
-                    <select
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value as ProjectCategory)}
-                      className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-xs font-black text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  <div className="space-y-1 relative" id="category-select-container">
+                    <label className="block text-[10px] font-black text-slate-400 mb-1.5 mr-1 uppercase tracking-widest">البند / التصنيف الفرعي *</label>
+                    
+                    {/* Trigger Button */}
+                    <button
+                      type="button"
+                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                      className="w-full flex items-center justify-between bg-slate-800 border border-slate-700 rounded-2xl p-3.5 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-right cursor-pointer"
                     >
-                      <option value="contractors">مقاولين الباطن</option>
-                      <option value="supplies">التوريدات والمواد</option>
-                      <option value="equipment">المعدات</option>
-                      <option value="fuel">المحروقات والسولار</option>
-                      <option value="custody">العهد الموقعية</option>
-                    </select>
+                      <div className="flex items-center gap-2">
+                        {(() => {
+                          const activeItem = CATEGORY_ITEMS.find(item => item.key === selectedCategoryKey) || CATEGORY_ITEMS[0];
+                          const IconComp = activeItem.icon;
+                          return (
+                            <>
+                              <span className={`p-1 rounded-md ${activeItem.bgColorClass} flex items-center justify-center`}>
+                                <IconComp size={16} className={activeItem.colorClass} />
+                              </span>
+                              <span>{activeItem.label}</span>
+                            </>
+                          );
+                        })()}
+                      </div>
+                      <ChevronDown size={16} className={`text-slate-400 transition-transform duration-200 ${isDropdownOpen ? 'transform rotate-180' : ''}`} />
+                    </button>
+
+                    {/* Popover List */}
+                    {isDropdownOpen && (
+                      <div className="absolute z-50 mt-1 w-full bg-slate-800 border border-slate-700 rounded-2xl shadow-xl overflow-hidden animate-fadeIn py-1">
+                        {CATEGORY_ITEMS.map((item) => {
+                          const IconComp = item.icon;
+                          const isSelected = selectedCategoryKey === item.key;
+                          return (
+                            <button
+                              key={item.key}
+                              type="button"
+                              onClick={() => {
+                                setSelectedCategoryKey(item.key);
+                                if (item.key === 'custom_external') {
+                                  setCategory('other');
+                                } else {
+                                  setCategory(item.key as ProjectCategory);
+                                }
+                                setIsDropdownOpen(false);
+                              }}
+                              className={`w-full flex items-center gap-3 p-3.5 text-right font-black text-xs transition duration-150 cursor-pointer ${
+                                isSelected 
+                                  ? 'bg-indigo-600 text-white' 
+                                  : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                              }`}
+                            >
+                              <span className={`p-1.5 rounded-lg flex items-center justify-center ${
+                                isSelected ? 'bg-indigo-700 text-white' : item.bgColorClass
+                              }`}>
+                                <IconComp size={15} className={isSelected ? 'text-white' : item.colorClass} />
+                              </span>
+                              <span className="flex-1 text-right">{item.label}</span>
+                              {isSelected && <span className="text-[10px] bg-indigo-700 text-white px-2 py-0.5 rounded-md font-bold">نشط</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
+
+                {/* Custom Category Input if selected */}
+                {selectedCategoryKey === 'custom_external' && (
+                  <div className="space-y-1 animate-fadeIn">
+                    <label className="block text-[10px] font-black text-indigo-400 mb-1.5 mr-1 uppercase tracking-widest">اسم البند الخارجي المخصص *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="مثال: رسوم تراخيص، إكراميات استثنائية، صيانة طارئة..."
+                      value={customCategoryName}
+                      onChange={(e) => setCustomCategoryName(e.target.value)}
+                      className="w-full text-xs p-3.5 bg-slate-800 border border-slate-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold text-white outline-none"
+                    />
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 gap-4">
                   {/* Transaction Nature */}
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-500 mr-1">طبيعة المعاملة والمصدر الرئيسي *</label>
+                    <label className="block text-[10px] font-black text-slate-400 mb-1.5 mr-1 uppercase tracking-widest">طبيعة المعاملة والمصدر الرئيسي *</label>
                     <select
                       value={nature}
                       onChange={(e) => setNature(e.target.value as TransactionNature)}
-                      className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-xs font-black text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      className="w-full text-xs p-3 bg-slate-800 border border-slate-700 rounded-2xl font-black text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                     >
-                      <option value="inside_custody">عهدة الموقع 💼</option>
-                      <option value="outside_custody">المكتب الرئيسي 🏛️</option>
+                      <option value="inside_custody" className="bg-slate-900">عهدة الموقع</option>
+                      <option value="outside_custody" className="bg-slate-900">المكتب الرئيسي للشركة</option>
                     </select>
                   </div>
                 </div>
@@ -246,15 +375,15 @@ export default function AddTransactionModal({
 
               {/* Section 2: المستفيد والماليات */}
               <div className="space-y-4">
-                <h4 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest border-r-4 border-emerald-500 pr-3">
+                <h4 className="text-xs font-black text-emerald-400 uppercase tracking-widest border-r-4 border-emerald-500 pr-3">
                   المستفيد والماليات
                 </h4>
 
-                <div className="bg-white p-6 rounded-[2rem] border border-slate-200 space-y-4">
+                <div className="bg-slate-800/40 p-6 rounded-2xl border border-slate-700 space-y-4">
                   
                   {/* Amount of record */}
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-500 mr-1">المبلغ وبالتفاصيل الميدانية لإجمالي القيد (ج.م) *</label>
+                    <label className="block text-[10px] font-black text-slate-400 mb-1.5 mr-1 uppercase tracking-widest">المبلغ وبالتفاصيل الميدانية لإجمالي القيد (ج.م) *</label>
                     <div className="relative">
                       <input
                         type="number"
@@ -263,7 +392,7 @@ export default function AddTransactionModal({
                         placeholder="0.00"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-250 rounded-2xl p-4 text-sm font-black text-slate-900 outline-none focus:ring-2 focus:ring-emerald-500/10 text-left font-mono"
+                        className="w-full text-sm p-3.5 bg-slate-800 border border-slate-700 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-black text-white outline-none text-left font-mono pr-20"
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400 pointer-events-none">
                         جنيه مصري
@@ -273,10 +402,10 @@ export default function AddTransactionModal({
 
                   {/* Beneficiary recipient selection */}
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-500 mr-1">المستفيد / جهة الصرف المتأثرة *</label>
+                    <label className="block text-[10px] font-black text-slate-400 mb-1.5 mr-1 uppercase tracking-widest">المستفيد / جهة الصرف المتأثرة *</label>
                     
                     {category === 'equipment' ? (
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 bg-slate-800 border border-slate-700 rounded-2xl">
                         <select
                           required
                           value={equipmentId}
@@ -285,13 +414,115 @@ export default function AddTransactionModal({
                             const eq = equipmentList.find(item => item.id === e.target.value);
                             if (eq) setRecipient(eq.name);
                           }}
-                          className="w-full bg-slate-50 border border-slate-250 rounded-2xl p-4 text-xs font-black text-slate-900 outline-none focus:ring-2 focus:ring-emerald-500/10"
+                          className="w-full text-xs p-3 bg-slate-800 border border-slate-700 rounded-2xl font-black text-white outline-none"
                         >
-                          <option value="" disabled>-- اختر المعدة من القائمة --</option>
+                          <option value="" disabled className="bg-slate-900">-- اختر المعدة من القائمة --</option>
                           {equipmentList.map((eq) => (
-                            <option key={eq.id} value={eq.id}>{eq.name} ({eq.driver})</option>
+                            <option key={eq.id} value={eq.id} className="bg-slate-900">{eq.name} ({eq.driver})</option>
                           ))}
                         </select>
+                      </div>
+                    ) : category === 'fuel' ? (
+                      <div className="flex gap-2.5">
+                        {!isNewRecipient ? (
+                          <div className="flex-1 flex gap-2.5">
+                            <select
+                              required
+                              value={fuelStationId}
+                              onChange={(e) => {
+                                setFuelStationId(e.target.value);
+                                const st = fuelStations.find(station => station.id === e.target.value);
+                                if (st) setRecipient(st.name);
+                              }}
+                              className="flex-1 w-full bg-slate-800 border border-slate-700 rounded-2xl p-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                            >
+                              <option value="" disabled className="bg-slate-900">-- اختر محطة الوقود للشحن / الإيداع --</option>
+                              {fuelStations.map((station) => (
+                                <option key={station.id} value={station.id} className="bg-slate-900">{station.name}</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsNewRecipient(true);
+                                setFuelStationId('');
+                                setRecipient('');
+                              }}
+                              className="flex items-center justify-center gap-1.5 bg-slate-800 border border-slate-700 hover:border-emerald-500 text-slate-300 hover:text-emerald-400 px-5 rounded-2xl text-xs font-black transition whitespace-nowrap cursor-pointer"
+                            >
+                              <Plus size={15} /> جهة أخرى
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex-1 flex gap-2.5 relative">
+                            <input
+                              type="text"
+                              required
+                              placeholder="اكتب مستفيد غير مدرج بالمحطات..."
+                              value={newRecipientName}
+                              onChange={(e) => setNewRecipientName(e.target.value)}
+                              className="flex-1 w-full p-3.5 bg-slate-800 border border-emerald-500 rounded-2xl text-xs font-bold text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsNewRecipient(false);
+                                setNewRecipientName('');
+                              }}
+                              className="bg-slate-700 hover:bg-slate-600 text-slate-200 px-5 rounded-2xl text-xs font-black transition cursor-pointer"
+                            >
+                              المحطات المسجلة
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : category === 'custody' ? (
+                      <div className="flex gap-2.5">
+                        {!isNewRecipient ? (
+                          <div className="flex-1 flex gap-2.5">
+                            <select
+                              required
+                              value={recipient}
+                              onChange={(e) => setRecipient(e.target.value)}
+                              className="flex-1 w-full bg-slate-800 border border-slate-700 rounded-2xl p-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                            >
+                              <option value="" disabled className="bg-slate-900">-- اختر المسؤول عن العهدة من العاملين بالقرية/الموقع --</option>
+                              {workers.map((w) => (
+                                <option key={w.id} value={w.name} className="bg-slate-900">{w.name} ({w.jobTitle})</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => setIsNewRecipient(true)}
+                              className="flex items-center justify-center gap-1.5 bg-slate-800 border border-slate-700 hover:border-emerald-500 text-slate-300 hover:text-emerald-400 px-5 rounded-2xl text-xs font-black transition whitespace-nowrap cursor-pointer"
+                            >
+                              <Plus size={15} /> جهة أخرى
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex-1 flex gap-2.5 relative">
+                            <input
+                              type="text"
+                              required
+                              placeholder="اكتب اسم المستلم الجديد للعهدة..."
+                              value={newRecipientName}
+                              onChange={(e) => setNewRecipientName(e.target.value)}
+                              className="flex-1 w-full p-3.5 bg-slate-800 border border-emerald-500 rounded-2xl text-xs font-bold text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsNewRecipient(false);
+                                setNewRecipientName('');
+                              }}
+                              className="bg-slate-700 hover:bg-slate-600 text-slate-200 px-5 rounded-2xl text-xs font-black transition cursor-pointer"
+                            >
+                              المسؤولين المسجلين
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ) : !isNewRecipient ? (
                       <div className="flex gap-2.5">
@@ -299,17 +530,22 @@ export default function AddTransactionModal({
                           required
                           value={recipient}
                           onChange={(e) => setRecipient(e.target.value)}
-                          className="flex-1 w-full bg-slate-50 border border-slate-250 rounded-2xl p-4 text-xs font-black text-slate-900 outline-none focus:ring-2 focus:ring-emerald-500/10"
+                          className="flex-1 w-full bg-slate-800 border border-slate-700 rounded-2xl p-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-emerald-500"
                         >
-                          <option value="" disabled>-- اختر من القائمة المرتبطة --</option>
-                          {(category === 'contractors' ? subcontractors : category === 'supplies' ? knownSuppliers : [...subcontractors, ...knownSuppliers]).map((c) => (
-                            <option key={c.id || c.name} value={c.name}>{c.name}</option>
+                          <option value="" disabled className="bg-slate-900">-- اختر من القائمة المرتبطة --</option>
+                          {(category === 'contractors' 
+                            ? subcontractors 
+                            : category === 'supplies' 
+                              ? knownSuppliers 
+                              : [...subcontractors, ...knownSuppliers, ...workers.map(w => ({ id: w.id, name: w.name }))]
+                          ).map((c) => (
+                            <option key={c.id || c.name} value={c.name} className="bg-slate-900">{c.name}</option>
                           ))}
                         </select>
                         <button
                           type="button"
                           onClick={() => setIsNewRecipient(true)}
-                          className="flex items-center justify-center gap-1.5 bg-white border border-slate-250 hover:border-emerald-500 hover:text-emerald-700 px-5 rounded-2xl text-xs font-black transition whitespace-nowrap cursor-pointer shadow-xs"
+                          className="flex items-center justify-center gap-1.5 bg-slate-800 border border-slate-700 hover:border-emerald-500 text-slate-300 hover:text-emerald-400 px-5 rounded-2xl text-xs font-black transition whitespace-nowrap cursor-pointer shadow-xs"
                         >
                           <Plus size={15} /> جهة جديدة
                         </button>
@@ -322,7 +558,7 @@ export default function AddTransactionModal({
                           placeholder="اكتب اسم المستفيد الجديد..."
                           value={newRecipientName}
                           onChange={(e) => setNewRecipientName(e.target.value)}
-                          className="flex-1 w-full p-4 bg-white border border-emerald-300 rounded-2xl text-xs font-black text-slate-900 outline-none focus:ring-2 focus:ring-emerald-500/20"
+                          className="flex-1 w-full p-3.5 bg-slate-800 border border-emerald-500 rounded-2xl text-xs font-bold text-white outline-none focus:ring-2 focus:ring-emerald-500"
                           autoFocus
                         />
                         <button
@@ -331,7 +567,7 @@ export default function AddTransactionModal({
                             setIsNewRecipient(false);
                             setNewRecipientName('');
                           }}
-                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 rounded-2xl text-xs font-black transition cursor-pointer"
+                          className="bg-slate-700 hover:bg-slate-600 text-slate-200 px-5 rounded-2xl text-xs font-black transition cursor-pointer"
                         >
                           إلغاء
                         </button>
@@ -341,84 +577,85 @@ export default function AddTransactionModal({
                       يجري الربط الديناميكي مع كشوف التقرير الرئيسي بالأعلى ودفاتر التسويات الميدانية.
                     </p>
                   </div>
-
+ 
                 </div>
               </div>
-
+ 
               {/* Section 3: طريقة الدفع والتأكيد */}
               <div className="space-y-4">
-                <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest border-r-4 border-indigo-500 pr-3">
+                <h4 className="text-xs font-black text-indigo-400 uppercase tracking-widest border-r-4 border-indigo-500 pr-3">
                   طريقة السداد والتكويد
                 </h4>
-
-                <div className="bg-white p-6 rounded-[2rem] border border-slate-200 space-y-4">
+ 
+                <div className="bg-slate-800/40 p-6 rounded-2xl border border-slate-700 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Payment Method */}
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-500 mr-1">طريقة الدفع *</label>
+                      <label className="block text-[10px] font-black text-slate-400 mb-1.5 mr-1 uppercase tracking-widest">طريقة الدفع *</label>
                       <select
                         value={paymentMethod}
                         onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                        className="w-full bg-slate-50 border border-slate-250 rounded-2xl p-4 text-xs font-black text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        className="w-full text-xs p-3 bg-slate-800 border border-slate-700 rounded-2xl font-black text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                       >
-                        <option value="نقدى">نقدى</option>
-                        <option value="شيك">شيك</option>
-                        <option value="تحويل بنكى">تحويل بنكى</option>
-                        <option value="انستا">انستا</option>
-                        <option value="فودافون كاش">فودافون كاش</option>
-                        <option value="اخرى">اخرى</option>
+                        <option value="نقدى" className="bg-slate-900">نقدى</option>
+                        <option value="شيك" className="bg-slate-900">شيك</option>
+                        <option value="تحويل بنكى" className="bg-slate-900">تحويل بنكى</option>
+                        <option value="انستا" className="bg-slate-900">انستا</option>
+                        <option value="فودافون كاش" className="bg-slate-900">فودافون كاش</option>
+                        <option value="اخرى" className="bg-slate-900">اخرى</option>
                       </select>
                     </div>
-
+ 
                     {/* Reference No */}
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-500 mr-1">رقم السند / الشيك / الحوالة</label>
+                      <label className="block text-[10px] font-black text-slate-400 mb-1.5 mr-1 uppercase tracking-widest">رقم السند / الشيك / الحوالة</label>
                       <input
                         type="text"
                         placeholder="رقم المرجع (اختياري)"
                         value={referenceNo}
                         onChange={(e) => setReferenceNo(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-250 rounded-2xl p-4 text-xs font-black text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20 font-mono text-left"
+                        className="w-full text-xs p-3 bg-slate-800 border border-slate-700 rounded-2xl font-black text-white focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-left"
                       />
                     </div>
                   </div>
-
+ 
                   {/* Auto-Description / Coding */}
                   <div className="space-y-1 pt-2">
-                    <label className="text-[10px] font-black text-slate-500 mr-1">التكويد الذكي ووصف المعاملة</label>
+                    <label className="block text-[10px] font-black text-slate-400 mb-1.5 mr-1 uppercase tracking-widest">التكويد الذكي ووصف المعاملة</label>
                     <input
                       readOnly
                       value={autoDescription}
-                      className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl text-xs font-black text-slate-500 focus:outline-none cursor-not-allowed text-center"
+                      className="w-full p-3.5 bg-slate-950 border border-slate-800 rounded-2xl text-xs font-bold text-slate-400 focus:outline-none cursor-not-allowed text-center"
                     />
                   </div>
                 </div>
               </div>
-
+ 
             </form>
           </div>
-
+ 
           {/* Footer Action Bar */}
-          <div className="p-6 border-t border-slate-100 flex items-center justify-end gap-4 bg-white flex-shrink-0 flex-row-reverse">
+          <div className="p-6 border-t border-slate-700 flex items-center justify-end gap-4 bg-slate-900 flex-shrink-0 flex-row-reverse">
             <button
               type="submit"
               form="transaction-form"
-              className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-black transition cursor-pointer shadow-lg shadow-indigo-600/15 active:scale-[0.98]"
+              className="px-8 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-black transition cursor-pointer shadow-lg active:scale-95"
             >
               حفظ
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl text-xs font-black transition cursor-pointer border border-slate-200"
+              className="px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl text-xs font-black border border-slate-700 transition cursor-pointer"
             >
               إلغاء التراجع
             </button>
           </div>
-
+ 
         </div>
-
+ 
       </div>
     </div>
   );
 }
+

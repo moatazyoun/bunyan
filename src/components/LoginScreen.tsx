@@ -104,14 +104,17 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, dbConnected, dbLaten
       // Only prompt on first interaction
       provider.setCustomParameters({ prompt: 'select_account' });
       
-      const result = await signInWithPopup(auth, provider);
-      await processGoogleUser(result.user);
+      await signInWithRedirect(auth, provider);
     } catch (err: any) {
-      console.error('Google Sign-In Error:', err);
-      // Fallback to redirect if popup is blocked
+      if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
+        console.error('Google Sign-In Error:', err);
+      }
       if (err.code === 'auth/popup-blocked') {
-        const provider = new GoogleAuthProvider();
-        signInWithRedirect(auth, provider);
+        setError('منع المتصفح فتح نافذة المصادقة. يرجى محاولة تسجيل الدخول مرة أخرى.');
+        setIsGoogleLoading(false);
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setError('النطاق الحالي (Domain) غير مصرح له بتسجيل الدخول.');
+        setIsGoogleLoading(false);
       } else {
         setError('فشل تسجيل الدخول باستخدام جوجل: ' + (err.message || 'خطأ غير معروف'));
         setIsGoogleLoading(false);

@@ -20,9 +20,11 @@ import {
   RefreshCw,
   AlertCircle,
   Info,
-  Phone
+  Phone,
+  Printer,
+  X
 } from 'lucide-react';
-import { Transaction, Subcontractor, SubcontractorWorkItem, SubcontractorDiscount } from '../types';
+import { Transaction, Subcontractor, SubcontractorWorkItem, SubcontractorDiscount, Contract } from '../types';
 
 interface SubcontractorsDashboardProps {
   transactions: Transaction[];
@@ -31,6 +33,7 @@ interface SubcontractorsDashboardProps {
   setSubcontractors: React.Dispatch<React.SetStateAction<Subcontractor[]>>;
   userRole?: string;
   addAuditLog: (action: string, module: string, details: string) => void;
+  contracts?: Contract[];
 }
 
 export default function SubcontractorsDashboard({ 
@@ -39,12 +42,474 @@ export default function SubcontractorsDashboard({
   subcontractors = [],
   setSubcontractors,
   userRole,
-  addAuditLog
+  addAuditLog,
+  contracts = []
 }: SubcontractorsDashboardProps) {
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  
+  // Print States
+  const [showPrintAllModal, setShowPrintAllModal] = useState(false);
+  const [printPaperSizeAll, setPrintPaperSizeAll] = useState<'A4' | 'A3'>('A4');
+  const [printOrientationAll, setPrintOrientationAll] = useState<'portrait' | 'landscape'>('landscape');
+
+  const [showPrintSingleModal, setShowPrintSingleModal] = useState(false);
+  const [printTargetSub, setPrintTargetSub] = useState<Subcontractor | null>(null);
+  const [printPaperSizeSingle, setPrintPaperSizeSingle] = useState<'A4' | 'A3'>('A4');
+  const [printOrientationSingle, setPrintOrientationSingle] = useState<'portrait' | 'landscape'>('portrait');
+
+  const handlePrintAllSubcontractors = (paperSize: 'A4' | 'A3', orientation: 'portrait' | 'landscape') => {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (!doc) return;
+
+    const dateStr = new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    const rows = subcontractors.map((c, index) => {
+      const stats = getSubcontractorCalculatedStats(c);
+      return `
+        <tr class="border-b border-slate-300 text-[10px] text-slate-850 text-center">
+          <td class="p-1.5 border border-slate-400 font-bold">${index + 1}</td>
+          <td class="p-1.5 border border-slate-400 text-right font-black text-indigo-950">${c.name}</td>
+          <td class="p-1.5 border border-slate-400 text-right font-medium text-slate-650">${c.trade || 'عمل رئيسي'}</td>
+          <td class="p-1.5 border border-slate-400 font-mono text-slate-600">${c.phone || '---'}</td>
+          <td class="p-1.5 border border-slate-400 font-mono text-slate-600">${c.contractNumber || '---'}</td>
+          <td class="p-1.5 border border-slate-400 font-bold font-mono">${stats.grossValue.toLocaleString('ar-EG')} ج.م</td>
+          <td class="p-1.5 border border-slate-400 font-bold font-mono text-rose-700">${stats.totalDiscounts.toLocaleString('ar-EG')} ج.م</td>
+          <td class="p-1.5 border border-slate-400 font-black font-mono text-sky-800">${stats.netValue.toLocaleString('ar-EG')} ج.م</td>
+          <td class="p-1.5 border border-slate-400 font-bold font-mono text-purple-700">${stats.paperTotal.toLocaleString('ar-EG')} ج.م</td>
+          <td class="p-1.5 border border-slate-400 font-black font-mono text-emerald-800">${stats.finalPaid.toLocaleString('ar-EG')} ج.م</td>
+          <td class="p-1.5 border border-slate-400 font-black font-mono ${stats.finalRemaining < 0 ? 'text-rose-700 bg-rose-50' : 'text-amber-700 bg-amber-50'}">${stats.finalRemaining.toLocaleString('ar-EG')} ج.م</td>
+        </tr>
+      `;
+    }).join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <title>كشف حساب مقاولي الباطن الإجمالي</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+        <script>
+          tailwind.config = {
+            theme: {
+              extend: {
+                fontFamily: {
+                  sans: ['Tajawal', 'sans-serif'],
+                }
+              }
+            }
+          }
+        </script>
+        <style>
+          @page {
+            size: ${paperSize} ${orientation};
+            margin: 10mm;
+          }
+          @media print {
+            body {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+              background-color: white !important;
+            }
+          }
+          body {
+            font-family: 'Tajawal', sans-serif;
+            background-color: white;
+          }
+        </style>
+      </head>
+      <body class="p-2 bg-white text-slate-900">
+        <div class="border-4 border-double border-slate-700 p-4 min-h-full flex flex-col justify-between">
+          <div>
+            <!-- Header Block -->
+            <div class="flex items-center justify-between border-b-2 border-slate-800 pb-3 mb-4">
+              <div class="text-right space-y-1">
+                <h1 class="text-xs font-black text-slate-800">شركة بنيان للتشييد والتطوير العقاري</h1>
+                <p class="text-[9px] font-bold text-slate-500">إدارة المشروعات والرقابة الهندسية والتوريدات</p>
+                <p class="text-[8px] text-slate-400">تاريخ الطباعة: ${dateStr}</p>
+              </div>
+              
+              <div class="text-center">
+                <div class="border border-slate-800 px-3 py-1.5 bg-slate-50 rounded-lg">
+                  <span class="text-[10px] font-black text-slate-800 block">شعار بنيان</span>
+                  <span class="text-[8px] font-bold text-slate-400">BUNYAN CO.</span>
+                </div>
+              </div>
+
+              <div class="text-left text-xs space-y-0.5">
+                <p class="font-bold">الموقع: <span class="font-black text-indigo-750">مشروع برج العرب الجديدة</span></p>
+                <p class="font-bold text-[10px] text-slate-500">مستند مالي: كشف حساب المقاولين الإجمالي</p>
+              </div>
+            </div>
+
+            <!-- Title -->
+            <div class="text-center my-4">
+              <h2 class="text-base font-black text-slate-900 border-b-2 border-indigo-600 inline-block pb-0.5 px-4 uppercase tracking-wider">
+                كشف الموقف المالي الإجمالي لمقاولي الباطن بالموقع
+              </h2>
+              <p class="text-[10px] font-bold text-slate-500 mt-1">
+                حالة الأعمال والخصومات والمسحوبات الإجمالية لجميع مقاولي الباطن المسجلين بالمشروع
+              </p>
+            </div>
+
+            <!-- Table -->
+            <div class="mt-2">
+              <table class="w-full text-right text-[10px] border-collapse border border-slate-400">
+                <thead>
+                  <tr class="bg-slate-100 text-slate-900 font-black text-center text-[10px]">
+                    <th class="p-2 border border-slate-400 w-10">م</th>
+                    <th class="p-2 border border-slate-400 text-right">اسم المقاول</th>
+                    <th class="p-2 border border-slate-400 text-right">التخصص والبنود</th>
+                    <th class="p-2 border border-slate-400">رقم الهاتف</th>
+                    <th class="p-2 border border-slate-400">رقم العقد</th>
+                    <th class="p-2 border border-slate-400">إجمالي الأعمال Gross</th>
+                    <th class="p-2 border border-slate-400 text-rose-800">إجمالي الخصومات</th>
+                    <th class="p-2 border border-slate-400 text-sky-800">الصافي المعتمد Net</th>
+                    <th class="p-2 border border-slate-400 text-purple-800">تسويات ورقية</th>
+                    <th class="p-2 border border-slate-400 text-emerald-800">إجمالي المنصرف</th>
+                    <th class="p-2 border border-slate-400 text-amber-800">المتبقي النهائي</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rows}
+                  <!-- Totals Row -->
+                  <tr class="bg-slate-50 border-t-2 border-slate-800 text-[10px] font-black text-center">
+                    <td colspan="5" class="p-2 border border-slate-400 text-right text-slate-900">
+                      الإجمالي العام للحسابات (${subcontractors.length} مقاول باطن):
+                    </td>
+                    <td class="p-2 border border-slate-400 font-mono text-slate-900">
+                      ${totalStatsGross.toLocaleString('ar-EG')} ج.م
+                    </td>
+                    <td class="p-2 border border-slate-400 font-mono text-rose-700">
+                      ${totalStatsDiscounts.toLocaleString('ar-EG')} ج.م
+                    </td>
+                    <td class="p-2 border border-slate-400 font-mono text-sky-900">
+                      ${totalStatsNet.toLocaleString('ar-EG')} ج.م
+                    </td>
+                    <td class="p-2 border border-slate-400 font-mono text-purple-700">
+                      ${subcontractors.reduce((sum, c) => sum + (c.paperSettlements || 0), 0).toLocaleString('ar-EG')} ج.م
+                    </td>
+                    <td class="p-2 border border-slate-400 font-mono text-emerald-900">
+                      ${totalStatsPaid.toLocaleString('ar-EG')} ج.م
+                    </td>
+                    <td class="p-2 border border-slate-400 font-mono text-amber-800 bg-amber-50">
+                      ${totalStatsRemaining.toLocaleString('ar-EG')} ج.م
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Signature block -->
+          <div class="grid grid-cols-4 gap-4 text-center text-[9px] font-black text-slate-700 mt-12 border-t border-slate-300 pt-4">
+            <div class="space-y-10">
+              <p>إعداد المراجعة والمكتب الفني</p>
+              <p class="border-t border-dashed border-slate-400 pt-1 w-3/4 mx-auto">توقيع: .....................</p>
+            </div>
+            <div class="space-y-10">
+              <p>مراجعة الحسابات ومراقب التكاليف</p>
+              <p class="border-t border-dashed border-slate-400 pt-1 w-3/4 mx-auto">الاسم والتوقيع: .....................</p>
+            </div>
+            <div class="space-y-10">
+              <p>المدير المالي للمشروع</p>
+              <p class="border-t border-dashed border-slate-400 pt-1 w-3/4 mx-auto">الاسم والتوقيع: .....................</p>
+            </div>
+            <div class="space-y-10">
+              <p>اعتماد مدير عام المشروع</p>
+              <p class="border-t border-dashed border-slate-400 pt-1 w-3/4 mx-auto">الاسم والتوقيع: .....................</p>
+            </div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+              setTimeout(function() {
+                window.frameElement.remove();
+              }, 500);
+            }, 1000);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+  };
+
+  const handlePrintSingleSubcontractor = (c: Subcontractor, paperSize: 'A4' | 'A3', orientation: 'portrait' | 'landscape') => {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (!doc) return;
+
+    const dateStr = new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+    const stats = getSubcontractorCalculatedStats(c);
+
+    // Build Work Items Rows
+    const itemRows = stats.items.map((item, idx) => {
+      const itemGross = item.totalValue;
+      const itemDiscs = item.discounts ? item.discounts.reduce((sum, d) => sum + (d.amount || 0), 0) : 0;
+      const itemNet = itemGross - itemDiscs;
+
+      const discountsText = item.discounts && item.discounts.length > 0
+        ? item.discounts.map(d => `${d.label}: ${d.amount.toLocaleString('ar-EG')} ج.م`).join(' | ')
+        : '---';
+
+      return `
+        <tr class="border-b border-slate-300 text-[10px] text-slate-850 text-center">
+          <td class="p-1.5 border border-slate-400 font-bold">${idx + 1}</td>
+          <td class="p-1.5 border border-slate-400 text-right font-bold">${item.trade}</td>
+          <td class="p-1.5 border border-slate-400 font-mono">${(item.workVolume || 0).toLocaleString('ar-EG')}</td>
+          <td class="p-1.5 border border-slate-400 font-mono">${(item.unitPrice || 0).toLocaleString('ar-EG')} ج.م</td>
+          <td class="p-1.5 border border-slate-400 font-bold font-mono">${itemGross.toLocaleString('ar-EG')} ج.م</td>
+          <td class="p-1.5 border border-slate-400 text-right text-rose-700 font-semibold text-[9px]">${discountsText}</td>
+          <td class="p-1.5 border border-slate-400 font-bold font-mono text-indigo-900">${itemNet.toLocaleString('ar-EG')} ج.م</td>
+        </tr>
+      `;
+    }).join('');
+
+    // Build Payments Rows
+    const paymentRows = stats.ledgerPayments.length === 0 ? `
+      <tr>
+        <td colspan="5" class="p-2 border border-slate-400 text-center text-slate-400 italic">لا توجد حركات صرف مالية مسجلة في عهد الموقع أو الدفعات الرئيسية بعد لهذا المقاول.</td>
+      </tr>
+    ` : stats.ledgerPayments.map((tx, idx) => `
+      <tr class="border-b border-slate-300 text-[10px] text-slate-850 text-center">
+        <td class="p-1.5 border border-slate-400 font-bold">${idx + 1}</td>
+        <td class="p-1.5 border border-slate-400 font-mono">${tx.date}</td>
+        <td class="p-1.5 border border-slate-400 text-right">${tx.description}</td>
+        <td class="p-1.5 border border-slate-400 font-semibold text-indigo-750">${tx.nature === 'inside_custody' ? 'مسحوبات من عهدة الموقع' : 'دفعة من المكتب الرئيسي'}</td>
+        <td class="p-1.5 border border-slate-400 font-black font-mono text-slate-900">${tx.amount.toLocaleString('ar-EG')} ج.م</td>
+      </tr>
+    `).join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <title>بيان حساب تفصيلي: ${c.name}</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+        <script>
+          tailwind.config = {
+            theme: {
+              extend: {
+                fontFamily: {
+                  sans: ['Tajawal', 'sans-serif'],
+                }
+              }
+            }
+          }
+        </script>
+        <style>
+          @page {
+            size: ${paperSize} ${orientation};
+            margin: 12mm;
+          }
+          @media print {
+            body {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+              background-color: white !important;
+            }
+          }
+          body {
+            font-family: 'Tajawal', sans-serif;
+            background-color: white;
+          }
+        </style>
+      </head>
+      <body class="p-2 bg-white text-slate-900">
+        <div class="border-4 border-double border-slate-700 p-4 min-h-full flex flex-col justify-between">
+          <div>
+            <!-- Header Block -->
+            <div class="flex items-center justify-between border-b-2 border-slate-800 pb-3 mb-4">
+              <div class="text-right space-y-1">
+                <h1 class="text-xs font-black text-slate-800">شركة بنيان للتشييد والتطوير العقاري</h1>
+                <p class="text-[9px] font-bold text-slate-500">إدارة المشروعات والرقابة الهندسية والتوريدات</p>
+                <p class="text-[8px] text-slate-400">تاريخ الطباعة: ${dateStr}</p>
+              </div>
+              
+              <div class="text-center">
+                <div class="border border-slate-800 px-3 py-1.5 bg-slate-50 rounded-lg">
+                  <span class="text-[10px] font-black text-slate-800 block">شعار بنيان</span>
+                  <span class="text-[8px] font-bold text-slate-400">BUNYAN CO.</span>
+                </div>
+              </div>
+
+              <div class="text-left text-xs space-y-0.5">
+                <p class="font-bold">الموقع: <span class="font-black text-indigo-750">مشروع برج العرب الجديدة</span></p>
+                <p class="font-bold text-[10px] text-slate-500">مستند تفصيلي: بيان كشف حساب مقاول باطن</p>
+              </div>
+            </div>
+
+            <!-- Title -->
+            <div class="text-center my-4">
+              <h2 class="text-base font-black text-slate-900 border-b-2 border-indigo-600 inline-block pb-0.5 px-4 uppercase tracking-wider">
+                كشف الموقف المالي والتسوية التفصيلية للمقاول
+              </h2>
+              <p class="text-[12px] font-black text-indigo-750 mt-1">
+                الاسم: ${c.name}
+              </p>
+            </div>
+
+            <!-- Profile Info Cards -->
+            <div class="grid grid-cols-2 gap-4 my-3 text-xs">
+              <div class="border border-slate-300 p-3 rounded-xl bg-slate-50/50 space-y-1.5">
+                <h3 class="font-black text-slate-800 border-b pb-1 text-[11px]">بيانات التعاقد والتواصل</h3>
+                <p><span class="text-slate-500">رقم الهاتف:</span> <span class="font-bold font-mono">${c.phone || 'غير مسجل'}</span></p>
+                <p><span class="text-slate-500">رقم العقد الإطاري:</span> <span class="font-bold font-mono">${c.contractNumber || 'بدون عقد'}</span></p>
+                <p><span class="text-slate-500">التخصص الرئيسي للمقاولة:</span> <span class="font-bold text-slate-700">${c.trade || 'أعمال متنوعة'}</span></p>
+              </div>
+
+              <div class="border border-slate-300 p-3 rounded-xl bg-indigo-50/20 space-y-1 text-[11px]">
+                <h3 class="font-black text-indigo-950 border-b border-indigo-100 pb-1 text-[11px]">ملخص تحليل الحساب المالي للمقاول</h3>
+                <div class="grid grid-cols-2 gap-y-1">
+                  <span class="text-slate-600">إجمالي قيمة الأعمال (Gross):</span>
+                  <span class="font-bold font-mono text-slate-900 text-left">${stats.grossValue.toLocaleString('ar-EG')} ج.م</span>
+
+                  <span class="text-rose-700 font-bold">إجمالي الخصومات والاستقطاعات:</span>
+                  <span class="font-bold font-mono text-rose-700 text-left">-${stats.totalDiscounts.toLocaleString('ar-EG')} ج.م</span>
+
+                  <span class="text-indigo-950 font-black">صافي قيمة المستخلص (Net):</span>
+                  <span class="font-black font-mono text-indigo-950 text-left underline">${stats.netValue.toLocaleString('ar-EG')} ج.م</span>
+
+                  <span class="text-purple-700">تسويات ورقية مقتطعة:</span>
+                  <span class="font-bold font-mono text-purple-700 text-left">-${stats.paperTotal.toLocaleString('ar-EG')} ج.م</span>
+
+                  <span class="text-emerald-800 font-bold">إجمالي المنصرف والمسدد الفعلي:</span>
+                  <span class="font-bold font-mono text-emerald-800 text-left">-${(stats.custodyTotal + stats.officeTotal).toLocaleString('ar-EG')} ج.م</span>
+
+                  <span class="text-amber-800 font-black border-t border-dashed pt-0.5">الرصيد المتبقي النهائي المستحق:</span>
+                  <span class="font-black font-mono text-amber-800 text-left border-t border-dashed pt-0.5">${stats.finalRemaining.toLocaleString('ar-EG')} ج.م</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Block 1: Work Items and Quantities -->
+            <div class="mt-4">
+              <h3 class="text-xs font-black text-slate-800 mb-2 border-r-4 border-indigo-600 pr-2">أولاً: بيان بنود الأعمال والقياسات المنجزة والخصومات</h3>
+              <table class="w-full text-right text-[10px] border-collapse border border-slate-400">
+                <thead>
+                  <tr class="bg-slate-100 text-slate-900 font-black text-center text-[10px]">
+                    <th class="p-1.5 border border-slate-400 w-10">م</th>
+                    <th class="p-1.5 border border-slate-400 text-right">بيان الأعمال / البند</th>
+                    <th class="p-1.5 border border-slate-400 w-16">حجم الأعمال</th>
+                    <th class="p-1.5 border border-slate-400 w-24">سعر الفئة</th>
+                    <th class="p-1.5 border border-slate-400 w-24">الإجمالي (Gross)</th>
+                    <th class="p-1.5 border border-slate-400">الخصومات والاستقطاعات للبند</th>
+                    <th class="p-1.5 border border-slate-400 w-24">الصافي (Net)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${itemRows}
+                  <tr class="bg-slate-50 font-black text-center text-[10px]">
+                    <td colspan="2" class="p-1.5 border border-slate-400 text-right">الإجمالي لجميع البنود:</td>
+                    <td colspan="2" class="p-1.5 border border-slate-400">---</td>
+                    <td class="p-1.5 border border-slate-400 font-mono">${stats.grossValue.toLocaleString('ar-EG')} ج.م</td>
+                    <td class="p-1.5 border border-slate-400 font-mono text-rose-700">-${stats.totalDiscounts.toLocaleString('ar-EG')} ج.م</td>
+                    <td class="p-1.5 border border-slate-400 font-mono text-indigo-900">${stats.netValue.toLocaleString('ar-EG')} ج.م</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Block 2: Site Custody & main office payments -->
+            <div class="mt-5">
+              <h3 class="text-xs font-black text-slate-800 mb-2 border-r-4 border-indigo-600 pr-2">ثانياً: بيان حركات صرف الدفعات والمسحوبات المالية</h3>
+              <table class="w-full text-right text-[10px] border-collapse border border-slate-400">
+                <thead>
+                  <tr class="bg-slate-100 text-slate-900 font-black text-center text-[10px]">
+                    <th class="p-1.5 border border-slate-400 w-10">م</th>
+                    <th class="p-1.5 border border-slate-400 w-24">تاريخ الحركة</th>
+                    <th class="p-1.5 border border-slate-400 text-right">بيان ووصف الدفعة / المسحوبات</th>
+                    <th class="p-1.5 border border-slate-400 w-44">نوع الدفعة وجهة الصرف</th>
+                    <th class="p-1.5 border border-slate-400 w-28">قيمة الدفعة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${paymentRows}
+                  <tr class="bg-slate-50 font-black text-center text-[10px]">
+                    <td colspan="3" class="p-1.5 border border-slate-400 text-right">إجمالي المدفوعات المسددة والمنصرفة (من عهدة الموقع والمكتب الرئيسي):</td>
+                    <td class="p-1.5 border border-slate-400 text-slate-500 font-medium text-[9px]">c:${stats.custodyTotal.toLocaleString('ar-EG')} | o:${stats.officeTotal.toLocaleString('ar-EG')}</td>
+                    <td class="p-1.5 border border-slate-400 font-mono text-slate-900">${(stats.custodyTotal + stats.officeTotal).toLocaleString('ar-EG')} ج.م</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            ${c.notes ? `
+            <div class="mt-4 p-2.5 bg-amber-50/50 border border-amber-300 rounded-xl text-xs text-amber-850">
+              <strong>ملاحظات إضافية وشروط خاصة:</strong> ${c.notes}
+            </div>
+            ` : ''}
+          </div>
+
+          <!-- Signature block -->
+          <div class="grid grid-cols-4 gap-4 text-center text-[9px] font-black text-slate-700 mt-12 border-t border-slate-300 pt-4">
+            <div class="space-y-10">
+              <p>مراجعة المكتب الفني</p>
+              <p class="border-t border-dashed border-slate-400 pt-1 w-3/4 mx-auto">توقيع: .....................</p>
+            </div>
+            <div class="space-y-10">
+              <p>مراجعة الحسابات والتسويات</p>
+              <p class="border-t border-dashed border-slate-400 pt-1 w-3/4 mx-auto">توقيع: .....................</p>
+            </div>
+            <div class="space-y-10">
+              <p>المدير المالي والرقابة الهندسية</p>
+              <p class="border-t border-dashed border-slate-400 pt-1 w-3/4 mx-auto">توقيع: .....................</p>
+            </div>
+            <div class="space-y-10">
+              <p>اعتماد مدير عام المشروع</p>
+              <p class="border-t border-dashed border-slate-400 pt-1 w-3/4 mx-auto">توقيع: .....................</p>
+            </div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+              setTimeout(function() {
+                window.frameElement.remove();
+              }, 500);
+            }, 1000);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+  };
   
   const [formData, setFormData] = useState({
     name: '',
@@ -348,15 +813,27 @@ export default function SubcontractorsDashboard({
           </div>
         </div>
         
-        <motion.button 
-          whileHover={{ scale: userRole !== 'viewer' ? 1.02 : 1, y: userRole !== 'viewer' ? -2 : 0 }}
-          whileTap={{ scale: userRole !== 'viewer' ? 0.98 : 1 }}
-          onClick={() => { if (userRole !== 'viewer') { resetForm(); setShowModal(true); } else { alert('غير مسموح لك بإضافة مقاول'); } }}
-          className={`relative z-10 w-full md:w-auto px-6 py-3 bg-slate-900 ${userRole === 'viewer' ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-800'} text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-slate-900/10 transition-all`}
-        >
-          <Plus size={18} />
-          <span>إضافة مقاول جديد</span>
-        </motion.button>
+        <div className="flex flex-wrap items-center gap-2 relative z-10 w-full md:w-auto">
+          <motion.button 
+            whileHover={{ scale: 1.02, y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setShowPrintAllModal(true)}
+            className="w-full md:w-auto px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold flex items-center justify-center gap-2 border border-slate-200 transition-all cursor-pointer"
+          >
+            <Printer size={18} className="text-slate-600" />
+            <span>طباعة الحساب الإجمالي</span>
+          </motion.button>
+
+          <motion.button 
+            whileHover={{ scale: userRole !== 'viewer' ? 1.02 : 1, y: userRole !== 'viewer' ? -2 : 0 }}
+            whileTap={{ scale: userRole !== 'viewer' ? 0.98 : 1 }}
+            onClick={() => { if (userRole !== 'viewer') { resetForm(); setShowModal(true); } else { alert('غير مسموح لك بإضافة مقاول'); } }}
+            className={`w-full md:w-auto px-6 py-3 bg-slate-900 ${userRole === 'viewer' ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-800'} text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-slate-900/10 transition-all`}
+          >
+            <Plus size={18} />
+            <span>إضافة مقاول جديد</span>
+          </motion.button>
+        </div>
       </header>
 
       {/* KPI Stats */}
@@ -457,7 +934,21 @@ export default function SubcontractorsDashboard({
                                     </p>
                                     <p className="flex justify-between gap-3 items-center">
                                       <span className="text-slate-400 font-extrabold text-[9px]">رقم العقد:</span>
-                                      <span className="font-mono text-white text-left font-semibold select-all" dir="ltr">{c.contractNumber || 'بدون عقد'}</span>
+                                      <span className="font-mono text-white text-left font-semibold select-all flex items-center gap-1" dir="ltr">
+                                        {(() => {
+                                          const linkedCon = contracts.find(con => con.counterparty.trim() === c.name.trim());
+                                          return linkedCon ? (
+                                            <>
+                                              {linkedCon.contractNumber}
+                                              <span className="bg-indigo-600 text-indigo-100 text-[7px] px-1 py-0.5 rounded-full font-sans font-black scale-90 origin-right">
+                                                مربوط
+                                              </span>
+                                            </>
+                                          ) : (
+                                            c.contractNumber || 'بدون عقد'
+                                          );
+                                        })()}
+                                      </span>
                                     </p>
                                   </div>
                                 </div>
@@ -511,6 +1002,13 @@ export default function SubcontractorsDashboard({
                         </td>
                         <td className="p-3 bg-slate-50/50 rounded-l-xl border-l border-y border-slate-200/50 shadow-sm">
                           <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setPrintTargetSub(c); setShowPrintSingleModal(true); }}
+                              className="p-1.5 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded transition animate-pulse"
+                              title="طباعة بيان كشف الحساب التفصيلي"
+                            >
+                              <Printer size={14} />
+                            </button>
                             <button
                               onClick={(e) => { e.stopPropagation(); if (userRole !== 'viewer') startEdit(c); else alert('غير مسموح لك بالتعديل'); }}
                               className={`p-1.5 ${userRole === 'viewer' ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700'} rounded transition`}
@@ -1052,6 +1550,172 @@ export default function SubcontractorsDashboard({
 
             </div>
           </motion.div>
+        </div>
+      )}
+
+      {/* Print All Subcontractors Modal */}
+      {showPrintAllModal && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in text-right" dir="rtl">
+          <div className="bg-white border border-slate-200 rounded-[2rem] w-full max-w-md p-6 shadow-2xl space-y-6">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <Printer className="h-5 w-5 text-indigo-600" />
+                إعدادات طباعة حساب المقاولين الإجمالي
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowPrintAllModal(false)}
+                className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-black text-slate-500 mb-2">نوع التقرير للطباعة:</p>
+                <div className="p-3 bg-slate-50 border rounded-xl text-xs font-bold text-indigo-900">
+                  كشف الموقف المالي الإجمالي لمقاولي الباطن بالموقع مع بيان قيم الأعمال والخصومات والمسدد والرصيد المتبقي
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">حجم الورقة:</label>
+                  <select
+                    value={printPaperSizeAll}
+                    onChange={(e: any) => setPrintPaperSizeAll(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20"
+                  >
+                    <option value="A4">A4 (قياسي)</option>
+                    <option value="A3">A3 (كبير جداً - تفصيلي)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">اتجاه الصفحة:</label>
+                  <select
+                    value={printOrientationAll}
+                    onChange={(e: any) => setPrintOrientationAll(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20"
+                  >
+                    <option value="landscape">أفقي (Landscape - مستحسن)</option>
+                    <option value="portrait">رأسي (Portrait)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  handlePrintAllSubcontractors(printPaperSizeAll, printOrientationAll);
+                  setShowPrintAllModal(false);
+                }}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl shadow-lg transition text-center text-xs"
+              >
+                تأكيد وأمر الطباعة
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPrintAllModal(false)}
+                className="px-4 bg-slate-50 hover:bg-slate-100 text-slate-500 font-bold py-3 rounded-xl transition text-xs"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Print Single Subcontractor Modal */}
+      {showPrintSingleModal && printTargetSub && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in text-right" dir="rtl">
+          <div className="bg-white border border-slate-200 rounded-[2rem] w-full max-w-md p-6 shadow-2xl space-y-6">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <Printer className="h-5 w-5 text-indigo-600" />
+                إعدادات طباعة كشف حساب مقاول
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPrintSingleModal(false);
+                  setPrintTargetSub(null);
+                }}
+                className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-black text-slate-500 mb-1">المقاول المستهدف:</p>
+                <p className="text-sm font-black text-indigo-900 bg-indigo-50/50 border border-indigo-150 p-2.5 rounded-xl">
+                  {printTargetSub.name}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-black text-slate-500 mb-2">نوع التقرير للطباعة:</p>
+                <div className="p-3 bg-slate-50 border rounded-xl text-xs font-bold text-indigo-950 leading-relaxed">
+                  بيان كشف حركة حساب المقاول التفصيلي متضمناً قياسات البنود والكميات المستحقة، سجل حركات الصرف العينية والنقدية والعهدة، تسوية الرصيد النهائي مع البصمة المعتمدة للتوقيعات.
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">حجم الورقة:</label>
+                  <select
+                    value={printPaperSizeSingle}
+                    onChange={(e: any) => setPrintPaperSizeSingle(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20"
+                  >
+                    <option value="A4">A4 (قياسي)</option>
+                    <option value="A3">A3 (كبير جداً)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">اتجاه الصفحة:</label>
+                  <select
+                    value={printOrientationSingle}
+                    onChange={(e: any) => setPrintOrientationSingle(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20"
+                  >
+                    <option value="portrait">رأسي (Portrait)</option>
+                    <option value="landscape">أفقي (Landscape)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  handlePrintSingleSubcontractor(printTargetSub, printPaperSizeSingle, printOrientationSingle);
+                  setShowPrintSingleModal(false);
+                  setPrintTargetSub(null);
+                }}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl shadow-lg transition text-center text-xs"
+              >
+                تأكيد وأمر الطباعة
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPrintSingleModal(false);
+                  setPrintTargetSub(null);
+                }}
+                className="px-4 bg-slate-50 hover:bg-slate-100 text-slate-500 font-bold py-3 rounded-xl transition text-xs"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

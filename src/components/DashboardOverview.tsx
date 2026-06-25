@@ -32,7 +32,7 @@ import {
   CategoryMetric, 
   Transaction, 
   SupplyRecord, 
-  EquipmentRecord, 
+  EquipmentSummary, 
   MaintenanceOrder, 
   CustodyRecord, 
   ContractorCertificate, 
@@ -49,7 +49,7 @@ interface DashboardOverviewProps {
   transactions: Transaction[];
   setActiveTab: (tab: string) => void;
   supplyRecords: SupplyRecord[];
-  equipmentList: EquipmentRecord[];
+  equipmentList: EquipmentSummary[];
   maintenanceOrders: MaintenanceOrder[];
   custodies: CustodyRecord[];
   contractors: ContractorCertificate[];
@@ -136,7 +136,13 @@ export default function DashboardOverview({
   }, {} as Record<string, number>);
   const suppliesDistribution = Object.entries(suppliesByItem).sort((a, b) => b[1] - a[1]);
 
-  const totalEqHours = equipmentList.reduce((acc, eq) => acc + (eq.hoursWorked || 0), 0);
+  const totalEqHours = equipmentList.reduce((acc, eq) => {
+    const logsHours = eq.logs?.reduce((sum, log) => {
+      const dur = parseFloat(String(log.duration));
+      return sum + (isNaN(dur) ? 0 : dur);
+    }, 0) || 0;
+    return acc + (eq.carryoverHours || 0) + logsHours;
+  }, 0);
 
   return (
     <div className="space-y-8" id="dashboard-overview-container">
@@ -154,7 +160,7 @@ export default function DashboardOverview({
               Executive Control Hub
             </span>
           </div>
-          <h2 className="text-3xl md:text-5xl font-black text-slate-900 leading-none tracking-tighter">مركز القيادة الرقمي للسجلـات</h2>
+          <h2 className="text-3xl md:text-5xl font-black text-slate-900 leading-none tracking-tighter">مركز البيانات والتحكم</h2>
           <p className="text-sm md:text-base text-slate-500 font-bold mt-4 max-w-2xl ml-auto leading-relaxed opacity-90">
             رؤية بانورامية متكاملة لكافة عمليات الموقع الإنشائي. نجمع لك البيانات المالية، الهندسية، والتشغيلية في شاشة واحدة لاتخاذ قرارات دقيقة مبنية على الحقائق اللحظية.
           </p>
@@ -216,7 +222,7 @@ export default function DashboardOverview({
               <span className="text-2xl font-black font-mono text-slate-900 group-hover:text-emerald-600 transition-colors tracking-tighter">{formatCurrency(officeSpent)}</span>
             </div>
             <div className="p-6 bg-slate-50/50 border border-slate-100 rounded-3xl text-right group hover:border-amber-500/30 transition-all">
-              <span className="text-[10px] text-amber-600 font-black block mb-2 uppercase tracking-tighter opacity-60">إجمالي الموازنة</span>
+              <span className="text-[10px] text-amber-600 font-black block mb-2 uppercase tracking-tighter opacity-60">إجمالي المسدد</span>
               <span className="text-2xl font-black font-mono text-slate-900 group-hover:text-amber-400 transition-colors tracking-tighter">{formatCurrency(totalSpent)}</span>
             </div>
           </div>
@@ -228,14 +234,18 @@ export default function DashboardOverview({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {categories.slice(0, 4).map((cat) => {
-                const ratio = Math.min(100, (cat.totalSpent / (cat.initialBudget || 1)) * 100);
+                const ratio = cat.totalExecutedValue > 0 
+                  ? (cat.totalSpent / cat.totalExecutedValue) * 100 
+                  : (cat.totalSpent > 0 ? 100 : 0);
+                const displayRatio = Math.min(100, ratio);
                 return (
                   <div key={cat.id} className="p-5 bg-slate-50 border border-slate-200/50 rounded-3xl space-y-3">
                     <div className="flex justify-between items-center">
                       <div className="font-mono text-xs font-black text-slate-900" dir="ltr">
                         {formatCurrency(cat.totalSpent)}
-                        <span className="text-slate-400 mx-1.5">/</span>
-                        <span className={`text-[10px] ${ratio > 90 ? 'text-rose-600' : 'text-slate-400'}`}>{Math.round(ratio)}%</span>
+                        <span className="text-slate-400 mx-1.5">\</span>
+                        {formatCurrency(cat.totalExecutedValue)}
+                        <span className={`text-[10px] ml-1.5 ${ratio > 90 ? 'text-rose-600' : 'text-slate-400'}`}>({Math.round(ratio)}%)</span>
                       </div>
                       <div className="flex items-center gap-2.5">
                         <span className="font-black text-slate-700 text-[11px]">{cat.nameAr}</span>
@@ -245,7 +255,7 @@ export default function DashboardOverview({
                     <div className="relative w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
                       <motion.div 
                         initial={{ width: 0 }}
-                        animate={{ width: `${ratio}%` }}
+                        animate={{ width: `${displayRatio}%` }}
                         transition={{ duration: 1.5, ease: "easeOut" }}
                         className="h-full rounded-full" 
                         style={{ backgroundColor: cat.color }}

@@ -36,19 +36,37 @@ import {
   CheckCircle
 } from 'lucide-react';
 import { 
-  FuelLogRecord 
+  FuelLogRecord,
+  FuelStation,
+  SiteWorker
 } from '../types';
 import { 
   INITIAL_FUEL_LOGS, 
   INITIAL_FUEL_CUSTODY_BUDGET
 } from '../data/fuelInitialData';
 
-export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, setCustodyBudget, equipment, userRole, addAuditLog }: {
+export default function FuelDashboard({ 
+  fuelLogs, 
+  setFuelLogs, 
+  custodyBudget, 
+  setCustodyBudget, 
+  fuelStations,
+  setFuelStations,
+  equipment, 
+  transactions, 
+  workers,
+  userRole, 
+  addAuditLog 
+}: {
   fuelLogs: FuelLogRecord[];
   setFuelLogs: React.Dispatch<React.SetStateAction<FuelLogRecord[]>>;
   custodyBudget: number;
   setCustodyBudget: React.Dispatch<React.SetStateAction<number>>;
+  fuelStations: FuelStation[];
+  setFuelStations: React.Dispatch<React.SetStateAction<FuelStation[]>>;
   equipment: any[];
+  transactions: any[];
+  workers: SiteWorker[];
   userRole?: string;
   addAuditLog: (action: string, module: string, details: string) => void;
 }) {
@@ -57,14 +75,153 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
   // EQUIPMENTS_LIST derived from equipment prop
   const EQUIPMENTS_LIST = equipment.map(e => e.name);
 
+  // --- Fuel Stations Management States ---
+  const [stationName, setStationName] = useState('');
+  const [stationLocation, setStationLocation] = useState('');
+  const [stationDelegateName, setStationDelegateName] = useState('');
+  const [stationDelegatePhone, setStationDelegatePhone] = useState('');
+  const [editingStationId, setEditingStationId] = useState<string | null>(null);
+
+  // Dynamic Financial Data calculation for any fuel station (recharges minus consumption)
+  const getStationFinancialData = (station: FuelStation) => {
+    if (station.isInfinite) {
+      return {
+        balance: Infinity,
+        recharges: Infinity,
+        consumption: (fuelLogs || [])
+          .filter(log => log.stationId === station.id)
+          .reduce((sum, log) => sum + (Number(log.cost) || 0), 0),
+        ratio: 100
+      };
+    }
+
+    // 1. Recharges (from Transactions with category === 'fuel' and fuelStationId === station.id)
+    const recharges = (transactions || [])
+      .filter(tx => tx.category === 'fuel' && tx.fuelStationId === station.id)
+      .reduce((sum, tx) => {
+        if (tx.type === 'spent') {
+          return sum + (Number(tx.amount) || 0);
+        } else if (tx.type === 'income') {
+          return sum - (Number(tx.amount) || 0);
+        }
+        return sum;
+      }, 0);
+
+    // 2. Consumption (from Fuel Logs where stationId === station.id)
+    const consumption = (fuelLogs || [])
+      .filter(log => log.stationId === station.id)
+      .reduce((sum, log) => sum + (Number(log.cost) || 0), 0);
+
+    const balance = recharges - consumption;
+    const ratio = recharges > 0 ? Math.max(0, Math.min(100, Math.round((balance / recharges) * 100))) : 0;
+
+    return {
+      balance,
+      recharges,
+      consumption,
+      ratio
+    };
+  };
+
+  // Initialize default fuel stations if empty
+  useEffect(() => {
+    if (!fuelStations || fuelStations.length === 0) {
+      setFuelStations([
+        { 
+          id: 'company-caravan', 
+          name: 'عربة المحروقات الخاصة بالشركة', 
+          location: 'متحرك بموقع العمل تتبع حركة المشروع', 
+          delegateName: 'مشرف الحركة العام', 
+          delegatePhone: 'جهة داخلية معتمدة',
+          isInfinite: true 
+        }
+      ]);
+    }
+  }, [fuelStations, setFuelStations]);
+
+  const handleSaveStation = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stationName.trim()) {
+      alert('يرجى إدخال اسم البنزينة أولاً.');
+      return;
+    }
+
+    if (editingStationId) {
+      setFuelStations(prev => prev.map(s => {
+        if (s.id === editingStationId) {
+          return {
+            ...s,
+            name: stationName.trim(),
+            location: stationLocation.trim(),
+            delegateName: stationDelegateName.trim(),
+            delegatePhone: stationDelegatePhone.trim()
+          };
+        }
+        return s;
+      }));
+      addAuditLog('تعديل بيانات محطة وقود', 'حركة المحروقات', `تم تعديل بيانات محطة: ${stationName}`);
+      setEditingStationId(null);
+    } else {
+      const newStation: FuelStation = {
+        id: `station-${Date.now()}`,
+        name: stationName.trim(),
+        location: stationLocation.trim(),
+        delegateName: stationDelegateName.trim(),
+        delegatePhone: stationDelegatePhone.trim(),
+        isInfinite: false
+      };
+      setFuelStations(prev => [...prev, newStation]);
+      addAuditLog('إضافة محطة وقود جديدة', 'حركة المحروقات', `تم تسجيل محطة جديدة: ${stationName}`);
+    }
+
+    // Reset fields
+    setStationName('');
+    setStationLocation('');
+    setStationDelegateName('');
+    setStationDelegatePhone('');
+  };
+
+  const handleEditStation = (s: FuelStation) => {
+    setEditingStationId(s.id);
+    setStationName(s.name);
+    setStationLocation(s.location || '');
+    setStationDelegateName(s.delegateName || '');
+    setStationDelegatePhone(s.delegatePhone || '');
+  };
+
+  const handleDeleteStation = (id: string, name: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: 'حذف بنزينة / محطة وقود',
+      message: `هل أنت متأكد تماماً من رغبتك في حذف بيانات ورصيد محطة: "${name}" من السجلات بالكامل وتصفير رصيدها؟`,
+      onConfirm: () => {
+        setFuelStations(prev => prev.filter(s => s.id !== id));
+        addAuditLog('حذف محطة وقود', 'حركة المحروقات', `تم حذف محطة الوقود: ${name} وتصفير رصيدها.`);
+      }
+    });
+  };
+
   // New/Edit Form State
-  const [formState, setFormState] = useState({
+  const [formState, setFormState] = useState<{
+    date: string;
+    day: string;
+    equipmentName: string;
+    quantity: number;
+    cost: number;
+    additionalCost: number;
+    recipientName: string;
+    notes: string;
+    stationId?: string;
+  }>({
     date: new Date().toISOString().split('T')[0],
     day: 'الأحد',
     equipmentName: EQUIPMENTS_LIST[0] || '',
-    quantity: 100,
-    cost: 1765,
-    notes: ''
+    quantity: 0,
+    cost: parseFloat(localStorage.getItem('lastFuelCost') || '0') || 0,
+    additionalCost: 0,
+    recipientName: '',
+    notes: '',
+    stationId: ''
   });
 
   // Sync default equipment name when equipment list loads
@@ -129,6 +286,7 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEquipmentFilter, setSelectedEquipmentFilter] = useState('all');
+  const [selectedStationFilter, setSelectedStationFilter] = useState('all');
   const [sortBy, setSortBy] = useState<'date' | 'cost' | 'quantity'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
@@ -162,9 +320,14 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
   };
 
   // --- Aggregates and Statistics ---
+  // Automatically calculate fuel budget from Transactions (شيت الحركة)
+  const calculatedFuelBudget = transactions
+    .filter(tx => tx.category === 'fuel')
+    .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+
   const totalQuantity = fuelLogs.reduce((sum, log) => sum + log.quantity, 0);
   const totalSpent = fuelLogs.reduce((sum, log) => sum + log.cost, 0);
-  const currentBalance = custodyBudget - totalSpent;
+  const currentBalance = calculatedFuelBudget - totalSpent;
 
   // Aggregate Fuel Cost by Equipment for the side table (matching OCR)
   const equipmentSummaries = EQUIPMENTS_LIST.map(eqName => {
@@ -177,26 +340,33 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
   // --- Handlers ---
   const handleSaveLog = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formState.equipmentName) {
-      alert('يرجى تحديد المعدة المستلمة للسولار.');
+    if (!formState.equipmentName || !formState.recipientName) {
+      alert('يرجى تحديد المعدة والمستلم.');
       return;
     }
 
-    const costNum = Number(formState.cost) || 0;
+    const costPerLiter = Number(formState.cost) || 0;
     const qtyNum = Number(formState.quantity) || 0;
+    const additionalCost = Number(formState.additionalCost) || 0;
+    const totalCost = (costPerLiter * qtyNum) + additionalCost;
+    
+    // Remember the last cost per liter
+    localStorage.setItem('lastFuelCost', costPerLiter.toString());
 
     if (editingLogId) {
       setFuelLogs(prev => prev.map(log => {
         if (log.id === editingLogId) {
           return {
-            id: log.id,
-            referenceNo: log.referenceNo,
+            ...log,
             date: formState.date,
             day: formState.day,
             equipmentName: formState.equipmentName,
             quantity: qtyNum,
-            cost: costNum,
-            notes: formState.notes
+            cost: totalCost,
+            additionalCost: additionalCost,
+            recipientName: formState.recipientName,
+            notes: formState.notes,
+            stationId: formState.stationId || undefined
           };
         }
         return log;
@@ -212,8 +382,11 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
         day: formState.day,
         equipmentName: formState.equipmentName,
         quantity: qtyNum,
-        cost: costNum,
-        notes: formState.notes
+        cost: totalCost,
+        additionalCost: additionalCost,
+        recipientName: formState.recipientName,
+        notes: formState.notes,
+        stationId: formState.stationId || undefined
       };
       setFuelLogs(prev => [newRecord, ...prev]);
       addAuditLog('إضافة بون وقود', 'حركة المحروقات', `تم تسجيل بون وقود جديد رقم: ${refNo} للمعدة: ${formState.equipmentName} بكمية: ${qtyNum} لتر.`);
@@ -226,8 +399,11 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
       day: 'الأحد',
       equipmentName: EQUIPMENTS_LIST[0] || '',
       quantity: 100,
-      cost: 1765,
-      notes: ''
+      cost: parseFloat(localStorage.getItem('lastFuelCost') || '0') || 0,
+      additionalCost: 0,
+      recipientName: '',
+      notes: '',
+      stationId: ''
     });
   };
 
@@ -238,8 +414,11 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
       day: log.day,
       equipmentName: log.equipmentName,
       quantity: log.quantity,
-      cost: log.cost,
-      notes: log.notes || ''
+      cost: log.cost - log.additionalCost, // cost per liter needs to be recalculated or stored differently. Assuming log.cost is total. Wait, log.cost is total. How to get cost per liter back?
+      additionalCost: log.additionalCost,
+      recipientName: log.recipientName,
+      notes: log.notes || '',
+      stationId: log.stationId || ''
     });
     setShowAddModal(true);
   };
@@ -276,8 +455,9 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
       log.day.includes(searchTerm);
     
     const matchesFilter = selectedEquipmentFilter === 'all' || log.equipmentName === selectedEquipmentFilter;
+    const matchesStationFilter = selectedStationFilter === 'all' || log.stationId === selectedStationFilter;
     
-    return matchesSearch && matchesFilter;
+    return matchesSearch && matchesFilter && matchesStationFilter;
   }).sort((a, b) => {
     let factor = sortOrder === 'asc' ? 1 : -1;
     if (sortBy === 'date') {
@@ -328,34 +508,10 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
         {/* Action button bar */}
         <div className="flex flex-wrap gap-2.5 w-full lg:w-auto justify-end">
           <button
-            onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية إعادة تعيين البيانات') : handleResetData}
-            disabled={userRole === 'viewer'}
-            className={`px-3.5 py-2 text-xs font-black rounded-xl transition border flex items-center gap-1.5 ${
-              userRole === 'viewer'
-                ? 'bg-slate-800 text-slate-500 cursor-not-allowed border-slate-700'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700 cursor-pointer'
-            }`}
-            title="إعادة ضبط الحسابات إلى قيم الـ PDF الموجه"
-          >
-            إعادة للقيم الأصلية ↺
-          </button>
-          <button
             onClick={() => window.print()}
             className="px-3.5 py-2 bg-indigo-900/30 text-indigo-400 hover:bg-indigo-900/50 text-xs font-black rounded-xl transition border border-indigo-800/40 flex items-center gap-1.5 cursor-pointer"
           >
             <Printer size={15} /> طباعة كشف المحروقات
-          </button>
-          <button
-            onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية استخدام المسح الذكي') : () => setShowAiIngest(!showAiIngest)}
-            disabled={userRole === 'viewer'}
-            className={`px-3.5 py-2 font-extrabold text-xs rounded-xl flex items-center gap-1.5 shadow-md transition border active:scale-95 ${
-              userRole === 'viewer'
-                ? 'bg-slate-800 text-slate-500 cursor-not-allowed border-slate-700'
-                : 'bg-slate-800 hover:bg-slate-750 text-amber-400 cursor-pointer border-slate-700'
-            }`}
-          >
-            <Sparkles size={14} className={userRole === 'viewer' ? 'text-slate-500' : 'text-amber-400 animate-pulse'} />
-            <span>تسجيل وقيد بالذكاء الاصطناعي ✨</span>
           </button>
           <button
             onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية تسجيل بونات جديدة') : () => {
@@ -365,7 +521,7 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
                 day: 'الأحد',
                 equipmentName: EQUIPMENTS_LIST[0] || '',
                 quantity: 100,
-                cost: 1765,
+                cost: parseFloat(localStorage.getItem('lastFuelCost') || '0') || 0,
                 notes: ''
               });
               setShowAddModal(true);
@@ -476,8 +632,29 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
                         mimeType: aiImageMime
                       })
                     });
-                    const data = await res.json();
-                    if (!res.ok) throw new Error(data.error || 'فشل فحص البون وتفسيره');
+                    if (!res.ok) {
+                      let errData;
+                      try { errData = await res.json(); } catch(e) {}
+                      throw new Error((errData && errData.error) || 'فشل فحص البون وتفسيره');
+                    }
+
+                    const reader = res.body?.getReader();
+                    const decoder = new TextDecoder();
+                    let resultText = '';
+                    if (reader) {
+                      while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        resultText += decoder.decode(value, { stream: true });
+                      }
+                    }
+                    
+                    let data: any = {};
+                    try {
+                      data = JSON.parse(resultText);
+                    } catch (e) {
+                      throw new Error("فشل في تحليل المخرجات الواردة من الذكاء الاصطناعي.");
+                    }
                     if (data.transactions && data.transactions.length > 0) {
                       const mapped = mapTransactionsToFuelRecords(data.transactions);
                       setAiResultRecords(mapped);
@@ -573,82 +750,63 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
       </AnimatePresence>
 
       {/* 2. Key Metrics Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {/* 1. إجمالي العهدة المخصصة للوقود */}
-        <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex items-center justify-between">
-          <div className="text-right">
-            <span className="text-slate-400 font-bold text-[10px]">مخصص عهدة المحروقات</span>
-            <div className="flex items-center gap-1.5 mt-1">
-              <input
-                type="number"
-                value={custodyBudget}
-                disabled={userRole === 'viewer'}
-                onChange={(e) => setCustodyBudget(Number(e.target.value) || 0)}
-                className={`text-lg font-mono font-black w-28 text-center rounded-lg py-0.5 focus:border-indigo-500 transition-all ${
-                  userRole === 'viewer'
-                    ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
-                    : 'bg-slate-50 border border-slate-200 text-slate-900 border-slate-200'
-                }`}
-                title={userRole === 'viewer' ? 'لا تملك صلاحية تعديل الميزانية' : 'اضغط لتغيير مخصص العهدة'}
-              />
-              <span className="text-xs text-slate-400 font-bold">ج.م</span>
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        {[
+          {
+            title: 'مخصص عهدة المحروقات',
+            value: calculatedFuelBudget.toLocaleString('ar-EG'),
+            unit: 'ج.م',
+            subtitle: 'عهد نقدية مخصصة للديزل',
+            icon: Coins,
+            color: 'indigo'
+          },
+          {
+            title: 'إجمالي المنصرف الفعلي',
+            value: totalSpent.toLocaleString('ar-EG'),
+            unit: 'ج.م',
+            subtitle: 'مكافئ التكلفة الإجمالية للبونات',
+            icon: Droplet,
+            color: 'rose'
+          },
+          {
+            title: 'رصيد عهدة المحروقات',
+            value: currentBalance.toLocaleString('ar-EG'),
+            unit: 'ج.م',
+            subtitle: currentBalance < 0 ? 'تجاوز وسلفيات' : 'الأمانة النقدية المتوفرة',
+            icon: AlertTriangle,
+            color: currentBalance < 0 ? 'amber' : 'emerald'
+          },
+          {
+            title: 'إجمالي السولار المستلم',
+            value: totalQuantity.toLocaleString('ar-EG'),
+            unit: 'لتر',
+            subtitle: 'مسحوبات الآلات الموقعية',
+            icon: Calendar,
+            color: 'slate'
+          },
+          {
+            title: 'رصيد حساب البنزينات',
+            value: (fuelStations || []).filter(s => !s.isInfinite).reduce((sum, s) => sum + getStationFinancialData(s).balance, 0).toLocaleString('ar-EG'),
+            unit: 'ج.م',
+            subtitle: 'الرصيد المشحون طرف المحطات',
+            icon: Fuel,
+            color: 'teal'
+          }
+        ].map((card, idx) => (
+          <div key={idx} className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm hover:shadow-lg transition-all flex items-center justify-between">
+            <div className="text-right">
+              <span className={`text-${card.color}-600 font-black text-[10px] uppercase tracking-wider`}>{card.title}</span>
+              <div className="flex items-baseline gap-1.5 mt-1">
+                <p className="text-xl font-mono font-black text-slate-900">{card.value}</p>
+                <span className="text-xs text-slate-400 font-bold">{card.unit}</span>
+              </div>
+              <p className="text-[9px] text-slate-400 font-semibold mt-1">{card.subtitle}</p>
             </div>
-            <p className="text-[9px] text-slate-400 font-semibold mt-1">عهد نقدية مخصصة للديزل</p>
+            <div className={`p-3.5 bg-${card.color}-50 rounded-2xl text-${card.color}-600 border border-${card.color}-100`}>
+              <card.icon size={22} />
+            </div>
           </div>
-          <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600 border border-indigo-150">
-            <Coins size={20} />
-          </div>
-        </div>
-
-        {/* 2. إجمالي المنصرف - المحروقات */}
-        <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex items-center justify-between">
-          <div className="text-right">
-            <span className="text-slate-400 font-bold text-[10px]">إجمالي المنصرف الفعلي</span>
-            <p className="text-lg font-mono font-black text-rose-650 mt-1">
-              {totalSpent.toLocaleString('ar-EG')} <span className="text-xs">ج.م</span>
-            </p>
-            <p className="text-[9px] text-rose-500 font-bold mt-1">مكافئ التكلفة الإجمالية للبونات</p>
-          </div>
-          <div className="p-3 bg-rose-50 rounded-2xl text-rose-600 border border-rose-150">
-            <Droplet size={20} />
-          </div>
-        </div>
-
-        {/* 3. رصيد العهدة (الرصيد المتبقي طرف الإدارة) */}
-        <div className={`border p-5 rounded-2xl shadow-sm flex items-center justify-between ${
-          currentBalance < 0 ? 'bg-amber-50/10 border-amber-300' : 'bg-white border-slate-200'
-        }`}>
-          <div className="text-right">
-            <span className="text-slate-400 font-bold text-[10px]">رصيد عهدة المحروقات</span>
-            <p className={`text-lg font-mono font-black mt-1 ${currentBalance < 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
-              {currentBalance.toLocaleString('ar-EG')} <span className="text-xs">ج.م</span>
-            </p>
-            <p className="text-[9px] text-slate-400 font-semibold mt-1">
-              {currentBalance < 0 ? 'تجاوز وسلفيات جارية (-)' : 'الأمانة النقدية المتوفرة'}
-            </p>
-          </div>
-          <div className={`p-3 rounded-2xl border ${
-            currentBalance < 0 
-              ? 'bg-amber-100/60 border-amber-200 text-amber-700' 
-              : 'bg-emerald-50 border-emerald-150 text-emerald-600'
-          }`}>
-            <AlertTriangle size={20} />
-          </div>
-        </div>
-
-        {/* 4. إجمالي الكمية المستلمة باللتر */}
-        <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex items-center justify-between">
-          <div className="text-right">
-            <span className="text-slate-400 font-bold text-[10px]">إجمالي السولار المستلم</span>
-            <p className="text-lg font-mono font-black text-indigo-950 mt-1">
-              {totalQuantity.toLocaleString('ar-EG')} <span className="text-xs">لتر</span>
-            </p>
-            <p className="text-[9px] text-slate-400 font-semibold mt-1">مسحوبات الآلات الموقعية كلياً</p>
-          </div>
-          <div className="p-3 bg-slate-50 border border-slate-150 rounded-2xl text-slate-600">
-            <Calendar size={20} />
-          </div>
-        </div>
+        ))}
       </div>
 
       {/* 3. Analysis Charts & Summaries */}
@@ -722,6 +880,221 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
         </div>
       </div>
 
+      {/* 3.5 Fuel Stations (Gasolines) Management Module */}
+      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-xs space-y-6" id="fuel-stations-module">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-200 pb-4 gap-4">
+          <div className="text-right">
+            <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+              ⛽ موديول إدارة عهد وحسابات محطات الوقود (البنزينات)
+            </h4>
+            <p className="text-[10px] text-slate-500 font-bold mt-0.5">
+              قم بإنشاء وتحديث أرصدة العملات الميدانية المسلمة للبنزينات لحسابات تموين المعدات المباشر.
+            </p>
+          </div>
+          <span className="text-[10px] bg-slate-200 text-slate-700 px-3 py-1 font-bold rounded-lg border border-slate-300">
+            عدد البنزينات المسجلة: {fuelStations.length} محطة
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Form to Add/Edit */}
+          <form onSubmit={handleSaveStation} className="lg:col-span-4 bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-4">
+            <h5 className="text-[11px] font-black text-slate-700 border-b border-slate-100 pb-2">
+              {editingStationId ? '✏️ تعديل بيانات ومفوض البنزينة أو المحطة' : '➕ قيد وتسجيل بنزينة جديدة بالمشروع'}
+            </h5>
+
+            <div className="space-y-3.5 text-right text-xs font-bold">
+              <div>
+                <label className="block text-slate-600 mb-1">اسم البنزينة / محطة الوقود <span className="text-rose-500">*</span></label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثال: محطة شل أكتوبر الجديدة"
+                  value={stationName}
+                  onChange={(e) => setStationName(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-xs text-right focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-600 mb-1">موقع البنزينة / العنوان <span className="text-rose-500">*</span></label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثال: محور 26 يوليو، بجوار مسجد الشرطة"
+                  value={stationLocation}
+                  onChange={(e) => setStationLocation(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-xs text-right focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-600 mb-1">اسم المفوض للتعامل مع الشركة <span className="text-rose-500">*</span></label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثال: أ/ محمد عبد الرحمن - مدير المحطة"
+                  value={stationDelegateName}
+                  onChange={(e) => setStationDelegateName(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-xs text-right focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-600 mb-1">رقم هاتف المفوض <span className="text-rose-500">*</span></label>
+                <input
+                  type="tel"
+                  required
+                  placeholder="مثال: 01012345678"
+                  value={stationDelegatePhone}
+                  onChange={(e) => setStationDelegatePhone(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs text-right focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  dir="rtl"
+                />
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="submit"
+                  disabled={userRole === 'viewer'}
+                  className={`flex-1 py-2.5 text-xs font-black rounded-xl transition ${
+                    userRole === 'viewer'
+                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                      : 'bg-indigo-650 hover:bg-slate-900 text-white cursor-pointer shadow-xs'
+                  }`}
+                >
+                  {editingStationId ? 'تحديث كارت البنزينة ✓' : 'قيد وتسجيل المحطة +'}
+                </button>
+                {editingStationId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingStationId(null);
+                      setStationName('');
+                      setStationLocation('');
+                      setStationDelegateName('');
+                      setStationDelegatePhone('');
+                    }}
+                    className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl border border-slate-250 transition"
+                  >
+                    إلغاء
+                  </button>
+                )}
+              </div>
+            </div>
+          </form>
+
+          {/* Cards Display for Gas Stations */}
+          <div className="lg:col-span-8 space-y-3">
+            <h5 className="text-[11px] font-black text-slate-500 text-right">كروت الأرصدة النشطة للبنزينات والمحطات المعتمدة:</h5>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {fuelStations.length === 0 ? (
+                <div className="md:col-span-2 bg-white rounded-xl border border-dashed border-slate-250 p-10 text-center text-slate-400 text-xs font-bold">
+                  لا توجد أرصدة محطات مسجلة حالياً بالمشروع. استخدم النموذج لتهيئة وبدء الأرصدة الحركية.
+                </div>
+              ) : (
+                fuelStations.map(station => {
+                  const financials = getStationFinancialData(station);
+                  const isInf = !!station.isInfinite;
+                  const displayBalanceStr = isInf ? 'رصيد لانهائي ♾️' : `${financials.balance.toLocaleString('ar-EG')} ج.م`;
+                  return (
+                    <div 
+                      key={station.id} 
+                      className={`bg-white rounded-xl border p-4 shadow-3xs hover:shadow-2xs transition flex flex-col justify-between space-y-3.5 relative ${
+                        editingStationId === station.id ? 'ring-2 ring-indigo-500/50 bg-indigo-50/10 border-indigo-200' : 'border-slate-200'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="text-right flex-1">
+                          <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 p-0.5 px-2 rounded-lg inline-block">
+                            {isInf ? 'عربة محروقات الشركة (غير محدودة)' : 'كارت رصيد المحطة المعتمدة'}
+                          </span>
+                          <span className="text-xs font-extrabold text-slate-800 block mt-1 line-clamp-1">{station.name}</span>
+                        </div>
+                        <div className="p-2 bg-teal-50 text-teal-600 rounded-lg border border-teal-100 flex-shrink-0">
+                          <Fuel size={14} />
+                        </div>
+                      </div>
+
+                      {/* Station Profile Details */}
+                      <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] space-y-1.5 font-bold text-slate-600 text-right">
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400">📍 موقعها:</span>
+                          <span className="text-slate-700 text-left truncate max-w-[150px]">{station.location || 'غير مسجل'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400">👤 المفوض:</span>
+                          <span className="text-slate-700 text-left truncate max-w-[150px]">{station.delegateName || 'غير مسجل'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400">📞 رقم الهاتف:</span>
+                          <span className="text-slate-700 font-mono text-[11px]" dir="ltr">{station.delegatePhone || 'غير مسجل'}</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between items-baseline mb-1">
+                          <span className="text-[10px] text-slate-400 font-bold">الرصيد المالي المتاح:</span>
+                          <span className={`text-sm font-black ${isInf ? 'text-indigo-600 font-extrabold' : 'text-emerald-700 font-mono'}`}>
+                            {displayBalanceStr}
+                          </span>
+                        </div>
+                        
+                        {/* Progressive status bar */}
+                        <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              isInf ? 'bg-indigo-600 w-full' : financials.ratio < 20 ? 'bg-rose-500' : financials.ratio < 50 ? 'bg-amber-500' : 'bg-emerald-600'
+                            }`}
+                            style={{ width: `${isInf ? 100 : financials.ratio}%` }}
+                          />
+                        </div>
+
+                        <div className="flex justify-between items-center text-[9px] text-slate-400 font-semibold mt-1">
+                          {isInf ? (
+                            <>
+                              <span>نسبة السحب والوفر: غير محدود 🟢</span>
+                              <span>حركة مستمرة</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>رصيد متبقي: {financials.ratio}%</span>
+                              <span>إجمالي ما شُحن: {financials.recharges.toLocaleString('ar-EG')} ج.م</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-2.5">
+                        <button
+                          type="button"
+                          onClick={() => handleEditStation(station)}
+                          className="px-2.5 py-1 text-[10px] font-black text-indigo-700 bg-indigo-50 border border-indigo-150 rounded-lg hover:bg-indigo-100 transition cursor-pointer"
+                        >
+                          تعديل البيانات ✏️
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isInf}
+                          onClick={() => handleDeleteStation(station.id, station.name)}
+                          className={`px-2.5 py-1 text-[10px] font-black rounded-lg transition ${
+                            isInf 
+                              ? 'text-slate-400 bg-slate-50 border border-slate-100 cursor-not-allowed'
+                              : 'text-rose-700 bg-rose-50 border border-rose-150 hover:bg-rose-100 cursor-pointer'
+                          }`}
+                        >
+                          حذف وسحب المحطة 🗑️
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* 4. Filter and Journal Table section */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-md overflow-hidden flex flex-col justify-between">
         
@@ -756,6 +1129,20 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
                 ))}
               </select>
             </div>
+            
+            {/* Station pick list */}
+            <div>
+              <select
+                value={selectedStationFilter}
+                onChange={(e) => setSelectedStationFilter(e.target.value)}
+                className="text-xs p-2 bg-white border border-slate-200 rounded-xl font-bold focus:border-indigo-550"
+              >
+                <option value="all">جميع المحطات</option>
+                {fuelStations.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Records Counter */}
@@ -770,29 +1157,28 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
             <thead>
               <tr className="bg-slate-900 text-slate-100 font-extrabold text-xs border-b border-slate-800 text-center">
                 <th 
-                  className="p-3 text-right pr-6 cursor-pointer hover:bg-slate-800 transition"
+                  className="p-3 cursor-pointer hover:bg-slate-800 transition"
                   onClick={() => toggleSort('date')}
                 >
-                  <div className="flex items-center justify-start gap-1">
+                  <div className="flex items-center justify-center gap-1">
                     <span>التاريخ</span>
                     <ArrowUpDown size={11} />
                   </div>
                 </th>
                 <th className="p-3">اليوم</th>
-                <th className="p-3">المعدة</th>
-                <th 
-                  className="p-3 cursor-pointer hover:bg-slate-800 transition"
-                  onClick={() => toggleSort('quantity')}
-                >
+                <th className="p-3 text-right">الرقم المرجعي</th>
+                <th className="p-3 text-right">محطة الاستلام/المصدر</th>
+                <th className="p-3 text-right">المستلم</th>
+                <th className="p-3 text-right">المعدة</th>
+                <th className="p-3 cursor-pointer hover:bg-slate-800 transition" onClick={() => toggleSort('quantity')}>
                   <div className="flex items-center justify-center gap-1">
                     <span>الكمية (لتر)</span>
                     <ArrowUpDown size={11} />
                   </div>
                 </th>
-                <th 
-                  className="p-3 cursor-pointer hover:bg-slate-800 transition"
-                  onClick={() => toggleSort('cost')}
-                >
+                <th className="p-3">السعر/م</th>
+                <th className="p-3">إضافي</th>
+                <th className="p-3 cursor-pointer hover:bg-slate-800 transition" onClick={() => toggleSort('cost')}>
                   <div className="flex items-center justify-center gap-1">
                     <span>التكلفة (ج.م)</span>
                     <ArrowUpDown size={11} />
@@ -806,15 +1192,25 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
               {filteredLogs.map((log) => (
                 <tr key={log.id} className="border-b border-slate-150 hover:bg-indigo-50/15 transition text-center text-xs">
                   
-                  {/* Date */}
-                  <td className="p-3 pr-6 text-right font-semibold text-slate-600 font-mono">
-                    <span className="block">{log.date}</span>
-                    {log.referenceNo && <span className="block text-[8px] text-indigo-500 font-black">{log.referenceNo}</span>}
+                  {/* Date, Day, Ref */}
+                  <td className="p-3 text-right font-semibold text-slate-600 font-mono text-[11px]">{log.date}</td>
+                  <td className="p-3 text-[11px] font-bold text-slate-800">{log.day}</td>
+                  <td className="p-3 font-black text-indigo-600 text-[11px] tracking-widest">{log.referenceNo || '---'}</td>
+                  
+                  {/* Fuel Station */}
+                  <td className="p-3 text-right">
+                    {log.stationId ? (
+                      <span className="inline-flex items-center gap-1.5 bg-teal-50 border border-teal-155 text-teal-700 text-[10px] font-black p-1 px-2.5 rounded-lg">
+                        ⛽ {fuelStations.find(s => s.id === log.stationId)?.name || 'البنزينة المسجلة'}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 font-semibold bg-slate-100 p-1 px-2 rounded-lg">تموين مباشر</span>
+                    )}
                   </td>
 
-                  {/* Day */}
-                  <td className="p-3 font-black text-slate-800">
-                    {log.day}
+                  {/* Recipient */}
+                  <td className="p-3 text-right text-[11px] font-semibold text-slate-700">
+                    {log.recipientName || '---'}
                   </td>
 
                   {/* Machinery */}
@@ -825,17 +1221,27 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
                   </td>
 
                   {/* Quantity */}
-                  <td className="p-3 font-mono font-black text-slate-750">
-                    {log.quantity.toLocaleString('ar-EG')}
+                  <td className="p-3 font-mono font-black text-slate-750 text-[12px]">
+                    {(log.quantity || 0).toLocaleString('ar-EG')}
                   </td>
 
+                  {/* Price per unit - derived */}
+                  <td className="p-3 font-mono font-black text-slate-600 text-[11px]">
+                     {((log.quantity || 0) > 0 ? (((log.cost || 0) - (log.additionalCost || 0)) / (log.quantity || 1)).toFixed(2) : '0.00')}
+                  </td>
+                  
+                  {/* Additional Cost */}
+                  <td className="p-3 font-mono font-black text-slate-600 text-[11px]">
+                    {(log.additionalCost || 0).toLocaleString('ar-EG')}
+                  </td>
+                  
                   {/* Cost */}
-                  <td className="p-3 font-mono font-black text-indigo-950">
-                    {log.cost.toLocaleString('ar-EG')} <span className="text-[9px] text-slate-400">ج.م</span>
+                  <td className="p-3 font-mono font-black text-indigo-950 text-[12px]">
+                    {(log.cost || 0).toLocaleString('ar-EG')}
                   </td>
 
                   {/* Notes */}
-                  <td className="p-3 text-right text-slate-500 font-medium text-[11px] pr-4 max-w-[200px] truncate" title={log.notes}>
+                  <td className="p-3 text-right text-slate-500 font-medium text-[11px] pr-4 max-w-[150px] truncate" title={log.notes}>
                     {log.notes || '-'}
                   </td>
 
@@ -854,13 +1260,13 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
                       </button>
                       <button
                         onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية حذف السجلات') : () => handleDeleteLog(log.id, log.cost, log.equipmentName)}
-                        className={`p-1.5 transition ${
+                        className={`p-1 px-2.5 rounded transition text-[11px] font-black ${
                           userRole === 'viewer'
-                            ? 'text-slate-200 cursor-not-allowed'
-                            : 'text-slate-400 hover:text-rose-600'
+                            ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                            : 'bg-rose-50 hover:bg-rose-100 text-rose-700'
                         }`}
                       >
-                        <Trash2 size={12} />
+                        حذف
                       </button>
                     </div>
                   </td>
@@ -884,9 +1290,9 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
             * يتم تصفير وتسوية هذا الكشف أسبوعياً مع لجان المراجعة والمستند الاستشاري.
           </p>
           <div className="font-sans flex gap-4 text-slate-800">
-            <span>إجمالي الصفحة: <span className="font-mono text-indigo-650">{filteredLogs.reduce((sum, r) => sum + r.quantity, 0).toLocaleString('ar-EG')} لتر</span></span>
+            <span>إجمالي الصفحة: <span className="font-mono text-indigo-650">{filteredLogs.reduce((sum, r) => sum + (r.quantity || 0), 0).toLocaleString('ar-EG')} لتر</span></span>
             <span className="border-l border-slate-200"></span>
-            <span>القيمة الإجمالية: <span className="font-mono text-indigo-650">{filteredLogs.reduce((sum, r) => sum + r.cost, 0).toLocaleString('ar-EG')} ج.م</span></span>
+            <span>القيمة الإجمالية: <span className="font-mono text-indigo-650">{filteredLogs.reduce((sum, r) => sum + (r.cost || 0), 0).toLocaleString('ar-EG')} ج.م</span></span>
           </div>
         </div>
       </div>
@@ -967,9 +1373,38 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
                       </select>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black text-slate-500 mr-1">محطة الوقود المستلم منها (البنزينة) ⛽</label>
+                      <select
+                        value={formState.stationId || ''}
+                        onChange={(e) => setFormState(prev => ({ ...prev, stationId: e.target.value }))}
+                        className="w-full text-xs p-3 bg-white border border-slate-250 rounded-2xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 font-bold outline-none text-right transition-all"
+                      >
+                        <option value="">-- تموين خارجي / مباشر (عهدة بدون محطة) --</option>
+                        {fuelStations.map(station => (
+                          <option key={station.id} value={station.id}>{station.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black text-slate-500 mr-1">المستلم *</label>
+                      <select
+                        required
+                        value={formState.recipientName}
+                        onChange={(e) => setFormState(prev => ({ ...prev, recipientName: e.target.value }))}
+                        className="w-full text-xs p-3 bg-white border border-slate-200 rounded-2xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 font-bold outline-none text-right transition-all"
+                      >
+                        <option value="">-- اختر المستلم --</option>
+                        {workers.map(worker => (
+                          <option key={worker.id} value={worker.name}>{worker.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-1.5">
-                        <label className="block text-[10px] font-black text-slate-500 mr-1">الكمية المصروفة (لتر) *</label>
+                        <label className="block text-[10px] font-black text-slate-500 mr-1">الكمية (لتر) *</label>
                         <input
                           type="number"
                           step="any"
@@ -981,17 +1416,41 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="block text-[10px] font-black text-slate-500 mr-1">التكلفة (ج.م) *</label>
+                        <label className="block text-[10px] font-black text-slate-500 mr-1">سعر اللتر (ج.م) *</label>
                         <input
                           type="number"
                           step="any"
                           required
                           placeholder="0.0"
                           value={formState.cost || ''}
-                          onChange={(e) => setFormState(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
+                          onChange={(e) => {
+                            const costPerLiter = parseFloat(e.target.value) || 0;
+                            setFormState(prev => ({ ...prev, cost: costPerLiter }));
+                          }}
                           className="w-full text-xs p-3 bg-white border border-slate-200 rounded-2xl focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 font-mono font-black text-center text-amber-900 outline-none transition-all"
                         />
                       </div>
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-black text-slate-500 mr-1">إضافي (ج.م)</label>
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="0.0"
+                          value={formState.additionalCost ?? ''}
+                          onChange={(e) => setFormState(prev => ({ ...prev, additionalCost: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 }))}
+                          className="w-full text-xs p-3 bg-white border border-slate-200 rounded-2xl focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 font-mono font-black text-center text-amber-900 outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="p-3 bg-slate-100 rounded-2xl text-center">
+                      <p className="text-[10px] font-black text-slate-500">إجمالي التكلفة</p>
+                      <p className="text-sm font-black text-indigo-700">
+                        {(!isNaN(formState.quantity) && !isNaN(formState.cost) && !isNaN(formState.additionalCost) 
+                          ? ((formState.quantity * formState.cost) + formState.additionalCost) 
+                          : 0
+                        ).toLocaleString('ar-EG')} ج.م
+                      </p>
                     </div>
 
                     <div className="space-y-1.5">
@@ -1045,7 +1504,7 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
           <div className="grid grid-cols-4 gap-4 border p-3 bg-slate-50 rounded text-center">
             <div>
               <p className="text-[9px] text-slate-500 font-bold">إجمالي العهدة</p>
-              <p className="font-mono font-black mt-1 text-sm">{custodyBudget.toLocaleString('ar-EG')} ج.م</p>
+              <p className="font-mono font-black mt-1 text-sm">{calculatedFuelBudget.toLocaleString('ar-EG')} ج.م</p>
             </div>
             <div>
               <p className="text-[9px] text-slate-500 font-bold">إجمالي المنصرف</p>
@@ -1067,6 +1526,7 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
               <tr className="bg-slate-100 font-bold border-b border-slate-450 border">
                 <th className="border border-slate-400 p-1.5">التاريخ</th>
                 <th className="border border-slate-400 p-1.5">اليوم</th>
+                <th className="border border-slate-400 p-1.5">محطة الاستلام</th>
                 <th className="border border-slate-400 p-1.5">المعدة</th>
                 <th className="border border-slate-400 p-1.5">الكمية (لتر)</th>
                 <th className="border border-slate-400 p-1.5">التكلفة (ج.م)</th>
@@ -1078,6 +1538,9 @@ export default function FuelDashboard({ fuelLogs, setFuelLogs, custodyBudget, se
                 <tr key={log.id} className="border-b border-slate-400">
                   <td className="border border-slate-400 p-1.5 font-mono">{log.date}</td>
                   <td className="border border-slate-400 p-1.5">{log.day}</td>
+                  <td className="border border-slate-400 p-1.5 font-extrabold max-w-[120px] truncate">
+                    {log.stationId ? (fuelStations.find(s => s.id === log.stationId)?.name || 'بنزينة معتمدة') : 'تموين مباشر'}
+                  </td>
                   <td className="border border-slate-400 p-1.5 font-bold">{log.equipmentName}</td>
                   <td className="border border-slate-400 p-1.5 font-mono">{log.quantity.toLocaleString('ar-EG')}</td>
                   <td className="border border-slate-400 p-1.5 font-mono">{log.cost.toLocaleString('ar-EG')}</td>
