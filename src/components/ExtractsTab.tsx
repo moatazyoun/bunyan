@@ -648,7 +648,7 @@ export default function ExtractsTab({
                   ${rows}
                   <!-- Totals Row -->
                   <tr class="bg-slate-100 font-black h-12 border-t-2 border-slate-950 text-[10px]">
-                    <td colspan="9" class="border border-slate-950 px-4 text-center text-slate-900">الاجمالى العام</td>
+                    <td colspan="8" class="border border-slate-950 px-4 text-center text-slate-900">الاجمالى العام</td>
                     <td class="border border-slate-950 font-mono">${formatVal(extractCalculations.grossValue)}</td>
                     <td class="border border-slate-950"></td>
                     <td class="border border-slate-950 font-mono text-rose-700">${formatVal(extractCalculations.totalDiscount)}</td>
