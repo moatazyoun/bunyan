@@ -30,7 +30,12 @@ import {
   CalendarDays,
   LayoutDashboard,
   Truck,
-  Hash
+  Hash,
+  UploadCloud,
+  Loader2,
+  Image as ImageIcon,
+  FileText,
+  X
 } from 'lucide-react';
 import { OperationalLog, EquipmentSummary, Transaction, FuelLogRecord, MaintenanceOrder } from '../types';
 import EquipmentOperationLog from './EquipmentOperationLog';
@@ -109,11 +114,23 @@ export default function EquipmentDashboard({
   const handleAddMaintOrder = (e: React.FormEvent) => {
     e.preventDefault();
     if (!maintEqId) {
-      alert('الرجاء اختيار المعدة المعنية بالصيانة.');
+      setConfirmState({
+        isOpen: true,
+        title: 'تنبيه',
+        message: 'الرجاء اختيار المعدة المعنية بالصيانة.',
+        confirmLabel: 'حسناً',
+        onConfirm: () => {},
+      });
       return;
     }
     if (!maintDesc.trim()) {
-      alert('الرجاء كتابة تفاصيل ووصف أعمال الصيانة.');
+      setConfirmState({
+        isOpen: true,
+        title: 'بيانات غير مكتملة',
+        message: 'الرجاء كتابة تفاصيل ووصف أعمال الصيانة.',
+        confirmLabel: 'حسناً',
+        onConfirm: () => {},
+      });
       return;
     }
 
@@ -191,6 +208,173 @@ export default function EquipmentDashboard({
   const [aiImageMime, setAiImageMime] = useState<string | null>(null);
   const [aiError, setAiError] = useState('');
   const [aiResultRecords, setAiResultRecords] = useState<any[]>([]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    if (file.size > 5 * 1024 * 1024) {
+      setAiError('حجم الملف كبير جداً. الحد الأقصى هو 5 ميجابايت.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64String = (event.target?.result as string).split(',')[1];
+      setAiImageBase64(base64String);
+      setAiImageMime(file.type);
+      setAiError('');
+    };
+    reader.onerror = () => {
+      setAiError('حدث خطأ أثناء قراءة الملف.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAnalyzeSarki = async () => {
+    if (!aiText.trim() && !aiImageBase64) {
+      setAiError('الرجاء إدخال نص أو رفع ملف السركي (صورة/PDF/Excel) للتحليل.');
+      return;
+    }
+    
+    if (!activeEquipment) {
+      setAiError('الرجاء اختيار معدة أولاً لإدراج سجلاتها.');
+      return;
+    }
+
+    setIsAiAnalyzing(true);
+    setAiError('');
+    setAiResultRecords([]);
+
+    try {
+      const payload = {
+        textContent: aiText,
+        fileBase64: aiImageBase64,
+        mimeType: aiImageMime
+      };
+
+      const response = await fetch('/api/gemini/analyze-sarki', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        let errMessage = 'حدث خطأ أثناء تحليل السركي من الخادم.';
+        try {
+          const errData = await response.json();
+          if (errData.error) errMessage = errData.error;
+        } catch (e) {
+          const errText = await response.text();
+          if (errText) errMessage = errText;
+        }
+        throw new Error(errMessage);
+      }
+
+      const text = await response.text();
+      let data;
+      try {
+        const cleanedText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        data = JSON.parse(cleanedText);
+      } catch (e) {
+         throw new Error('فشل في قراءة بيانات الاستجابة من الخادم.');
+      }
+
+      if (data && data.records && data.records.length > 0) {
+        setAiResultRecords(data.records);
+      } else {
+        setAiError('لم يتم العثور على سجلات يومية صالحة في المستند.');
+      }
+    } catch (err: any) {
+      setAiError(err.message || 'فشل الاتصال بخدمة التحليل الذكي.');
+    } finally {
+      setIsAiAnalyzing(false);
+    }
+  };
+
+  const handleAcceptAiRecord = (rec: any, idx: number) => {
+    if (!activeEquipment) return;
+    const newLog: OperationalLog = {
+      id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      day: rec.day || 'السبت',
+      date: rec.date || new Date().toISOString().split('T')[0],
+      fromTime: rec.from || '8:00 ص',
+      toTime: rec.to || '4:00 م',
+      duration: Number(rec.durationValue) || 8,
+      cost: 0,
+      siteExpense: 0,
+      fuelLiters: 0,
+      fuelCost: 0,
+      discount: 0,
+      deductedHours: Number(rec.deductedHours) || 0,
+      notes: rec.notes || ''
+    };
+    
+    setEquipmentList(prev => prev.map(eq => {
+      if (eq.id === activeEquipment.id) {
+        const existingIdx = eq.logs.findIndex(l => l.date === newLog.date);
+        const updatedLogs = [...eq.logs];
+        if (existingIdx !== -1) {
+          updatedLogs[existingIdx] = { ...newLog, id: updatedLogs[existingIdx].id || newLog.id };
+        } else {
+          updatedLogs.push(newLog);
+        }
+        return { ...eq, logs: updatedLogs };
+      }
+      return eq;
+    }));
+    addAuditLog?.(`تسجيل يومية AI: ${activeEquipment.name}`, 'سركى المعدات', `إضافة يومية بتاريخ ${newLog.date}`);
+
+    // Remove it from the suggested list
+    setAiResultRecords(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleUpdateAiRecord = (idx: number, field: string, value: any) => {
+    setAiResultRecords(prev => {
+      const newRecords = [...prev];
+      newRecords[idx] = { ...newRecords[idx], [field]: value };
+      return newRecords;
+    });
+  };
+
+  const handleAcceptAllAiRecords = () => {
+    if (!activeEquipment) return;
+    
+    const newLogs: OperationalLog[] = aiResultRecords.map(rec => ({
+      id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      day: rec.day || 'السبت',
+      date: rec.date || new Date().toISOString().split('T')[0],
+      fromTime: rec.from || '8:00 ص',
+      toTime: rec.to || '4:00 م',
+      duration: Number(rec.durationValue) || 8,
+      cost: 0,
+      siteExpense: 0,
+      fuelLiters: 0,
+      fuelCost: 0,
+      discount: 0,
+      deductedHours: Number(rec.deductedHours) || 0,
+      notes: rec.notes || ''
+    }));
+    
+    setEquipmentList(prev => prev.map(eq => {
+      if (eq.id === activeEquipment.id) {
+        let updatedLogs = [...eq.logs];
+        newLogs.forEach(newLog => {
+          const existingIdx = updatedLogs.findIndex(l => l.date === newLog.date);
+          if (existingIdx !== -1) {
+            updatedLogs[existingIdx] = { ...newLog, id: updatedLogs[existingIdx].id || newLog.id };
+          } else {
+            updatedLogs.push(newLog);
+          }
+        });
+        return { ...eq, logs: updatedLogs };
+      }
+      return eq;
+    }));
+    addAuditLog?.(`تسجيل عدة يوميات AI: ${activeEquipment.name}`, 'سركى المعدات', `إضافة ${newLogs.length} يوميات`);
+    
+    setAiResultRecords([]);
+  };
 
   const [deleteVerificationInput, setDeleteVerificationInput] = useState('');
   const [expectedDeleteCode, setExpectedDeleteCode] = useState('');
@@ -527,29 +711,6 @@ export default function EquipmentDashboard({
     </AnimatePresence>
   );
 
-  if (!activeEquipment) {
-     return (
-       <div className="p-20 text-center bg-slate-50 rounded-[2rem] border-4 border-dashed border-slate-200">
-         <Truck className="mx-auto text-slate-200 mb-6" size={80} />
-         <h2 className="text-2xl font-black text-slate-400 mb-6 tracking-tight italic uppercase">أسطول المشروع فارغ حالياً</h2>
-         <button onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية الإضافة') : () => setShowAddEqModal(true)} disabled={userRole === 'viewer'} className={`px-8 py-4 ${userRole === 'viewer' ? 'bg-slate-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-slate-900 active:scale-95'} text-white rounded-2xl text-sm font-black shadow-2xl transition-all flex items-center gap-3 mx-auto`}>
-           <Plus size={20} />
-           تسجيل أول معدة بالموقع
-         </button>
-         <EquipmentModals 
-           showAddEqModal={showAddEqModal} setShowAddEqModal={setShowAddEqModal} handleAddEqSubmit={handleAddEqSubmit}
-           newEqName={newEqName} setNewEqName={setNewEqName} newEqDriver={newEqDriver} setNewEqDriver={setNewEqDriver}
-           newEqIsRental={newEqIsRental} setNewEqIsRental={setNewEqIsRental} newEqRate={newEqRate} setNewEqRate={setNewEqRate}
-           newEqRateUnit={newEqRateUnit} setNewEqRateUnit={setNewEqRateUnit} newEqCarryover={newEqCarryover} setNewEqCarryover={setNewEqCarryover}
-           newEqFuel={newEqFuel} setNewEqFuel={setNewEqFuel} newEqSpent={newEqSpent} setNewEqSpent={setNewEqSpent}
-           newEqDiscount={newEqDiscount} setNewEqDiscount={setNewEqDiscount} newEqDailyHours={newEqDailyHours} setNewEqDailyHours={setNewEqDailyHours}
-           editingEqId={editingEqId} setEditingEqId={setEditingEqId} editEqForm={editEqForm} setEditEqForm={setEditEqForm} handleSaveEqEdit={handleSaveEqEdit}
-         />
-         {renderConfirmDialog()}
-       </div>
-     );
-  }
-
   const maintStats = useMemo(() => {
     const totalCost = currentMaintOrders.reduce((sum, order) => sum + (order.cost || 0), 0);
     const activeJobs = currentMaintOrders.filter(order => order.status === 'in_progress').length;
@@ -566,6 +727,29 @@ export default function EquipmentDashboard({
       return matchEq && matchType && matchStatus;
     });
   }, [currentMaintOrders, filterEqId, filterType, filterStatus]);
+
+  if (!activeEquipment) {
+     return (
+       <div className="p-20 text-center bg-slate-50 rounded-[2rem] border-4 border-dashed border-slate-200">
+         <Truck className="mx-auto text-slate-200 mb-6" size={80} />
+         <h2 className="text-2xl font-black text-slate-400 mb-6 tracking-tight italic uppercase">أسطول المشروع فارغ حالياً</h2>
+         <button onClick={userRole === 'viewer' ? () => setConfirmState({ isOpen: true, title: 'عذراً', message: 'لا تملك صلاحية الإضافة', confirmLabel: 'حسناً', onConfirm: () => {} }) : () => setShowAddEqModal(true)} disabled={userRole === 'viewer'} className={`px-8 py-4 ${userRole === 'viewer' ? 'bg-slate-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-slate-900 active:scale-95'} text-white rounded-2xl text-sm font-black shadow-2xl transition-all flex items-center gap-3 mx-auto`}>
+           <Plus size={20} />
+           تسجيل أول معدة بالموقع
+         </button>
+         <EquipmentModals 
+           showAddEqModal={showAddEqModal} setShowAddEqModal={setShowAddEqModal} handleAddEqSubmit={handleAddEqSubmit}
+           newEqName={newEqName} setNewEqName={setNewEqName} newEqDriver={newEqDriver} setNewEqDriver={setNewEqDriver}
+           newEqIsRental={newEqIsRental} setNewEqIsRental={setNewEqIsRental} newEqRate={newEqRate} setNewEqRate={setNewEqRate}
+           newEqRateUnit={newEqRateUnit} setNewEqRateUnit={setNewEqRateUnit} newEqCarryover={newEqCarryover} setNewEqCarryover={setNewEqCarryover}
+           newEqFuel={newEqFuel} setNewEqFuel={setNewEqFuel} newEqSpent={newEqSpent} setNewEqSpent={setNewEqSpent}
+           newEqDiscount={newEqDiscount} setNewEqDiscount={setNewEqDiscount} newEqDailyHours={newEqDailyHours} setNewEqDailyHours={setNewEqDailyHours}
+           editingEqId={editingEqId} setEditingEqId={setEditingEqId} editEqForm={editEqForm} setEditEqForm={setEditEqForm} handleSaveEqEdit={handleSaveEqEdit}
+         />
+         {renderConfirmDialog()}
+       </div>
+     );
+  }
 
   return (
     <div className="space-y-12 animate-fadeIn text-right font-sans overflow-hidden pb-12">
@@ -637,9 +821,151 @@ export default function EquipmentDashboard({
                    <p className="text-xs text-slate-400 font-bold">حلل صور السركي الورقي أو نصوص الصيانة لإدراج الحركات تلقائياً</p>
                 </div>
              </div>
-             <div className="flex flex-col items-center justify-center p-10 border-2 border-dashed border-slate-700 rounded-[2rem] bg-slate-950/40">
-                <span className="text-slate-500 font-black text-sm uppercase italic">قريباً: تكامل Gemini 2.0 Pro للفهم العميق للمستندات والفواتير</span>
+             
+             <div className="mb-6 relative z-10">
+                <label className="block text-xs font-black text-slate-300 mb-2">المعدة المراد إضافة يوميات السركي لها</label>
+                <select
+                  value={selectedEqId}
+                  onChange={(e) => setSelectedEqId(e.target.value)}
+                  className="w-full md:w-1/2 bg-slate-950 border border-slate-800 rounded-2xl p-3 text-sm font-bold text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                >
+                  <option value="" disabled>اختر معدة...</option>
+                  {equipmentList.map(eq => (
+                    <option key={eq.id} value={eq.id}>{eq.name} ({eq.isRental ? 'إيجار' : 'مملوكة'})</option>
+                  ))}
+                </select>
              </div>
+
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                <div className="space-y-4">
+                  <label className="block text-xs font-black text-slate-300">أو أدخل النص المحول من السركي</label>
+                  <textarea
+                    rows={6}
+                    placeholder="قم بلصق محتوى السركي هنا (مثال: السبت 8 صباحا ل 4 العصر)..."
+                    value={aiText}
+                    onChange={(e) => setAiText(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-sm font-medium text-white focus:ring-2 focus:ring-indigo-500 placeholder-slate-600 outline-none resize-none transition-all"
+                  />
+                </div>
+                <div className="space-y-4">
+                  <label className="block text-xs font-black text-slate-300">ارفع ملف السركي (صورة أو Excel أو PDF)</label>
+                  <div className="relative group">
+                    <input
+                      type="file"
+                      accept="image/*,.pdf,.xlsx,.xls"
+                      onChange={handleFileChange}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    />
+                    <div className="w-full h-[152px] bg-slate-950 border-2 border-dashed border-slate-800 rounded-2xl flex flex-col items-center justify-center gap-3 group-hover:border-indigo-500 group-hover:bg-indigo-950/20 transition-all">
+                      {aiImageBase64 ? (
+                         <div className="text-center">
+                           <CheckCircle className="text-emerald-400 mx-auto mb-2" size={32} />
+                           <span className="text-xs font-black text-emerald-400">تم إرفاق الملف بنجاح</span>
+                         </div>
+                      ) : (
+                        <>
+                          <UploadCloud className="text-slate-600 group-hover:text-indigo-400 transition-colors" size={32} />
+                          <span className="text-xs font-black text-slate-500 group-hover:text-indigo-300">اسحب أو انقر لرفع ملف السركي</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+             </div>
+
+             {aiError && (
+               <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-3">
+                 <AlertCircle className="text-red-400 shrink-0" size={18} />
+                 <p className="text-xs font-bold text-red-200">{aiError}</p>
+               </div>
+             )}
+
+             <div className="mt-6 flex justify-end">
+               <button
+                 onClick={handleAnalyzeSarki}
+                 disabled={isAiAnalyzing || (!aiText.trim() && !aiImageBase64) || !activeEquipment}
+                 className="px-8 py-4 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-2xl text-sm font-black shadow-lg transition-all flex items-center gap-3 relative overflow-hidden group"
+               >
+                 {isAiAnalyzing ? (
+                   <>
+                     <Loader2 size={18} className="animate-spin" />
+                     <span>جاري تحليل السركي...</span>
+                   </>
+                 ) : (
+                   <>
+                     <Sparkles size={18} className="group-hover:animate-spin" />
+                     <span>تحليل واستخراج الأيام والساعات</span>
+                   </>
+                 )}
+               </button>
+             </div>
+
+             {/* AI Results */}
+             {aiResultRecords.length > 0 && (
+               <div className="mt-8 pt-8 border-t border-slate-800">
+                 <div className="flex items-center justify-between mb-4">
+                   <h5 className="text-sm font-black text-indigo-300 flex items-center gap-2">
+                     <CheckCircle size={16} />
+                     سجلات العمل المستخرجة من السركي
+                   </h5>
+                   <button
+                     onClick={handleAcceptAllAiRecords}
+                     className="px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500 text-emerald-400 hover:text-white rounded-xl text-xs font-black transition-all flex items-center gap-2"
+                   >
+                     <CheckCircle size={14} />
+                     إضافة كل السجلات
+                   </button>
+                 </div>
+                 <div className="overflow-x-auto">
+                   <table className="w-full text-right border-collapse min-w-[800px]">
+                     <thead>
+                       <tr className="bg-slate-900 border-b border-slate-800 text-slate-400 text-[10px] uppercase font-black tracking-wider">
+                         <th className="p-3 font-medium">اليوم</th>
+                         <th className="p-3 font-medium">التاريخ</th>
+                         <th className="p-3 font-medium">الوردية من</th>
+                         <th className="p-3 font-medium">الوردية إلى</th>
+                         <th className="p-3 font-medium">العمل الفعلي (ساعة)</th>
+                         <th className="p-3 font-medium">خصم/توقف (ساعة)</th>
+                         <th className="p-3 font-medium">ملاحظات</th>
+                         <th className="p-3 text-center font-medium">إجراء</th>
+                       </tr>
+                     </thead>
+                     <tbody>
+                       {aiResultRecords.map((rec, idx) => (
+                         <tr key={idx} className="border-b border-slate-800 hover:bg-slate-900/50 transition-colors">
+                           <td className="p-2">
+                             <input type="text" value={rec.day || ''} onChange={(e) => handleUpdateAiRecord(idx, 'day', e.target.value)} className="w-24 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:border-indigo-500 outline-none" />
+                           </td>
+                           <td className="p-2">
+                             <input type="date" value={rec.date || ''} onChange={(e) => handleUpdateAiRecord(idx, 'date', e.target.value)} className="w-32 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:border-indigo-500 outline-none" />
+                           </td>
+                           <td className="p-2">
+                             <input type="text" value={rec.from || ''} onChange={(e) => handleUpdateAiRecord(idx, 'from', e.target.value)} className="w-20 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:border-indigo-500 outline-none" />
+                           </td>
+                           <td className="p-2">
+                             <input type="text" value={rec.to || ''} onChange={(e) => handleUpdateAiRecord(idx, 'to', e.target.value)} className="w-20 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:border-indigo-500 outline-none" />
+                           </td>
+                           <td className="p-2">
+                             <input type="number" step="0.5" value={rec.durationValue || 0} onChange={(e) => handleUpdateAiRecord(idx, 'durationValue', e.target.value)} className="w-24 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:border-indigo-500 outline-none" />
+                           </td>
+                           <td className="p-2">
+                             <input type="number" step="0.5" value={rec.deductedHours || 0} onChange={(e) => handleUpdateAiRecord(idx, 'deductedHours', e.target.value)} className="w-24 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:border-indigo-500 outline-none" />
+                           </td>
+                           <td className="p-2">
+                             <input type="text" value={rec.notes || ''} onChange={(e) => handleUpdateAiRecord(idx, 'notes', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:border-indigo-500 outline-none" placeholder="ملاحظات..." />
+                           </td>
+                           <td className="p-2 text-center">
+                             <button onClick={() => handleAcceptAiRecord(rec, idx)} className="p-2 bg-indigo-500/20 hover:bg-indigo-500 text-indigo-400 hover:text-white rounded-lg transition-colors inline-flex items-center justify-center" title="إدراج السجل">
+                               <Plus size={16} />
+                             </button>
+                           </td>
+                         </tr>
+                       ))}
+                     </tbody>
+                   </table>
+                 </div>
+               </div>
+             )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -657,19 +983,21 @@ export default function EquipmentDashboard({
             totalRentedCost={totalRentedCost} totalFuel={totalFuel} totalRentedRemaining={totalRentedRemaining}
           />
 
-          <EquipmentOperationLog 
-            activeEquipment={activeEquipment} userRole={userRole} handleUpdateRecord={() => {}}
-            handleAddLog={handleAddLog} handleDeleteLogIndex={handleDeleteLogIndex}
-            editingLogIdx={editingLogIdx} setEditingLogIdx={setEditingLogIdx}
-            editLogForm={editLogForm} setEditLogForm={setEditLogForm} handleSaveLogIndex={handleSaveLogIndex}
-            newLogDay={newLogDay} setNewLogDay={setNewLogDay} newLogDate={newLogDate} setNewLogDate={setNewLogDate}
-            newLogFrom={newLogFrom} setNewLogFrom={setNewLogFrom} newLogTo={newLogTo} setNewLogTo={setNewLogTo}
-            newLogDuration={newLogDuration} setNewLogDuration={setNewLogDuration}
-            newLogDiscount={newLogDiscount} setNewLogDiscount={setNewLogDiscount}
-            newLogDeductedHours={newLogDeductedHours} setNewLogDeductedHours={setNewLogDeductedHours}
-            newLogNotes={newLogNotes} setNewLogNotes={setNewLogNotes}
-            getEquipmentCost={getEquipmentCost} getEquipmentTotalDuration={getEquipmentTotalDuration} getDurationSuffix={getDurationSuffix}
-          />
+          {activeEquipment && (
+            <EquipmentOperationLog 
+              activeEquipment={activeEquipment} userRole={userRole} handleUpdateRecord={() => {}}
+              handleAddLog={handleAddLog} handleDeleteLogIndex={handleDeleteLogIndex}
+              editingLogIdx={editingLogIdx} setEditingLogIdx={setEditingLogIdx}
+              editLogForm={editLogForm} setEditLogForm={setEditLogForm} handleSaveLogIndex={handleSaveLogIndex}
+              newLogDay={newLogDay} setNewLogDay={setNewLogDay} newLogDate={newLogDate} setNewLogDate={setNewLogDate}
+              newLogFrom={newLogFrom} setNewLogFrom={setNewLogFrom} newLogTo={newLogTo} setNewLogTo={setNewLogTo}
+              newLogDuration={newLogDuration} setNewLogDuration={setNewLogDuration}
+              newLogDiscount={newLogDiscount} setNewLogDiscount={setNewLogDiscount}
+              newLogDeductedHours={newLogDeductedHours} setNewLogDeductedHours={setNewLogDeductedHours}
+              newLogNotes={newLogNotes} setNewLogNotes={setNewLogNotes}
+              getEquipmentCost={getEquipmentCost} getEquipmentTotalDuration={getEquipmentTotalDuration} getDurationSuffix={getDurationSuffix}
+            />
+          )}
         </div>
       ) : (
         <div className="space-y-12">
@@ -1010,6 +1338,7 @@ export default function EquipmentDashboard({
                   <div className="space-y-1.5">
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">وصف وتفاصيل أعمال الصيانة</label>
                     <textarea
+                      required
                       rows={4}
                       value={maintDesc}
                       onChange={(e) => setMaintDesc(e.target.value)}

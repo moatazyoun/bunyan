@@ -526,7 +526,7 @@ app.get("/api/db-status", async (req, res) => {
 
 // Helper for Gemini content generation with retry and model fallback using streaming to eliminate Vercel 504 timeouts
 async function generateStreamWithRetryAndFallback(ai: any, contents: any, config: any, res: express.Response) {
-  const modelsToTry = ["gemini-1.5-flash", "gemini-2.5-flash", "gemini-flash-latest"];
+  const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash"];
   let lastError: any = null;
 
   for (const model of modelsToTry) {
@@ -823,6 +823,102 @@ app.post("/api/gemini/analyze-voucher", async (req, res) => {
     console.error("Voucher analysis error:", error);
     if (!res.headersSent) {
       res.status(500).json({ error: error.message || "حدث خطأ غير متوقع أثناء تحليل ملف بونات التوريد." });
+    } else {
+      res.end();
+    }
+  }
+});
+
+// Serve AI-powered Sarki (Equipment Daily Sheet) extraction
+app.post("/api/gemini/analyze-sarki", async (req, res) => {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(400).json({
+        error: "مفتاح API الخاص بـ Gemini غير متوفر. يرجى إضافته في إعدادات التطبيق (Settings > Secrets) باسم 'GEMINI_API_KEY'."
+      });
+    }
+
+    const { textContent, fileBase64, mimeType } = req.body;
+
+    const ai = new GoogleGenAI({
+      apiKey: apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+
+    const parts: any[] = [];
+
+    const prompt = `أنت مهندس حركة ومعدات ذكي لشركات المقاولات.
+مهمتك هي استخراج بيانات "سركي المعدة" أو "يومية عمل المعدة" من الصور أو النصوص أو ملفات PDF/Excel لمشروع إنشائي.
+قم بتحليل الملف أو النص بدقة شديدة واستخراج أيام وساعات العمل لمعدة واحدة في مصفوفة JSON.
+
+تأتي التفاصيل بالشكل التالي لكل يوم عمل:
+1. اليوم (day): اسم اليوم بالعربية (مثل: السبت، الأحد، الاثنين، ...).
+2. التاريخ (date): تاريخ اليوم بصيغة YYYY-MM-DD.
+3. من الساعة (from): وقت بدء العمل (مثل: 8:00 ص، 08:00، 7:30 ص).
+4. إلى الساعة (to): وقت انتهاء العمل (مثل: 4:00 م، 16:00، 5:00 م).
+5. عدد الساعات الفعلي للعمل (durationValue): إجمالي ساعات العمل كرقم (مثلاً 8، 9.5).
+6. ساعات الخصم/التوقف (deductedHours): عدد الساعات المستقطعة كأعطال أو خصومات (مثلاً 0، 1، 1.5).
+7. ملاحظات (notes): أي ملاحظات مذكورة في السركي لهذا اليوم.
+
+أخرج النتيجة كـ JSON مطابق تماماً للمخطط (Schema) المعطى. لا تضف أي بيانات غير موجودة، حاول الاستنتاج من السياق قدر الإمكان.`;
+
+    parts.push({ text: prompt });
+
+    if (textContent) {
+      parts.push({ text: `النص المدخل للسركي أو محتواه:\n${textContent}` });
+    }
+
+    if (fileBase64 && mimeType) {
+      if (isExcelMimeType(mimeType)) {
+        const xlText = parseExcelBase64(fileBase64);
+        if (xlText) {
+          parts.push({ text: `محتوى مستند إكسيل الذي تم رفعه وتحليله:\n${xlText}` });
+        }
+      } else {
+        parts.push({
+          inlineData: {
+            mimeType: mimeType,
+            data: fileBase64
+          }
+        });
+      }
+    }
+
+    await generateStreamWithRetryAndFallback(ai, { parts }, {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            records: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  day: { type: Type.STRING, description: "اسم اليوم (السبت، الأحد...)" },
+                  date: { type: Type.STRING, description: "التاريخ YYYY-MM-DD" },
+                  from: { type: Type.STRING, description: "وقت البدء" },
+                  to: { type: Type.STRING, description: "وقت الانتهاء" },
+                  durationValue: { type: Type.NUMBER, description: "عدد الساعات الفعلي" },
+                  deductedHours: { type: Type.NUMBER, description: "ساعات الخصم/التوقف" },
+                  notes: { type: Type.STRING, description: "ملاحظات" }
+                },
+                required: ["day", "date", "from", "to", "durationValue", "deductedHours"]
+              }
+            }
+          },
+          required: ["records"]
+        }
+    }, res);
+
+  } catch (error: any) {
+    console.error("Sarki analysis error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message || "حدث خطأ غير متوقع أثناء تحليل ملف السركي." });
     } else {
       res.end();
     }

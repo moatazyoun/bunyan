@@ -74,13 +74,11 @@ export default function Sidebar({
     { id: 'contracts', label: 'العقود', subtitle: 'Contracts', icon: Scroll, perm: true },
     { id: 'risk-management', label: 'إدارة المخاطر', subtitle: 'Risk Management', icon: AlertTriangle, perm: true },
     { id: 'quality-management', label: 'إدارة الجودة الشاملة', subtitle: 'Quality Management', icon: ShieldCheck, perm: true },
-    { id: 'hr', label: 'الموارد البشرية', subtitle: 'HR', icon: Users, perm: true },
     { id: 'inventory', label: 'المخازن والمستودعات', subtitle: 'Inventory', icon: Package, perm: true },
     { id: 'planning', label: 'الجدولة الزمنية', subtitle: 'Planning', icon: Calendar, perm: true },
     { id: 'hse', label: 'الصحة والسلامة المهنية', subtitle: 'HSE', icon: ShieldAlert, perm: true },
     { id: 'documents', label: 'إدارة الوثائق', subtitle: 'Documents', icon: FileText, perm: true },
     { id: 'crm', label: 'إدارة العملاء', subtitle: 'CRM', icon: Users, perm: true },
-    { id: 'maintenance', label: 'صيانة المعدات', subtitle: 'Maintenance', icon: Wrench, perm: true },
     { id: 'reports', label: 'التقارير والتحليلات', subtitle: 'Reports', icon: BarChart3, perm: true },
     { id: 'deliveries', label: 'التسليمات وفحص الأعمال', subtitle: 'Deliveries & Inspection', icon: FileCheck, perm: checkPerm('deliveries') },
     { id: 'site-workers', label: 'العاملين بالموقع', subtitle: 'Site Workers', icon: Users, perm: checkPerm('siteWorkers') },
@@ -104,7 +102,7 @@ export default function Sidebar({
   return (
     <>
       {/* Mobile Toggle Button */}
-      <div className="md:hidden fixed top-4 right-4 z-50">
+      <div className="md:hidden fixed top-4 left-4 z-50">
         <button 
           onClick={() => setIsOpen(!isOpen)}
           className="p-2.5 bg-slate-900 text-white rounded-xl shadow-lg border border-slate-700 hover:bg-slate-800 transition"

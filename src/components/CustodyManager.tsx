@@ -162,10 +162,15 @@ export default function CustodyManager({ custodies, transactions, onAddCustody, 
     // Read custody transactions related to that engineer
     return transactions.filter(tx => {
       const isCustodyCat = tx.category === 'custody';
-      const matchesRecipient = tx.recipient.toLowerCase().includes(cleanName.toLowerCase()) || 
-                               tx.recipient.toLowerCase().includes(engName.toLowerCase());
-      const matchesDesc = tx.description.toLowerCase().includes(cleanName.toLowerCase()) || 
-                          tx.description.toLowerCase().includes(engName.toLowerCase());
+      const cleanSearchName = (cleanName || '').toLowerCase();
+      const engSearchName = (engName || '').toLowerCase();
+      const txRecipient = (tx.recipient || '').toLowerCase();
+      const txDesc = (tx.description || '').toLowerCase();
+
+      const matchesRecipient = txRecipient.includes(cleanSearchName) || 
+                               txRecipient.includes(engSearchName);
+      const matchesDesc = txDesc.includes(cleanSearchName) || 
+                          txDesc.includes(engSearchName);
       
       return isCustodyCat && (matchesRecipient || matchesDesc);
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // newest first

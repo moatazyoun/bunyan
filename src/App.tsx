@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
+import SubmissionsTab from './components/SubmissionsTab';
 import DashboardOverview from './components/DashboardOverview';
 import TransactionsTable from './components/TransactionsTable';
 import AddTransactionModal from './components/AddTransactionModal';
@@ -27,16 +28,19 @@ import SiteWorkersDashboard from './components/SiteWorkersDashboard';
 import WarehouseDashboard from './components/WarehouseDashboard';
 import ExtractsTab from './components/ExtractsTab';
 import ErpModulePlaceholder from './components/ErpModulePlaceholder';
+import HSEDashboard from './components/HSEDashboard';
 import ProjectsTab from './components/ProjectsTab';
 import BOQTab from './components/BOQTab';
 import SettingsTab from './components/SettingsTab';
 import NotificationsTab from './components/NotificationsTab';
-import SubmissionsTab from './components/SubmissionsTab';
+import SiteInspectionRequests from './components/SiteInspectionRequests';
 import LoginScreen from './components/LoginScreen';
 import SiteSelectionScreen from './components/SiteSelectionScreen';
 import UsersAdminPanel from './components/UsersAdminPanel';
 import ErpSubDashboards from './components/ErpSubDashboards';
 import CrmDashboard from './components/CrmDashboard';
+import CrmCustomerList from './components/CrmCustomerList';
+import AddCustomerModal from './components/AddCustomerModal';
 
 import { 
   Transaction, 
@@ -69,7 +73,8 @@ import {
   UserItem,
   UserModulePermissions,
   RiskItem,
-  DcrRecord
+  DcrRecord,
+  CustomerRecord
 } from './types';
 import { INITIAL_FUEL_CUSTODY_BUDGET } from './data/fuelInitialData';
 
@@ -156,6 +161,9 @@ export default function App() {
   const [activeTab, setActiveTab ] = useState<string>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
+  const [showAddCustomerModal, setShowAddCustomerModal] = useState<boolean>(false);
+  const [customers, setCustomers] = useState<CustomerRecord[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerRecord | null>(null);
 
   // Security & Multi-site core databases
   const [user, setUser] = useState<UserItem | null>(() => {
@@ -910,7 +918,8 @@ export default function App() {
   };
 
   // Helper action: Post automated entry to audit logs
-  const addAuditLog = (action: string, module: string, details: string) => {
+  const addAuditLog = (action: string, module: string, details: string, customRefNo?: string) => {
+    const refNo = customRefNo || `REF-${Math.floor(100000 + Math.random() * 900000)}`;
     const newLog: AuditTrailRecord = {
       id: `audit-${Date.now()}-${Math.floor(Math.random() * 1000000)}`,
       timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
@@ -918,7 +927,8 @@ export default function App() {
       action,
       module,
       ip: '197.34.' + Math.floor(Math.random() * 255) + '.' + Math.floor(Math.random() * 255),
-      details
+      details,
+      referenceNo: refNo
     };
     setAuditLogs(prev => [newLog, ...prev]);
     
@@ -930,7 +940,7 @@ export default function App() {
         username: user?.username || 'engineer',
         actionAr: `${action} [${module}]`,
         type: 'site',
-        detailsAr: details
+        detailsAr: `${details} (الرقم المرجعي: ${refNo})`
       })
     }).catch(console.error);
   };
@@ -1031,6 +1041,11 @@ export default function App() {
     setTransactions(prev => [txWithId, ...prev]);
     addAuditLog('إضافة حركة مالية', 'دفتر الحركات المالي', `تم إضافة حركة مالية جديدة رقم ${txWithId.id} بقيمة ${txWithId.amount} ج.م.`);
     setShowAddModal(false);
+  };
+
+  const handleAddCustomer = (newCustomer: CustomerRecord) => {
+    setCustomers(prev => [...prev, newCustomer]);
+    setShowAddCustomerModal(false);
   };
 
   const handleDeleteTransaction = (id: string) => {
@@ -1510,6 +1525,7 @@ export default function App() {
             risks={risks}
             setRisks={setRisks}
             projects={projects}
+            workers={workers}
             addAuditLog={addAuditLog}
             userRole={user?.role}
           />
@@ -1566,7 +1582,7 @@ export default function App() {
           />
         );
       case 'hse':
-        return <ErpModulePlaceholder title="الصحة والسلامة المهنية" description="وحدة الصحة والسلامة المهنية (HSE) قيد التطوير." />;
+        return <HSEDashboard user={user} projects={projects} addAuditLog={addAuditLog} auditLogs={auditLogs} />;
       case 'documents':
         return (
           <DocumentControlDashboard 
@@ -1578,11 +1594,18 @@ export default function App() {
           />
         );
       case 'crm':
-        return (
-          <CrmDashboard 
+        return selectedCustomer ? (
+          <CrmDashboard
+            customer={selectedCustomer}
             projects={projects}
             userRole={user?.role}
             addAuditLog={addAuditLog}
+          />
+        ) : (
+          <CrmCustomerList
+            customers={customers}
+            onSelectCustomer={setSelectedCustomer}
+            onAddCustomer={() => setShowAddCustomerModal(true)}
           />
         );
       case 'maintenance':
@@ -1681,6 +1704,7 @@ export default function App() {
             setSubmissions={setSubmissions}
             userRole={user?.role}
             userNameAr={user?.nameAr}
+            addAuditLog={addAuditLog}
           />
         );
 
@@ -1964,16 +1988,16 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 md:mr-72 p-4 md:p-8 pt-20 md:pt-8 transition-all duration-300">
+      <div className="flex-1 min-w-0 md:mr-72 p-3 sm:p-4 md:p-8 pt-20 md:pt-8 transition-all duration-300 overflow-x-hidden">
         
         {/* Dynamic Professional Header Info */}
-        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-6 mb-6 border-b border-slate-200">
-          <div>
-            <div className="flex items-center gap-2.5 text-slate-700 text-xs md:text-sm font-semibold">
-              <Building size={15} className="text-indigo-600" />
-              <span className="font-black text-slate-800">{selectedSite.nameAr}</span>
+        <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 pb-6 mb-6 border-b border-slate-200">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-slate-700 text-xs md:text-sm font-semibold">
+              <Building size={14} className="text-indigo-600 shrink-0" />
+              <span className="font-black text-slate-800 truncate">{selectedSite.nameAr}</span>
             </div>
-            <h1 className="text-lg md:text-xl font-bold text-slate-900 tracking-tight mt-1 text-right font-sans">
+            <h1 className="text-base md:text-xl font-bold text-slate-900 tracking-tight mt-1 text-right font-sans">
               {activeTab === 'dashboard' && 'الصفحة الرئيسية'}
               {activeTab === 'projects' && 'المشروعات والإسناد'}
               {activeTab === 'settings' && 'إعدادات النظام والنسخ الاحتياطي السحابي'}
@@ -1989,14 +2013,14 @@ export default function App() {
           </div>
 
           {/* Connection & Time block wrapper */}
-          <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto block">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 self-start lg:self-auto">
 
             {/* Trial badge with countdown */}
             {trialTimeLeft !== null && (
-              <div className="px-3.5 py-1.5 rounded-xl border border-amber-200 bg-amber-500/10 text-amber-800 flex items-center gap-2 text-xs font-bold font-sans animate-pulse">
-                <Sparkles size={13} className="text-amber-600 shrink-0" />
+              <div className="px-2.5 py-1.5 rounded-xl border border-amber-200 bg-amber-500/10 text-amber-800 flex items-center gap-1.5 text-[11px] font-bold font-sans animate-pulse">
+                <Sparkles size={12} className="text-amber-600 shrink-0" />
                 <span>نسخة تجريبية</span>
-                <span className="bg-amber-600 text-white rounded px-2 py-0.5 text-xs font-mono tracking-wider font-extrabold">
+                <span className="bg-amber-600 text-white rounded px-1.5 py-0.5 text-[10px] font-mono tracking-wider font-extrabold">
                   {Math.floor(trialTimeLeft / 60)}:{(trialTimeLeft % 60).toString().padStart(2, '0')}
                 </span>
               </div>
@@ -2005,47 +2029,47 @@ export default function App() {
 
 
             {/* Real-time DB Status Badge */}
-            <div className={`px-3.5 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all duration-300 font-sans ${
+            <div className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1.5 text-[11px] font-bold transition-all duration-300 font-sans ${
               dbConnected === null 
                 ? 'bg-amber-50/80 border-amber-200/80 text-amber-700' 
                 : (dbConnected || forceOfflineBypass)
                 ? 'bg-emerald-50/80 border-emerald-200/80 text-emerald-700' 
                 : 'bg-rose-50 border-rose-200 text-rose-700 animate-pulse'
             }`}>
-              <Database size={13} className={dbConnected === null ? 'animate-pulse text-amber-500' : 'text-current'} />
+              <Database size={12} className={dbConnected === null ? 'animate-pulse text-amber-500' : 'text-current'} />
               <span className="hidden sm:inline text-slate-500 font-semibold">الحالة:</span>
               {dbConnected === null ? (
-                <span className="flex items-center gap-1.5">
-                  <RefreshCw size={11} className="animate-spin text-amber-500" />
+                <span className="flex items-center gap-1">
+                  <RefreshCw size={10} className="animate-spin text-amber-500" />
                   <span>جاري الفحص...</span>
                 </span>
               ) : (dbConnected || forceOfflineBypass) ? (
-                <span className="flex items-center gap-1.5 text-emerald-600 font-mono">
-                  <Wifi size={13} className="text-emerald-500" />
+                <span className="flex items-center gap-1 text-emerald-600 font-mono">
+                  <Wifi size={12} className="text-emerald-500" />
                   <span>{forceOfflineBypass ? 'نشط محلياً ⚠️' : 'متصل'}</span>
-                  {!forceOfflineBypass && <span className="text-[10px] text-emerald-500 font-medium">({dbLatency}ms)</span>}
+                  {!forceOfflineBypass && <span className="text-[9px] text-emerald-500 font-medium">({dbLatency}ms)</span>}
                 </span>
               ) : (
                 <button 
                   onClick={toggleOfflineBypass}
                   type="button"
-                  className="flex items-center gap-1.5 text-rose-600 cursor-pointer border-none bg-transparent font-bold p-0 transition hover:text-rose-700"
+                  className="flex items-center gap-1 text-rose-600 cursor-pointer border-none bg-transparent font-bold p-0 transition hover:text-rose-700 text-[11px]"
                   title="اضغط للعمل في وضع العمل المحلي دون إنترنت"
                 >
-                  <WifiOff size={13} className="text-rose-500 shrink-0 animate-pulse" />
-                  <span>أوفلاين (اضغط للتفعيل ⚠️)</span>
+                  <WifiOff size={12} className="text-rose-500 shrink-0 animate-pulse" />
+                  <span>أوفلاين (تفعيل ⚠️)</span>
                 </button>
               )}
             </div>
 
             {/* Time & Live Info Block */}
-            <div className="bg-white px-4 py-2 rounded-xl border border-slate-200/80 shadow-xs flex items-center gap-4 text-xs text-slate-600 font-bold font-mono">
-              <div className="flex items-center gap-1.5 border-l border-slate-100 pl-4">
-                <Calendar size={14} className="text-slate-400" />
+            <div className="bg-white px-2.5 py-1.5 rounded-xl border border-slate-200/80 shadow-xs flex items-center gap-2.5 text-[11px] text-slate-600 font-bold font-mono">
+              <div className="flex items-center gap-1 border-l border-slate-100 pl-2.5">
+                <Calendar size={12} className="text-slate-400" />
                 <span>{currentDate}</span>
               </div>
-              <div className="flex items-center gap-1.5 font-sans">
-                <Clock size={14} className="text-slate-400" />
+              <div className="flex items-center gap-1 font-sans">
+                <Clock size={12} className="text-slate-400" />
                 <span className="text-slate-950 font-black font-sans" dir="ltr">{currentTime}</span>
               </div>
             </div>
@@ -2122,6 +2146,12 @@ export default function App() {
           setContractorsReport={setContractorsReport}
           workers={workers}
           fuelStations={fuelStations}
+        />
+      )}
+      {showAddCustomerModal && (
+        <AddCustomerModal 
+          onClose={() => setShowAddCustomerModal(false)} 
+          onSave={handleAddCustomer} 
         />
       )}
 

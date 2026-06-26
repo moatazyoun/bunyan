@@ -213,82 +213,6 @@ export default function QualityDashboard({
         </div>
       </div>
 
-      {/* QA vs QC Panel */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-gradient-to-br from-indigo-50/50 to-sky-50/30 p-5 rounded-2xl border border-indigo-100">
-          <div className="flex items-center gap-2 text-indigo-900 font-black mb-3">
-            <span className="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-[11px] font-mono">QA</span>
-            <h4 className="text-sm">تأكيد الجودة (Quality Assurance) - إداري وقائي</h4>
-          </div>
-          <p className="text-xs text-slate-600 leading-relaxed text-justify">
-            منهجية مستندية استباقية تهدف لتحديد الإجراءات والمواصفات وطرق العمل والتدريب قبل بدء التنفيذ لمنع الأخطاء.
-          </p>
-          <ul className="text-xs text-slate-500 space-y-1.5 mt-3 list-disc list-inside">
-            <li>صياغة خطة الجودة المعتمدة للمشروع (PQP).</li>
-            <li>مراجعة طريقة التنفيذ الآمنة والقياسية (Method Statement).</li>
-            <li>إجراء تقارير عدم المطابقة المنهجية لمعالجة الأسباب الجذرية.</li>
-          </ul>
-        </div>
-
-        <div className="bg-gradient-to-br from-emerald-50/50 to-teal-50/30 p-5 rounded-2xl border border-emerald-100">
-          <div className="flex items-center gap-2 text-emerald-900 font-black mb-3">
-            <span className="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-[11px] font-mono">QC</span>
-            <h4 className="text-sm">ضبط ومراقبة الجودة (Quality Control) - ميداني تنفيذي</h4>
-          </div>
-          <p className="text-xs text-slate-600 leading-relaxed text-justify">
-            عمليات فحص واختبار ميدانية فعلية للمواد الموردة والبنود للتأكد من مطابقتها للمواصفات والكود المعتمد هندسياً.
-          </p>
-          <ul className="text-xs text-slate-500 space-y-1.5 mt-3 list-disc list-inside">
-            <li>فحص نتائج اختبار تكسير مكعبات الخرسانة (7 و 28 يوماً).</li>
-            <li>استلام وتوقيع طلبات فحص أعمال الإنشائية (RFI) بالميدان.</li>
-            <li>إجراء اختبارات الهبوط للخرسانة الجاهزة بالموقع فور التوريد.</li>
-          </ul>
-        </div>
-      </div>
-
-      {/* PDCA Interactive Section */}
-      <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200">
-        <div className="flex flex-col lg:flex-row gap-6 justify-between items-center">
-          <div className="space-y-3 lg:max-w-md text-right">
-            <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
-              <Sparkles size={16} className="text-indigo-600" />
-              <span>حلقة التحسين المستمر للجودة (Deming Cycle / PDCA)</span>
-            </h4>
-            <p className="text-xs text-slate-500 leading-relaxed text-justify">
-              إدارة الجودة تقوم على عجلة التحسين المستمر لحوكمة أعمال المقاولات الفنية. انقر على البنود في المخطط لاستعراض آليتها.
-            </p>
-            <div className="pt-3">
-              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
-                <p className="text-xs font-black text-indigo-700">{pdcaStepsInfo[pdcaStep].title}</p>
-                <p className="text-xs text-slate-600 leading-relaxed text-justify">{pdcaStepsInfo[pdcaStep].desc}</p>
-                <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-[10px] text-slate-400 font-mono">
-                  <span>المرجعية: {pdcaStepsInfo[pdcaStep].isoRef}</span>
-                  <span className="text-emerald-600 font-bold">المخرج: {pdcaStepsInfo[pdcaStep].outcome}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 w-full max-w-sm shrink-0">
-            {pdcaStepsInfo.map((s, idx) => (
-              <button
-                key={idx}
-                onClick={() => setPdcaStep(idx)}
-                className={`p-4 rounded-xl border text-right transition flex flex-col justify-between h-28 relative overflow-hidden ${
-                  pdcaStep === idx
-                    ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 text-white border-transparent shadow-md scale-[1.02]'
-                    : 'bg-white border-slate-200 text-slate-700 hover:border-indigo-300'
-                }`}
-              >
-                <span className={`text-[10px] font-black uppercase ${pdcaStep === idx ? 'text-indigo-200' : 'text-slate-400'}`}>الخطوة {idx+1}</span>
-                <span className="text-xs font-black mt-2 leading-tight">{s.title.split(' ')[1]} {s.title.split(' ')[2]}</span>
-                <div className={`mt-2 font-mono text-[9px] ${pdcaStep === idx ? 'text-indigo-100' : 'text-slate-400'}`}>{s.isoRef}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
       {/* Search and Filters */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col sm:flex-row gap-3 justify-between items-center shadow-xs">
         <div className="relative w-full sm:max-w-xs">
@@ -388,6 +312,82 @@ export default function QualityDashboard({
             </table>
           </div>
         )}
+      </div>
+
+      {/* QA vs QC Panel */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-gradient-to-br from-indigo-50/50 to-sky-50/30 p-5 rounded-2xl border border-indigo-100">
+          <div className="flex items-center gap-2 text-indigo-900 font-black mb-3">
+            <span className="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-[11px] font-mono">QA</span>
+            <h4 className="text-sm">تأكيد الجودة (Quality Assurance) - إداري وقائي</h4>
+          </div>
+          <p className="text-xs text-slate-600 leading-relaxed text-justify">
+            منهجية مستندية استباقية تهدف لتحديد الإجراءات والمواصفات وطرق العمل والتدريب قبل بدء التنفيذ لمنع الأخطاء.
+          </p>
+          <ul className="text-xs text-slate-500 space-y-1.5 mt-3 list-disc list-inside">
+            <li>صياغة خطة الجودة المعتمدة للمشروع (PQP).</li>
+            <li>مراجعة طريقة التنفيذ الآمنة والقياسية (Method Statement).</li>
+            <li>إجراء تقارير عدم المطابقة المنهجية لمعالجة الأسباب الجذرية.</li>
+          </ul>
+        </div>
+
+        <div className="bg-gradient-to-br from-emerald-50/50 to-teal-50/30 p-5 rounded-2xl border border-emerald-100">
+          <div className="flex items-center gap-2 text-emerald-900 font-black mb-3">
+            <span className="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-[11px] font-mono">QC</span>
+            <h4 className="text-sm">ضبط ومراقبة الجودة (Quality Control) - ميداني تنفيذي</h4>
+          </div>
+          <p className="text-xs text-slate-600 leading-relaxed text-justify">
+            عمليات فحص واختبار ميدانية فعلية للمواد الموردة والبنود للتأكد من مطابقتها للمواصفات والكود المعتمد هندسياً.
+          </p>
+          <ul className="text-xs text-slate-500 space-y-1.5 mt-3 list-disc list-inside">
+            <li>فحص نتائج اختبار تكسير مكعبات الخرسانة (7 و 28 يوماً).</li>
+            <li>استلام وتوقيع طلبات فحص أعمال الإنشائية (RFI) بالميدان.</li>
+            <li>إجراء اختبارات الهبوط للخرسانة الجاهزة بالموقع فور التوريد.</li>
+          </ul>
+        </div>
+      </div>
+
+      {/* PDCA Interactive Section */}
+      <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200">
+        <div className="flex flex-col lg:flex-row gap-6 justify-between items-center">
+          <div className="space-y-3 lg:max-w-md text-right">
+            <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+              <Sparkles size={16} className="text-indigo-600" />
+              <span>حلقة التحسين المستمر للجودة (Deming Cycle / PDCA)</span>
+            </h4>
+            <p className="text-xs text-slate-500 leading-relaxed text-justify">
+              إدارة الجودة تقوم على عجلة التحسين المستمر لحوكمة أعمال المقاولات الفنية. انقر على البنود في المخطط لاستعراض آليتها.
+            </p>
+            <div className="pt-3">
+              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
+                <p className="text-xs font-black text-indigo-700">{pdcaStepsInfo[pdcaStep].title}</p>
+                <p className="text-xs text-slate-600 leading-relaxed text-justify">{pdcaStepsInfo[pdcaStep].desc}</p>
+                <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-[10px] text-slate-400 font-mono">
+                  <span>المرجعية: {pdcaStepsInfo[pdcaStep].isoRef}</span>
+                  <span className="text-emerald-600 font-bold">المخرج: {pdcaStepsInfo[pdcaStep].outcome}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 w-full max-w-sm shrink-0">
+            {pdcaStepsInfo.map((s, idx) => (
+              <button
+                key={idx}
+                onClick={() => setPdcaStep(idx)}
+                className={`p-4 rounded-xl border text-right transition flex flex-col justify-between h-28 relative overflow-hidden ${
+                  pdcaStep === idx
+                    ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 text-white border-transparent shadow-md scale-[1.02]'
+                    : 'bg-white border-slate-200 text-slate-700 hover:border-indigo-300'
+                }`}
+              >
+                <span className={`text-[10px] font-black uppercase ${pdcaStep === idx ? 'text-indigo-200' : 'text-slate-400'}`}>الخطوة {idx+1}</span>
+                <span className="text-xs font-black mt-2 leading-tight">{s.title.split(' ')[1]} {s.title.split(' ')[2]}</span>
+                <div className={`mt-2 font-mono text-[9px] ${pdcaStep === idx ? 'text-indigo-100' : 'text-slate-400'}`}>{s.isoRef}</div>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Add Modal */}

@@ -184,6 +184,11 @@ export interface SiteWorker {
   whatsAppOn: 'none' | 'phone1' | 'phone2' | 'both';
   governorate: string;
   salaryTransferNo?: string;
+  
+  // HR & Performance
+  performanceRating?: number; // 1-5
+  trainingCompleted?: string[];
+  hrNotes?: string;
 }
 
 export interface WorkerAttendance {
@@ -219,6 +224,7 @@ export interface AuditTrailRecord {
   module: string;
   ip: string;
   details: string;
+  referenceNo?: string;
 }
 
 export interface FuelLogRecord {
@@ -488,6 +494,12 @@ export interface SubmissionSignatories {
   generalConsultant: string;
 }
 
+export type InspectionStatus = 'accepted' | 'rejected' | 'remarked' | 'none';
+export type ConsultantInspectionStatus = 'accepted' | 'rejected' | 'remarked';
+export type WorkCategory = 'مدنى' | 'كهربا' | 'معمارى' | 'أخرى';
+export type DirectionCategory = 'شمال (North)' | 'جنوب (South)' | 'شرق (East)' | 'غرب (West)' | 'شمال شرق' | 'شمال غرب' | 'جنوب شرق' | 'جنوب غرب' | 'قبلي' | 'بحرى' | 'اخرى';
+
+// ... in Submission ...
 export interface Submission {
   id: string;
   projectId: string; // id of the site/project
@@ -496,24 +508,24 @@ export interface Submission {
   inspectionDate: string; // تاريخ الفحص المطلوب
   inspectionTime: string; // الميعاد المطلوب للفحص
   itemDescription: string; // البند
+  locationDetails?: string; // مكان وتفاصيل الأعمال
   levelElevation?: string; // المنسوب
-  executingContractor: string; // الشركة المنفذة
-  direction: string; // الاتجاه (مثلا قبلي، بحري، الرئيسي، ...)
+  direction: DirectionCategory; // الاتجاه
   length?: string; // الطول
   areaArea?: string; // المسطح
-  stationFrom: string; // المحطة من
-  stationTo: string; // المحطة إلى
   submissionCount: number; // عدد مرات تقديم الطلب / التكرار (الأول، الثاني، الثالث)
   remarks?: string; // ملاحظات عامة
   
-  // Checking Form Specifics
-  workTypes?: string[]; // نوع الأعمال (قاع حفر، طبقة دمك، إلخ)
-  soilType?: string; // نوع التربة (صالحة، غير صالحة، قطع في صخر)
-  visualInspection?: 'accepted' | 'rejected' | 'pending'; // الفحص البصري
-  visualInspectionNotes?: string; // ملاحظات الفحص البصري
-  
-  status: 'Approved' | 'ApprovedWithRemarks' | 'Rejected' | 'Pending'; // نتيجة أعمال الفحص النهائي
-  workDetails: SubmissionWorkDetails;
+  // NEW FIELDS
+  engineerName: string;
+  surveyorName?: string;
+  surveyStatus: InspectionStatus;
+  qualityStatus: InspectionStatus;
+  consultantStatus: ConsultantInspectionStatus;
+  workCategory: WorkCategory;
+
+  status: 'Approved' | 'ApprovedWithRemarks' | 'Rejected' | 'Pending' | 'SurveyRejected'; // نتيجة أعمال الفحص النهائي
+  workDetails?: SubmissionWorkDetails;
   surveyNotes?: string; // ملاحظات مساحية
   labNotes?: string; // ملاحظات معملية
   signatories: SubmissionSignatories;
@@ -593,13 +605,25 @@ export interface DocumentRecord {
   date: string;
 }
 
+export interface ActivityLog {
+  id: string;
+  referenceNo: string; // REF-XXXXXX
+  timestamp: string;
+  user: string;
+  action: string;
+  module: string;
+  details: string;
+}
+
 export interface CustomerRecord {
   id: string;
   name: string;
   contactPerson: string;
   phone: string;
   email: string;
-  contracts: string[];
+  contracts: string[]; // List of Contract IDs
+  projects: string[]; // List of Project IDs
+  activityLogs: ActivityLog[];
 }
 
 export interface DcrRecord {

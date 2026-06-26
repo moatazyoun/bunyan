@@ -74,43 +74,7 @@ export default function HrStrategyTab({
 
   return (
     <div className="space-y-8" dir="rtl">
-      {/* 1. المقدمة والفلسفة الإدارية (Introduction & HR Philosophy) */}
-      <div className="bg-slate-950 border border-slate-900 rounded-3xl p-6 md:p-8 text-white relative overflow-hidden shadow-xl">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl -mr-20 -mt-20"></div>
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-emerald-600/10 rounded-full blur-3xl -ml-20 -mb-20"></div>
-        
-        <div className="relative space-y-4">
-          <div className="flex items-center gap-2 text-indigo-400 font-extrabold text-xs uppercase tracking-widest">
-            <Award size={14} className="animate-pulse" />
-            <span>رأس المال المهني الحقيقي للمشاريع الإنشائية</span>
-          </div>
-          <h1 className="text-2xl md:text-4xl font-black tracking-tight text-white font-sans leading-tight">
-            الاستثمار في الإنسان: حوكمة وتطوير رأس المال البشري بالمشاريع الكبرى
-          </h1>
-          <p className="text-slate-300 text-sm max-w-4xl leading-relaxed">
-            تؤمن شركتنا بأن الكفاءات البشرية هي المحرك الرئيسي لكافة نجاحاتنا الهندسية والإنشائية بالمواقع. لا تمثل الموارد البشرية لدينا مجرد أرقام في جداول الحضور والانصراف، بل هي **مؤسسة متكاملة** تضمن استدامة الأعمال، وتدفق الإنتاجية العالية، وتناقل الخبرات للأجيال القادمة، مع الحفاظ الكامل على معايير الجودة والصحة والسلامة المهنية العالمية.
-          </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-4 border-t border-white/5 mt-6">
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-1">
-              <span className="text-[10px] text-indigo-300 font-black block">التكافؤ والعدالة</span>
-              <p className="text-xs text-slate-400 leading-relaxed">توفير بيئة عمل عادلة تضمن تكافؤ الفرص لجميع الطواقم دون تمييز.</p>
-            </div>
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-1">
-              <span className="text-[10px] text-emerald-300 font-black block">التطوير المستمر</span>
-              <p className="text-xs text-slate-400 leading-relaxed">بناء مسارات تدريبية حية تتوافق مع المستجدات الهندسية بالميدان.</p>
-            </div>
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-1">
-              <span className="text-[10px] text-amber-300 font-black block">البيئة الآمنة</span>
-              <p className="text-xs text-slate-400 leading-relaxed">حظر أي نشاط يعرض حياة الطواقم الفنية أو العمال بالموقع للمخاطر.</p>
-            </div>
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-1">
-              <span className="text-[10px] text-rose-300 font-black block">الشفافية والنزاهة</span>
-              <p className="text-xs text-slate-400 leading-relaxed">ربط فوري وشفاف للأجور بالحضور الفعلي والإنتاج والتعاقدات المربوطة.</p>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Live Statistics Section */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -152,6 +116,99 @@ export default function HrStrategyTab({
             <span className="block text-[10px] text-slate-400 font-black">عمالة الأجر المباشر</span>
             <span className="text-lg font-black text-slate-900 font-mono">{hrStats.dailyCount} يومية ({hrStats.dailyPercent}%)</span>
           </div>
+        </div>
+      </div>
+
+      {/* 6. الهيكل التنظيمي وإحصائيات القوى العاملة (Organizational Structure & Allocation) */}
+      <div className="bg-white border border-slate-150 rounded-3xl overflow-hidden shadow-sm">
+        <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h3 className="text-base font-black text-slate-900">الهيكل التنظيمي وإحصائيات القوى العاملة المباشرة بالمشروع</h3>
+            <p className="text-slate-500 text-xs font-bold mt-1">توزيع كفاءات القوى العاملة النشطة والمسجلة حالياً بقاعدة البيانات وعلاقتها بمعايير التقييم</p>
+          </div>
+          <div className="bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-black px-3 py-1 rounded-full">
+            تحديث حي ومباشر
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-right border-collapse text-xs">
+            <thead>
+              <tr className="bg-slate-100/80 text-slate-400 font-extrabold uppercase tracking-widest border-b border-slate-100">
+                <th className="p-4">التصنيف والوظيفة</th>
+                <th className="p-4">فئة التعاقد الحالية</th>
+                <th className="p-4 text-center">العدد الفعلي النشط</th>
+                <th className="p-4 text-center">متوسط الفئة المالية باليوم</th>
+                <th className="p-4">آلية التوزيع بالموقع</th>
+                <th className="p-4">مؤشر التقييم الرئيسي المقترح لها (Primary KPI)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 font-bold text-slate-700">
+              {/* Generate dynamic rows based on actual jobTitle and count from DB */}
+              {Object.entries(hrStats.jobDistribution).length > 0 ? (
+                Object.entries(hrStats.jobDistribution).map(([job, count]) => {
+                  // Figure out the sample worker for this job to show employment type and rates
+                  const sampleWorker = workers.find(w => w.jobTitle === job || (!w.jobTitle && job === 'عامل عام'));
+                  const sampleType = sampleWorker ? sampleWorker.type : 'laborer';
+                  const sampleRate = sampleWorker ? sampleWorker.baseRate : 150;
+
+                  let typeLabel = 'عمالة يومية';
+                  let typeColor = 'text-emerald-600 bg-emerald-50';
+                  if (sampleType === 'appointed') {
+                    typeLabel = 'معين رسمي';
+                    typeColor = 'text-indigo-600 bg-indigo-50';
+                  } else if (sampleType === 'saraky') {
+                    typeLabel = 'سراكي مؤقت';
+                    typeColor = 'text-amber-600 bg-amber-50';
+                  }
+
+                  let allocationMethod = 'توزيع يومي حسب حزم المهام المفتوحة';
+                  let kpi = 'معدل الحضور والالتزام بمعايير جودة الرصف';
+
+                  if (job.includes('مهندس') || job.includes('مخطط')) {
+                    allocationMethod = 'مسؤول عن قطاع جغرافي أو حزمة تسليم بالكامل';
+                    kpi = 'نسبة إنجاز القطاع المحددة أسبوعياً وتجنب انحرافات الجدول';
+                  } else if (job.includes('مشرف')) {
+                    allocationMethod = 'إشراف ميداني وتوجيه مباشر لطواقم العمال';
+                    kpi = 'صفر حوادث أمنية ونظافة قطاع التسليم وجودة التنفيذ';
+                  } else if (job.includes('سائق') || job.includes('مشغل')) {
+                    allocationMethod = 'تشغيل المعدات الإنشائية حسب برنامج العمل';
+                    kpi = 'معدل استهلاك السولار وتجنب الأعطال المفاجئة للمعدة';
+                  }
+
+                  return (
+                    <tr key={job} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                          <span className="text-slate-900 font-extrabold">{job}</span>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-black ${typeColor}`}>
+                          {typeLabel}
+                        </span>
+                      </td>
+                      <td className="p-4 text-center text-slate-900 font-mono font-black">{count}</td>
+                      <td className="p-4 text-center font-mono font-black text-indigo-600">{sampleRate} <span className="text-[10px] text-slate-400">ج</span></td>
+                      <td className="p-4 text-slate-500 font-medium text-[11px]">{allocationMethod}</td>
+                      <td className="p-4">
+                        <span className="text-slate-800 bg-slate-100 px-2 py-1 rounded text-[10px] font-black">
+                          {kpi}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={6} className="p-8 text-center text-slate-400">
+                    لا يوجد عاملين مسجلين بقاعدة البيانات لعرض هيكل توزيع القوى العاملة.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -278,99 +335,6 @@ export default function HrStrategyTab({
               </p>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* 6. الهيكل التنظيمي وإحصائيات القوى العاملة (Organizational Structure & Allocation) */}
-      <div className="bg-white border border-slate-150 rounded-3xl overflow-hidden shadow-sm">
-        <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h3 className="text-base font-black text-slate-900">الهيكل التنظيمي وإحصائيات القوى العاملة المباشرة بالمشروع</h3>
-            <p className="text-slate-500 text-xs font-bold mt-1">توزيع كفاءات القوى العاملة النشطة والمسجلة حالياً بقاعدة البيانات وعلاقتها بمعايير التقييم</p>
-          </div>
-          <div className="bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-black px-3 py-1 rounded-full">
-            تحديث حي ومباشر
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-right border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-100/80 text-slate-400 font-extrabold uppercase tracking-widest border-b border-slate-100">
-                <th className="p-4">التصنيف والوظيفة</th>
-                <th className="p-4">فئة التعاقد الحالية</th>
-                <th className="p-4 text-center">العدد الفعلي النشط</th>
-                <th className="p-4 text-center">متوسط الفئة المالية باليوم</th>
-                <th className="p-4">آلية التوزيع بالموقع</th>
-                <th className="p-4">مؤشر التقييم الرئيسي المقترح لها (Primary KPI)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-bold text-slate-700">
-              {/* Generate dynamic rows based on actual jobTitle and count from DB */}
-              {Object.entries(hrStats.jobDistribution).length > 0 ? (
-                Object.entries(hrStats.jobDistribution).map(([job, count]) => {
-                  // Figure out the sample worker for this job to show employment type and rates
-                  const sampleWorker = workers.find(w => w.jobTitle === job || (!w.jobTitle && job === 'عامل عام'));
-                  const sampleType = sampleWorker ? sampleWorker.type : 'laborer';
-                  const sampleRate = sampleWorker ? sampleWorker.baseRate : 150;
-
-                  let typeLabel = 'عمالة يومية';
-                  let typeColor = 'text-emerald-600 bg-emerald-50';
-                  if (sampleType === 'appointed') {
-                    typeLabel = 'معين رسمي';
-                    typeColor = 'text-indigo-600 bg-indigo-50';
-                  } else if (sampleType === 'saraky') {
-                    typeLabel = 'سراكي مؤقت';
-                    typeColor = 'text-amber-600 bg-amber-50';
-                  }
-
-                  let allocationMethod = 'توزيع يومي حسب حزم المهام المفتوحة';
-                  let kpi = 'معدل الحضور والالتزام بمعايير جودة الرصف';
-
-                  if (job.includes('مهندس') || job.includes('مخطط')) {
-                    allocationMethod = 'مسؤول عن قطاع جغرافي أو حزمة تسليم بالكامل';
-                    kpi = 'نسبة إنجاز القطاع المحددة أسبوعياً وتجنب انحرافات الجدول';
-                  } else if (job.includes('مشرف')) {
-                    allocationMethod = 'إشراف ميداني وتوجيه مباشر لطواقم العمال';
-                    kpi = 'صفر حوادث أمنية ونظافة قطاع التسليم وجودة التنفيذ';
-                  } else if (job.includes('سائق') || job.includes('مشغل')) {
-                    allocationMethod = 'تشغيل المعدات الإنشائية حسب برنامج العمل';
-                    kpi = 'معدل استهلاك السولار وتجنب الأعطال المفاجئة للمعدة';
-                  }
-
-                  return (
-                    <tr key={job} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="p-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
-                          <span className="text-slate-900 font-extrabold">{job}</span>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-black ${typeColor}`}>
-                          {typeLabel}
-                        </span>
-                      </td>
-                      <td className="p-4 text-center text-slate-900 font-mono font-black">{count}</td>
-                      <td className="p-4 text-center font-mono font-black text-indigo-600">{sampleRate} <span className="text-[10px] text-slate-400">ج</span></td>
-                      <td className="p-4 text-slate-500 font-medium text-[11px]">{allocationMethod}</td>
-                      <td className="p-4">
-                        <span className="text-slate-800 bg-slate-100 px-2 py-1 rounded text-[10px] font-black">
-                          {kpi}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-400">
-                    لا يوجد عاملين مسجلين بقاعدة البيانات لعرض هيكل توزيع القوى العاملة.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>

@@ -900,7 +900,7 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
   };
 
   // Only forward the Gemini analyzer endpoints to the real Node backend since they require the server-side GEMINI_API_KEY.
-  const isAIBackendOnly = urlStr.includes('/api/gemini/analyze-report') || urlStr.includes('/api/gemini/analyze-voucher') || urlStr.includes('/api/gemini/analyze-boq');
+  const isAIBackendOnly = urlStr.includes('/api/gemini/analyze-report') || urlStr.includes('/api/gemini/analyze-voucher') || urlStr.includes('/api/gemini/analyze-boq') || urlStr.includes('/api/gemini/analyze-sarki');
 
   // If it's a real server request and NOT one of the ones we want to emulate, just pass through.
   // Actually, we want MOST things to hit the real server.

@@ -590,9 +590,16 @@ export default function UsersAdminPanel({ currentUser, auditLogs }: UsersAdminPa
                             )}
                             
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[10px] text-slate-500 font-mono mt-2 pt-2 border-t border-slate-200">
-                              <div className="flex items-center gap-1.5">
-                                <Clock size={12} />
-                                <span>{new Date(log.timestamp).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                              <div className="flex flex-wrap items-center gap-3">
+                                <div className="flex items-center gap-1.5">
+                                  <Clock size={12} />
+                                  <span>{new Date(log.timestamp).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                                </div>
+                                {log.referenceNo && (
+                                  <div className="flex items-center gap-1 text-purple-700 font-black bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                                    <span>{log.referenceNo}</span>
+                                  </div>
+                                )}
                               </div>
                               {log.ip && (
                                 <div className="flex items-center gap-1.5">

@@ -4,12 +4,13 @@ import {
   AlertTriangle, Plus, Trash2, Filter, Search, Info, ShieldAlert,
   Activity, Check, X, Shield, RefreshCw, BarChart2
 } from 'lucide-react';
-import { RiskItem, Project } from '../types';
+import { RiskItem, Project, SiteWorker } from '../types';
 
 interface RiskDashboardProps {
   risks: RiskItem[];
   setRisks: React.Dispatch<React.SetStateAction<RiskItem[]>>;
   projects: Project[];
+  workers?: SiteWorker[];
   addAuditLog?: (action: string, module: string, details: string) => void;
   userRole?: string;
 }
@@ -18,6 +19,7 @@ export default function RiskDashboard({
   risks,
   setRisks,
   projects,
+  workers = [],
   addAuditLog,
   userRole
 }: RiskDashboardProps) {
@@ -33,6 +35,7 @@ export default function RiskDashboard({
   const [newImpact, setNewImpact] = useState<RiskItem['impact']>('medium');
   const [newPreventiveAction, setNewPreventiveAction] = useState('');
   const [newOwner, setNewOwner] = useState('');
+  const [isManualOwner, setIsManualOwner] = useState(() => !workers || workers.length === 0);
   const [newProjectId, setNewProjectId] = useState('all');
 
   const handleAddRisk = (e: React.FormEvent) => {
@@ -515,15 +518,45 @@ export default function RiskDashboard({
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="block text-[10px] font-black text-slate-400 mb-1 mr-1 uppercase tracking-widest">المسؤول عن المجابهة والمراقبة *</label>
-                      <input 
-                        required
-                        type="text"
-                        value={newOwner}
-                        onChange={e => setNewOwner(e.target.value)}
-                        placeholder="مثال: م/ مدير التنفيذ والموقع"
-                        className="w-full text-xs p-3.5 bg-slate-800 border border-slate-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold text-white outline-none text-right"
-                      />
+                      <div className="flex justify-between items-center mr-1 mb-1">
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">المسؤول عن المجابهة والمراقبة *</label>
+                        {workers && workers.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsManualOwner(!isManualOwner);
+                              setNewOwner('');
+                            }}
+                            className="text-[10px] text-indigo-400 hover:text-indigo-300 font-black flex items-center gap-1 transition animate-fade-in"
+                          >
+                            {isManualOwner ? '← اختيار من طاقم العمل' : '← إدخال يدوي'}
+                          </button>
+                        )}
+                      </div>
+                      {!isManualOwner && workers && workers.length > 0 ? (
+                        <select 
+                          required
+                          value={newOwner}
+                          onChange={e => setNewOwner(e.target.value)}
+                          className="w-full text-xs p-3.5 bg-slate-800 border border-slate-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold text-white outline-none text-right"
+                        >
+                          <option value="" className="bg-slate-900">اختر المسؤول من طاقم العمل...</option>
+                          {workers.map(worker => (
+                            <option key={worker.id} value={`${worker.name} (${worker.jobTitle})`} className="bg-slate-900">
+                              {worker.name} - {worker.jobTitle}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input 
+                          required
+                          type="text"
+                          value={newOwner}
+                          onChange={e => setNewOwner(e.target.value)}
+                          placeholder="مثال: م/ مدير التنفيذ والموقع"
+                          className="w-full text-xs p-3.5 bg-slate-800 border border-slate-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold text-white outline-none text-right"
+                        />
+                      )}
                     </div>
 
                     <div className="space-y-1.5">

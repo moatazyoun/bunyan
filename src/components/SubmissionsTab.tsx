@@ -5,6 +5,7 @@ import {
   Trash2, 
   Edit, 
   Printer, 
+  X,
   ArrowRight, 
   Check, 
   CheckCircle,
@@ -15,21 +16,24 @@ import {
   FileText,
   FileCheck,
   Building,
+  ShieldCheck,
+  LayoutGrid,
+  Calendar,
+  Save,
+  ClipboardCheck,
   BookOpen,
   Award,
-  ShieldCheck,
   Layers,
   Zap,
   CheckSquare,
   Database,
-  Calendar,
   Camera,
   BarChart3,
   XCircle,
   TrendingUp,
   FileSpreadsheet
 } from 'lucide-react';
-import { Submission, SubmissionWorkDetails, SubmissionSignatories } from '../types';
+import { Submission, SubmissionWorkDetails, SubmissionSignatories, InspectionStatus, ConsultantInspectionStatus, WorkCategory, DirectionCategory } from '../types';
 
 interface SubmissionsTabProps {
   projectId: string;
@@ -37,6 +41,7 @@ interface SubmissionsTabProps {
   setSubmissions: (subs: Submission[]) => void;
   userRole?: string;
   userNameAr?: string;
+  addAuditLog?: (action: string, module: string, details: string) => void;
 }
 
 const DEFAULT_WORK_TYPES = [
@@ -64,7 +69,8 @@ export default function SubmissionsTab({
   submissions, 
   setSubmissions,
   userRole,
-  userNameAr 
+  userNameAr,
+  addAuditLog
 }: SubmissionsTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -78,6 +84,17 @@ export default function SubmissionsTab({
   const [isPrinting, setIsPrinting] = useState(false);
   const [printSub, setPrintSub] = useState<Submission | null>(null);
 
+  // Custom confirmation modal state
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    id?: string;
+    randomCode?: string;
+    onConfirm: () => void;
+  } | null>(null);
+  const [deleteCode, setDeleteCode] = useState('');
+
   // Form Fields
   const [submissionNumber, setSubmissionNumber] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -85,35 +102,26 @@ export default function SubmissionsTab({
   const [inspectionTime, setInspectionTime] = useState('12:00 م');
   const [itemDescription, setItemDescription] = useState('');
   const [levelElevation, setLevelElevation] = useState('');
-  const [executingContractor, setExecutingContractor] = useState('م/ فوزي الرفاعي');
-  const [direction, setDirection] = useState('القبلي');
+  const [locationDetails, setLocationDetails] = useState('');
+  const [direction, setDirection] = useState<DirectionCategory>('قبلي');
+  
+  // NEW FIELDS
+  const [engineerName, setEngineerName] = useState(userNameAr || '');
+  const [surveyorName, setSurveyorName] = useState('');
+  const [surveyStatus, setSurveyStatus] = useState<InspectionStatus>('none');
+  const [qualityStatus, setQualityStatus] = useState<InspectionStatus>('none');
+  const [consultantStatus, setConsultantStatus] = useState<ConsultantInspectionStatus>('accepted');
+  const [workCategory, setWorkCategory] = useState<WorkCategory>('مدنى');
+
   const [length, setLength] = useState('');
   const [areaArea, setAreaArea] = useState('');
-  const [stationFrom, setStationFrom] = useState('');
-  const [stationTo, setStationTo] = useState('');
   const [submissionCount, setSubmissionCount] = useState<number>(1);
   const [remarks, setRemarks] = useState('');
-  
-  // Checkbox/Radio selections
-  const [selectedWorkTypes, setSelectedWorkTypes] = useState<string[]>([]);
-  const [selectedSoilType, setSelectedSoilType] = useState<string>('تربة صالحة');
-  const [customWorkType, setCustomWorkType] = useState('');
-  const [workTypesList, setWorkTypesList] = useState<string[]>(DEFAULT_WORK_TYPES);
-  
-  // Technical Inspection Details
-  const [visualInspection, setVisualInspection] = useState<'accepted' | 'rejected' | 'pending'>('pending');
-  const [visualInspectionNotes, setVisualInspectionNotes] = useState('');
-  
-  const [surveyLevels, setSurveyLevels] = useState<'accepted' | 'accepted_with_remarks' | 'rejected' | 'pending'>('pending');
-  const [materialSuitability, setMaterialSuitability] = useState<'accepted' | 'accepted_with_remarks' | 'rejected' | 'pending'>('pending');
-  const [executionOperations, setExecutionOperations] = useState<'accepted' | 'accepted_with_remarks' | 'rejected' | 'pending'>('pending');
-  const [sectionWidth, setSectionWidth] = useState<'accepted' | 'accepted_with_remarks' | 'rejected' | 'pending'>('pending');
-  const [currentWidth, setCurrentWidth] = useState('');
   
   const [surveyNotes, setSurveyNotes] = useState('');
   const [labNotes, setLabNotes] = useState('');
   
-  const [status, setStatus] = useState<'Approved' | 'ApprovedWithRemarks' | 'Rejected' | 'Pending'>('Pending');
+  const [status, setStatus] = useState<'Approved' | 'ApprovedWithRemarks' | 'Rejected' | 'Pending' | 'SurveyRejected'>('Pending');
   
   // Signatories
   const [contractorEngineer, setContractorEngineer] = useState('');
@@ -123,10 +131,10 @@ export default function SubmissionsTab({
 
   // Filter actual site submissions
   const filteredSubs = submissions.filter(s => {
+    const searchStr = (searchTerm || '').toLowerCase();
     const matchesSearch = 
-      s.itemDescription.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.submissionNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.executingContractor.toLowerCase().includes(searchTerm.toLowerCase());
+      (s.itemDescription || '').toLowerCase().includes(searchStr) ||
+      (s.submissionNumber || '').toLowerCase().includes(searchStr);
     
     if (statusFilter === 'All') return matchesSearch;
     return matchesSearch && s.status === statusFilter;
@@ -143,23 +151,12 @@ export default function SubmissionsTab({
     setInspectionTime('12:00 م');
     setItemDescription('');
     setLevelElevation('');
-    setExecutingContractor(submissions[0]?.executingContractor || 'م/ فوزي الرفاعي');
-    setDirection('القبلي');
+    setLocationDetails('');
+    setDirection('اليمين');
     setLength('');
     setAreaArea('');
-    setStationFrom('');
-    setStationTo('');
     setSubmissionCount(1);
     setRemarks('');
-    setSelectedWorkTypes([]);
-    setSelectedSoilType('تربة صالحة');
-    setVisualInspection('pending');
-    setVisualInspectionNotes('');
-    setSurveyLevels('pending');
-    setMaterialSuitability('pending');
-    setExecutionOperations('pending');
-    setSectionWidth('pending');
-    setCurrentWidth('');
     setSurveyNotes('');
     setLabNotes('');
     setStatus('Pending');
@@ -167,6 +164,14 @@ export default function SubmissionsTab({
     setSurveyConsultant('');
     setQaEngineer('أ.د / خالد قنديل');
     setGeneralConsultant('');
+    
+    // NEW FIELDS
+    setEngineerName(userNameAr || '');
+    setSurveyorName('');
+    setSurveyStatus('none');
+    setQualityStatus('none');
+    setConsultantStatus('accepted');
+    setWorkCategory('مدنى');
     
     setIsNew(true);
     setSelectedSub(null);
@@ -181,25 +186,21 @@ export default function SubmissionsTab({
     setInspectionTime(sub.inspectionTime);
     setItemDescription(sub.itemDescription);
     setLevelElevation(sub.levelElevation || '');
-    setExecutingContractor(sub.executingContractor);
+    setLocationDetails(sub.locationDetails || '');
     setDirection(sub.direction);
+    
+    // NEW FIELDS
+    setEngineerName(sub.engineerName);
+    setSurveyorName(sub.surveyorName || '');
+    setSurveyStatus(sub.surveyStatus);
+    setQualityStatus(sub.qualityStatus);
+    setConsultantStatus(sub.consultantStatus);
+    setWorkCategory(sub.workCategory);
+
     setLength(sub.length || '');
     setAreaArea(sub.areaArea || '');
-    setStationFrom(sub.stationFrom);
-    setStationTo(sub.stationTo);
     setSubmissionCount(sub.submissionCount);
     setRemarks(sub.remarks || '');
-    setSelectedWorkTypes(sub.workTypes || []);
-    setSelectedSoilType(sub.soilType || 'تربة صالحة');
-    setVisualInspection(sub.visualInspection || 'pending');
-    setVisualInspectionNotes(sub.visualInspectionNotes || '');
-    
-    setSurveyLevels(sub.workDetails?.surveyLevels || 'pending');
-    setMaterialSuitability(sub.workDetails?.materialSuitability || 'pending');
-    setExecutionOperations(sub.workDetails?.executionOperations || 'pending');
-    setSectionWidth(sub.workDetails?.sectionWidth || 'pending');
-    setCurrentWidth(sub.workDetails?.currentWidth || '');
-    
     setSurveyNotes(sub.surveyNotes || '');
     setLabNotes(sub.labNotes || '');
     setStatus(sub.status);
@@ -216,8 +217,8 @@ export default function SubmissionsTab({
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!itemDescription || !stationFrom || !stationTo) {
-      alert('يرجى ملء البيانات الأساسية: بند الأعمال، والمحطات (من - إلى)');
+    if (!itemDescription || !locationDetails) {
+      alert('يرجى ملء البيانات الأساسية: بند الأعمال، ومكان وتفاصيل الأعمال');
       return;
     }
 
@@ -230,26 +231,13 @@ export default function SubmissionsTab({
       inspectionTime,
       itemDescription,
       levelElevation,
-      executingContractor,
+      locationDetails,
       direction,
       length,
       areaArea,
-      stationFrom,
-      stationTo,
       submissionCount,
       remarks,
-      workTypes: selectedWorkTypes,
-      soilType: selectedSoilType,
-      visualInspection,
-      visualInspectionNotes,
       status,
-      workDetails: {
-        surveyLevels,
-        materialSuitability,
-        executionOperations,
-        sectionWidth,
-        currentWidth
-      },
       surveyNotes,
       labNotes,
       signatories: {
@@ -257,7 +245,14 @@ export default function SubmissionsTab({
         surveyConsultant,
         qaEngineer,
         generalConsultant
-      }
+      },
+      // NEW FIELDS
+      engineerName,
+      surveyorName,
+      surveyStatus,
+      qualityStatus,
+      consultantStatus,
+      workCategory
     };
 
     let updatedList: Submission[];
@@ -268,35 +263,48 @@ export default function SubmissionsTab({
     }
 
     setSubmissions(updatedList);
-    setIsEditing(false);
+    
+    if (addAuditLog) {
+      const details = `${isNew ? 'إضافة' : 'تعديل'} طلب فحص أعمال برقم [${submissionNumber}] - ${itemDescription}`;
+      addAuditLog(isNew ? 'إضافة' : 'تعديل', 'التسليمات وفحص الأعمال', details);
+    }
+
+    setItemDescription('');
+    setLevelElevation('');
+    setLocationDetails('');
+    setLength('');
+    setAreaArea('');
+    setRemarks('');
     setSelectedSub(null);
+    setIsEditing(false);
     setIsNew(false);
   };
 
   const handleDelete = (id: string) => {
-    if (window.confirm('هل أنت متأكد من حذف هذا السجل نهائياً؟')) {
-      setSubmissions(submissions.filter(s => s.id !== id));
-      if (selectedSub?.id === id) {
-        setIsEditing(false);
-        setSelectedSub(null);
+    const sub = submissions.find(s => s.id === id);
+    if (!sub) return;
+
+    // Generate a random 4-digit code
+    const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
+
+    setConfirmState({
+      isOpen: true,
+      title: `تأكيد حذف الطلب [${sub.submissionNumber || 'N/A'}]`,
+      message: `هل أنت متأكد من حذف طلب فحص الأعمال (${sub.itemDescription || 'بدون وصف'})؟ لا يمكن التراجع عن هذا الإجراء وسيتم تسجيل العملية في السجل العام.`,
+      id: id,
+      randomCode: generatedCode,
+      onConfirm: () => {
+        setSubmissions(submissions.filter(s => s.id !== id));
+        if (addAuditLog) {
+          addAuditLog('حذف', 'التسليمات وفحص الأعمال', `حذف طلب فحص الأعمال رقم [${sub.submissionNumber || 'N/A'}] - ${sub.itemDescription || 'بدون وصف'}`);
+        }
+        if (selectedSub?.id === id) {
+          setIsEditing(false);
+          setSelectedSub(null);
+        }
       }
-    }
-  };
-
-  const handleAddCustomWorkType = () => {
-    if (customWorkType.trim() && !workTypesList.includes(customWorkType.trim())) {
-      setWorkTypesList([...workTypesList, customWorkType.trim()]);
-      setSelectedWorkTypes([...selectedWorkTypes, customWorkType.trim()]);
-      setCustomWorkType('');
-    }
-  };
-
-  const toggleWorkType = (type: string) => {
-    if (selectedWorkTypes.includes(type)) {
-      setSelectedWorkTypes(selectedWorkTypes.filter(t => t !== type));
-    } else {
-      setSelectedWorkTypes([...selectedWorkTypes, type]);
-    }
+    });
+    setDeleteCode('');
   };
 
   const printDocument = (sub: Submission) => {
@@ -311,13 +319,30 @@ export default function SubmissionsTab({
   const getStatusBadge = (s: string) => {
     switch (s) {
       case 'Approved':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-black text-emerald-800 bg-emerald-50 border border-emerald-150 rounded-lg shadow-sm">✔️ معتمد وموافق</span>;
+        return <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-black text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg shadow-xs">
+          <CheckCircle size={12} className="text-emerald-500" />
+          <span>معتمد وموافق كلياً</span>
+        </span>;
       case 'ApprovedWithRemarks':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-black text-amber-800 bg-amber-50 border border-amber-150 rounded-lg shadow-sm">⚠️ موافق بملاحظات</span>;
+        return <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-black text-amber-800 bg-amber-50 border border-amber-200 rounded-lg shadow-xs">
+          <AlertTriangle size={12} className="text-amber-500 animate-pulse" />
+          <span>موافق بملاحظات هندسية</span>
+        </span>;
       case 'Rejected':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-black text-rose-800 bg-rose-50 border border-rose-150 rounded-lg shadow-sm">❌ مرفوض ويعاد تقديمه</span>;
+        return <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-black text-rose-800 bg-rose-50 border border-rose-200 rounded-lg shadow-xs">
+          <XCircle size={12} className="text-rose-500" />
+          <span>مرفوض ويعاد تقديمه</span>
+        </span>;
+      case 'SurveyRejected':
+        return <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-black text-red-800 bg-red-50 border border-red-200 rounded-lg shadow-xs">
+          <MapPin size={12} className="text-red-500" />
+          <span>مرفوض مساحياً</span>
+        </span>;
       default:
-        return <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-black text-indigo-800 bg-indigo-50 border border-indigo-150 rounded-lg shadow-sm">⏱️ قيد الانتظار</span>;
+        return <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-black text-purple-800 bg-purple-50 border border-purple-200 rounded-lg shadow-xs">
+          <Clock size={12} className="text-purple-500 animate-spin" />
+          <span>قيد الانتظار والتدقيق</span>
+        </span>;
     }
   };
 
@@ -352,17 +377,12 @@ export default function SubmissionsTab({
               <p className="text-[10px] text-slate-500">إدارة المهندسين العسكريين</p>
               <p className="text-[9px] text-slate-400">اللواء ١٩ طرق - الكتيبة ٧٠ طرق</p>
             </div>
-            <div className="flex flex-col items-center justify-center border-x-2 border-slate-300 px-2">
+            <div className="flex flex-col items-center justify-center border-r-2 border-slate-300 px-2 col-span-2">
               <div className="border-2 border-blue-600 p-1.5 rounded-md mb-1 bg-blue-50/50">
                 <Building size={24} className="text-blue-600" />
               </div>
               <p className="font-black text-[14px] leading-none mb-1 text-slate-900">مكتب هندسي استشاري</p>
               <p className="font-black text-[11px] text-indigo-700">أ . د / خالد قنديل</p>
-            </div>
-            <div>
-              <p className="font-extrabold text-[12px]">الشركة المنفذة</p>
-              <p className="font-black text-[13px] text-[#cc1111]">{printSub.executingContractor}</p>
-              <p className="text-[10px] text-slate-500">للأعمال الإنشائية ومقاولات الطرق</p>
             </div>
           </div>
 
@@ -386,43 +406,38 @@ export default function SubmissionsTab({
         <table className="w-full border-collapse border-2 border-slate-950 text-center mb-6">
           <thead>
             <tr className="bg-slate-100 font-extrabold h-9 text-slate-900 border-b-2 border-slate-950">
-              <th className="border-2 border-slate-950 w-28">البند المراد فحصه</th>
+              <th className="border-2 border-slate-950 w-32">البند المراد فحصه</th>
+              <th className="border-2 border-slate-950 w-32">مكان وتفاصيل الأعمال</th>
               <th className="border-2 border-slate-950 w-16">المنسوب</th>
-              <th className="border-2 border-slate-950 w-24">الشركة المنفذة</th>
               <th className="border-2 border-slate-950 w-16">الإتجاه</th>
               <th className="border-2 border-slate-950 w-16">الطول</th>
               <th className="border-2 border-slate-950 w-16">المسطح</th>
-              <th className="border-2 border-slate-950 w-28" colSpan={2}>المحطة (الاستيشن)</th>
+              <th className="border-2 border-slate-950 w-28" colSpan={2}>موعد الفحص</th>
               <th className="border-2 border-slate-950 w-14">تقديم الطلب</th>
-              <th className="border-2 border-slate-950 w-16">موعد الفحص</th>
               <th className="border-2 border-slate-950 w-20">ملاحظات</th>
             </tr>
             <tr className="bg-slate-55 text-[9.5px] h-6 font-bold text-slate-700">
               <td className="border-2 border-slate-950" colSpan={6}></td>
-              <td className="border-2 border-slate-950 font-black">من</td>
-              <td className="border-2 border-slate-950 font-black">إلى</td>
-              <td className="border-2 border-slate-950 font-black" colSpan={3}></td>
+              <td className="border-2 border-slate-950 font-black">التاريخ</td>
+              <td className="border-2 border-slate-950 font-black">الوقت</td>
+              <td className="border-2 border-slate-950" colSpan={2}></td>
             </tr>
           </thead>
           <tbody>
             <tr className="h-12 font-black text-slate-800">
               <td className="border-2 border-slate-950 p-2 text-right leading-tight">{printSub.itemDescription}</td>
+              <td className="border-2 border-slate-950 p-2 text-right leading-tight">{printSub.locationDetails || '-'}</td>
               <td className="border-2 border-slate-950 font-mono">{printSub.levelElevation || '-'}</td>
-              <td className="border-2 border-slate-950">{printSub.executingContractor}</td>
               <td className="border-2 border-slate-950">{printSub.direction}</td>
               <td className="border-2 border-slate-950 font-mono">{printSub.length ? `${printSub.length} م` : '-'}</td>
               <td className="border-2 border-slate-950 font-mono">{printSub.areaArea ? `${printSub.areaArea} م٢` : '-'}</td>
-              <td className="border-2 border-slate-950 font-mono">{printSub.stationFrom}</td>
-              <td className="border-2 border-slate-950 font-mono">{printSub.stationTo}</td>
+              <td className="border-2 border-slate-950 font-mono text-[10px]">{printSub.inspectionDate}</td>
+              <td className="border-2 border-slate-950 font-mono text-[10px]">{printSub.inspectionTime}</td>
               <td className="border-2 border-slate-950 text-indigo-700">
                 {printSub.submissionCount === 1 && 'الأول'}
                 {printSub.submissionCount === 2 && 'الثاني (Re-2)'}
                 {printSub.submissionCount === 3 && 'الثالث (Re-3)'}
                 {printSub.submissionCount > 3 && `تكرار ${printSub.submissionCount}`}
-              </td>
-              <td className="border-2 border-slate-950 font-mono">
-                <div>{printSub.inspectionDate}</div>
-                <div className="text-[10px] text-slate-650 mt-0.5">{printSub.inspectionTime}</div>
               </td>
               <td className="border-2 border-slate-950 p-1 text-slate-600 font-medium text-[9.5px] leading-tight">
                 {printSub.remarks || 'مطابق أصول الصناعة'}
@@ -430,135 +445,6 @@ export default function SubmissionsTab({
             </tr>
           </tbody>
         </table>
-
-        {/* Detail Inspection Form Block Modeled on PDF 2 */}
-        <div className="border-4 border-slate-950 p-4 mb-4 page-break-avoid">
-          <div className="text-center font-black text-[12px] underline mb-4">
-            طلب إستلام أعمال (تفاصيل الاستمارة الهندسية المعتمدة لقطاع الطرق)
-          </div>
-
-          {/* Section: Work Type Grid (مع نوع الأعمال) */}
-          <div className="mb-4">
-            <span className="font-extrabold text-[11px] bg-slate-950 text-white px-2 py-0.5 ml-2">نوع الأعمال المراد استلامها:</span>
-            <div className="grid grid-cols-3 gap-y-2 mt-3 p-3 bg-slate-50 border border-slate-950 text-[10px]">
-              {(printSub.workTypes && printSub.workTypes.length > 0 ? printSub.workTypes : DEFAULT_WORK_TYPES).map((wt) => {
-                const checked = printSub.workTypes?.includes(wt);
-                return (
-                  <div key={wt} className="flex items-center gap-1.5">
-                    <div className={`w-3.5 h-3.5 border border-slate-950 rounded flex items-center justify-center font-bold font-mono text-[9px] ${checked ? 'bg-slate-900 text-white' : 'bg-transparent'}`}>
-                      {checked ? '✓' : ''}
-                    </div>
-                    <span className={checked ? 'font-black text-slate-900' : 'text-slate-600'}>{wt}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            {/* Section: Soil Type */}
-            <div className="border border-slate-950 p-3 bg-slate-50/50">
-              <span className="font-extrabold bg-slate-800 text-white px-2 py-0.5">نوع وحالة التربة:</span>
-              <div className="flex gap-4 mt-2 font-black">
-                {DEFAULT_SOIL_TYPES.map(st => {
-                  const active = printSub.soilType === st;
-                  return (
-                    <div key={st} className="flex items-center gap-1.5">
-                      <div className={`w-3.5 h-3.5 border-2 border-slate-900 rounded-full flex items-center justify-center text-[10px] ${active ? 'bg-slate-900' : ''}`}>
-                        {active && <span className="block w-1.5 h-1.5 bg-white rounded-full"></span>}
-                      </div>
-                      <span>{st}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Section: Visual Inspection */}
-            <div className="border border-slate-950 p-3 bg-slate-50/50">
-              <span className="font-extrabold bg-slate-800 text-white px-2 py-0.5">أعمال الفحص البصري بالموقع:</span>
-              <div className="flex gap-4 mt-2 font-black">
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded ${printSub.visualInspection === 'accepted' ? 'bg-emerald-100 text-emerald-900 border border-emerald-950' : 'opacity-40'}`}>
-                  ☑️ مقبول مبدئياً
-                </span>
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded ${printSub.visualInspection === 'rejected' ? 'bg-rose-100 text-rose-900 border border-slate-950 font-black' : 'opacity-40'}`}>
-                  ☒ مرفوض بالعين المجردة
-                </span>
-              </div>
-              {printSub.visualInspectionNotes && (
-                <p className="mt-2 text-[10px] text-rose-600 font-bold border-t border-slate-200 pt-1.5">ملاحظة: {printSub.visualInspectionNotes}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Section: Technical Works Matrix (وصف الأعمال) */}
-          <div className="mb-4">
-            <span className="font-extrabold text-[11px] bg-slate-950 text-white px-2 py-0.5">المعايير الهندسية الأربعة لوصف الأعمال وإثباتها:</span>
-            <table className="w-full border-collapse border border-slate-950 text-center mt-2.5">
-              <thead>
-                <tr className="bg-slate-100 font-extrabold h-8">
-                  <th className="border border-slate-950 w-2/5">المعيار الفني الهندسي والوصفي للعمل</th>
-                  <th className="border border-slate-950">مستوفى ومقبول</th>
-                  <th className="border border-slate-950">مستوفى بملاحظات</th>
-                  <th className="border border-slate-950">غير مستوفى / مرفوض</th>
-                  <th className="border border-slate-950">ملاحظات وقياسات الفاحص</th>
-                </tr>
-              </thead>
-              <tbody className="font-black">
-                {/* Row 1: Survey Levels */}
-                <tr className="h-8">
-                  <td className="border border-slate-950 text-right px-2 font-bold bg-slate-50">1- مناسيب الأعمال المساحية والطوبوغرافية</td>
-                  <td className="border border-slate-950">{printSub.workDetails?.surveyLevels === 'accepted' ? '✅' : ''}</td>
-                  <td className="border border-slate-950">{printSub.workDetails?.surveyLevels === 'accepted_with_remarks' ? '✔️' : ''}</td>
-                  <td className="border border-slate-950">{printSub.workDetails?.surveyLevels === 'rejected' ? '❌' : ''}</td>
-                  <td className="border border-slate-950 font-normal font-mono">{printSub.workDetails?.surveyLevels === 'pending' ? 'جاري الفحص الموقعي للميزان' : 'مطابق للوح'}</td>
-                </tr>
-                {/* Row 2: Material Suitability */}
-                <tr className="h-8">
-                  <td className="border border-slate-950 text-right px-2 font-bold bg-slate-50">2- صلاحية المواد ومطابقتها للمواصفات ومخدر السحق</td>
-                  <td className="border border-slate-900">{printSub.workDetails?.materialSuitability === 'accepted' ? '✅' : ''}</td>
-                  <td className="border border-slate-900">{printSub.workDetails?.materialSuitability === 'accepted_with_remarks' ? '✔️' : ''}</td>
-                  <td className="border border-slate-900">{printSub.workDetails?.materialSuitability === 'rejected' ? '❌' : ''}</td>
-                  <td className="border border-slate-900 font-normal">{printSub.workDetails?.materialSuitability === 'pending' ? 'انتظار الفحص المختبري' : 'تم مراجعة الشهادات المعتمدة'}</td>
-                </tr>
-                {/* Row 3: Operation Quality */}
-                <tr className="h-8">
-                  <td className="border border-slate-950 text-right px-2 font-bold bg-slate-50">3- أعمال التشغيل والدمك والرش بالماء للموقع</td>
-                  <td className="border border-slate-950">{printSub.workDetails?.executionOperations === 'accepted' ? '✅' : ''}</td>
-                  <td className="border border-slate-950">{printSub.workDetails?.executionOperations === 'accepted_with_remarks' ? '✔️' : ''}</td>
-                  <td className="border border-slate-950">{printSub.workDetails?.executionOperations === 'rejected' ? '❌' : ''}</td>
-                  <td className="border border-slate-950 font-normal text-[9.5px]">بنسبة دمك تزيد عن ٩٥٪ جاف قياسي</td>
-                </tr>
-                {/* Row 4: Section Width */}
-                <tr className="h-8">
-                  <td className="border border-slate-950 text-right px-2 font-bold bg-slate-50">4- عـرض القطاع المتصل من كتف الطريق لكتفه</td>
-                  <td className="border border-slate-950">{printSub.workDetails?.sectionWidth === 'accepted' ? '✅' : ''}</td>
-                  <td className="border border-slate-950">{printSub.workDetails?.sectionWidth === 'accepted_with_remarks' ? '✔️' : ''}</td>
-                  <td className="border border-slate-950">{printSub.workDetails?.sectionWidth === 'rejected' ? '❌' : ''}</td>
-                  <td className="border border-slate-950 font-mono font-bold text-center bg-indigo-50/50">
-                    {printSub.workDetails?.currentWidth ? `العرض الفعلي: ${printSub.workDetails.currentWidth} م` : '-'}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {/* Survey & Lab Logs */}
-          <div className="grid grid-cols-2 gap-4 mb-2">
-            <div className="border border-slate-950 p-2.5 bg-slate-50">
-              <span className="font-extrabold text-[10px] text-slate-800">ملاحظات ونتائج الرفع المساحي الموقعي:</span>
-              <p className="mt-1 font-black text-slate-700 min-h-12 border-t border-slate-200 pt-1">
-                {printSub.surveyNotes || '✓ تم مطابقة المناسيب مع نقاط الربط المرجعية بنجاح دون عجز.'}
-              </p>
-            </div>
-            <div className="border border-slate-950 p-2.5 bg-slate-50">
-              <span className="font-extrabold text-[10px] text-slate-800">ملاحظات مختبر ضبط الجودة والمعمل الفني:</span>
-              <p className="mt-1 font-black text-slate-700 min-h-12 border-t border-slate-200 pt-1">
-                {printSub.labNotes || '✓ موقف العينة مقبول هندسياً ومطابق للمواصفات الفنية العسكرية.'}
-              </p>
-            </div>
-          </div>
-        </div>
 
         {/* Section: Final Authorization Assessment Result */}
         <div className="border-4 border-slate-950 p-4 mb-6 bg-slate-50 rounded-lg">
@@ -572,7 +458,10 @@ export default function SubmissionsTab({
                 🟡 موافق بملاحظات مذكورة
               </span>
               <span className={`inline-flex items-center gap-1.5 ${printSub.status === 'Rejected' ? 'bg-[#dd2222] text-white border-2 border-slate-950 font-black rounded-lg px-3 py-1' : 'opacity-35'}`}>
-                🔴 مرفوض تماماً ويعاد تقديمه
+                🔴 مرفوض ويعاد تقديمه
+              </span>
+              <span className={`inline-flex items-center gap-1.5 ${printSub.status === 'SurveyRejected' ? 'bg-red-700 text-white border-2 border-slate-950 font-black rounded-lg px-3 py-1' : 'opacity-35'}`}>
+                🚩 مرفوض مساحياً
               </span>
             </div>
           </div>
@@ -638,21 +527,22 @@ export default function SubmissionsTab({
               <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
               <input 
                 type="text"
-                placeholder="البحث برقم الطلب، أو البند، أو الشركة المنفذة..."
+                placeholder="البحث برقم الطلب، أو البند، أو تفاصيل الموقع..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-4 pr-10 py-2 rounded-xl text-xs md:text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 transition text-right"
+                className="w-full pl-4 pr-10 py-2 rounded-xl text-xs md:text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-600/20 focus:border-purple-600 transition text-right"
               />
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-slate-500 text-xs font-semibold ml-1">تصفية الحالة:</span>
-              {['All', 'Pending', 'Approved', 'ApprovedWithRemarks', 'Rejected'].map(s => {
+              {['All', 'Pending', 'Approved', 'ApprovedWithRemarks', 'Rejected', 'SurveyRejected'].map(s => {
                 const label = 
                   s === 'All' ? 'الكل' :
                   s === 'Pending' ? 'قيد الانتظار' :
                   s === 'Approved' ? 'معتمد وموافق' :
-                  s === 'ApprovedWithRemarks' ? 'موافق بملاحظات' : 'مرفوض';
+                  s === 'ApprovedWithRemarks' ? 'موافق بملاحظات' :
+                  s === 'Rejected' ? 'مرفوض' : 'مرفوض مساحياً';
                 return (
                   <button
                     key={s}
@@ -675,7 +565,7 @@ export default function SubmissionsTab({
               className={`flex items-center gap-1.5 px-4 py-2 text-white font-extrabold text-xs md:text-sm rounded-xl shadow-md transition-all duration-250 self-start md:self-auto ${
                 userRole === 'viewer' 
                   ? 'bg-slate-400 cursor-not-allowed opacity-70' 
-                  : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/10 hover:-translate-y-0.5 active:translate-y-0'
+                  : 'bg-purple-700 hover:bg-purple-800 shadow-purple-600/10 hover:-translate-y-0.5 active:translate-y-0'
               }`}
             >
               <Plus size={16} />
@@ -684,92 +574,121 @@ export default function SubmissionsTab({
           </div>
 
           {/* Main Listing View */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-1">
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="font-extrabold text-sm md:text-base text-slate-900 flex items-center gap-2">
-                <FileCheck className="text-indigo-600" size={18} />
-                <span>جدول طلبات تسليمات الأعمال وفحص الجودة بالموقع</span>
-                <span className="bg-indigo-50 text-indigo-700 text-[11px] font-black px-2 py-0.5 rounded-md border border-indigo-100">
-                  {filteredSubs.length} سجلات
-                </span>
-              </h2>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden p-1">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/30">
+              <div className="border-r-4 border-purple-700 pr-4 py-1">
+                <h2 className="font-black text-base md:text-lg text-black flex items-center gap-3">
+                  <div className="p-1.5 bg-purple-700 rounded-lg shadow-md">
+                    <FileCheck className="text-white" size={18} />
+                  </div>
+                  <span>سجل طلبات تسليمات الأعمال وفحص الجودة بالموقع (IR / WIR)</span>
+                  <span className="bg-white text-purple-700 text-[11px] font-black px-3 py-1 rounded-full border border-purple-200 shadow-sm">
+                    {filteredSubs.length} سجلات معتمدة
+                  </span>
+                </h2>
+              </div>
             </div>
 
             {filteredSubs.length === 0 ? (
-              <div className="p-12 text-center">
-                <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-500 mx-auto mb-4 border border-indigo-150">
-                  <FileText size={26} />
+              <div className="p-20 text-center">
+                <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mx-auto mb-6 border border-slate-100 shadow-inner">
+                  <FileText size={40} />
                 </div>
-                <p className="text-slate-500 text-sm font-bold">لا توجد طلبات تسليم مسجلة حالياً.</p>
-                <p className="text-slate-400 text-xs mt-1">ابدأ بالنقر على "تسجيل طلب فحص / تسليم جديد" لإضافة أحدث الأعمال الموقعية.</p>
+                <p className="text-black text-lg font-black tracking-tight">لا توجد طلبات تسليم مسجلة حالياً</p>
+                <p className="text-slate-500 text-xs mt-2 max-w-xs mx-auto font-bold leading-relaxed">ابدأ بالنقر على الزر أعلاه لإضافة أول طلب فحص هندسي معتمد للمشروع</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-right border-collapse text-xs md:text-sm">
+                <table className="w-full text-right border-collapse">
                   <thead>
-                    <tr className="bg-slate-50 text-slate-600 font-extrabold h-11 border-b border-slate-200">
-                      <th className="pr-4 py-2 text-right">رقم الطلب</th>
-                      <th className="py-2 text-right">بند العمل</th>
-                      <th className="py-2 text-center">المحطة (الاستيشن)</th>
+                    <tr className="bg-black text-white font-black text-[11px] h-14 uppercase tracking-wider">
+                      <th className="pr-8 py-2 text-right">رقم الطلب (REF)</th>
+                      <th className="py-2 text-right">بند الأعمال والمواصفة</th>
+                      <th className="py-2 text-center">المهندس المسؤول</th>
                       <th className="py-2 text-center">الاتجاه</th>
-                      <th className="py-2 text-center">التاريخ</th>
-                      <th className="py-2 text-center">التكرار</th>
+                      <th className="py-2 text-center">تاريخ الفحص</th>
+                      <th className="py-2 text-center">تكرار التقديم</th>
                       <th className="py-2 text-center">الحالة النهائية</th>
-                      <th className="pl-4 py-2 text-center w-36">التحكم والطباعة</th>
+                      <th className="pl-8 py-2 text-center w-44">الإجراءات</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 font-black">
+                  <tbody className="divide-y divide-slate-100 font-bold text-black">
                     {filteredSubs.map((sub) => (
-                      <tr key={sub.id} className="h-14 hover:bg-slate-50/50 transition">
-                        <td className="pr-4 py-2 font-mono text-indigo-600">{sub.submissionNumber}</td>
-                        <td className="py-2 max-w-xs truncate font-bold text-slate-800">
-                          <div>{sub.itemDescription}</div>
-                          <div className="font-mono text-[9px] text-slate-400 font-normal mt-0.5">{sub.executingContractor}</div>
+                      <tr key={sub.id} className="group h-20 hover:bg-slate-50 transition-all duration-300">
+                        <td className="pr-8 py-2">
+                          <span className="font-mono text-black bg-white px-3 py-2 rounded-xl border-2 border-black text-xs font-black shadow-sm group-hover:bg-purple-50 group-hover:border-purple-700 group-hover:text-purple-700 transition-all">
+                            {sub.submissionNumber}
+                          </span>
                         </td>
-                        <td className="py-2 text-center font-mono text-slate-705">
-                          <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">من {sub.stationFrom}</span>
-                          <span className="mx-1 font-normal text-slate-400">إلى</span>
-                          <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{sub.stationTo}</span>
+                        <td className="py-2">
+                          <div className="max-w-xs space-y-1">
+                            <div className="text-[14px] font-black leading-tight text-black group-hover:text-purple-700 transition-colors">
+                              {sub.itemDescription}
+                            </div>
+                            {sub.locationDetails && (
+                              <div className="font-mono text-[10px] text-purple-700 font-bold flex items-center gap-1.5 bg-purple-50 w-fit px-2 py-0.5 rounded-md border border-purple-100">
+                                <MapPin size={10} className="text-purple-400" />
+                                {sub.locationDetails}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2 text-center text-[11px] text-slate-600 font-bold">
+                          {sub.engineerName}
                         </td>
                         <td className="py-2 text-center">
-                          <span className="text-[11px] font-extrabold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
+                          <span className="text-[11px] font-black text-black bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 group-hover:bg-purple-100 group-hover:border-purple-200 transition-colors">
                             {sub.direction}
                           </span>
                         </td>
-                        <td className="py-2 text-center font-mono text-slate-500">{sub.date}</td>
                         <td className="py-2 text-center">
-                          <span className="text-[10px] text-indigo-700 bg-indigo-50 font-black px-1.5 py-0.5 rounded-md border border-indigo-100/40">
-                            {sub.submissionCount === 1 ? 'الأولى' : `تكرار ${sub.submissionCount}`}
+                          <div className="flex flex-col items-center">
+                            <span className="font-mono text-xs text-black font-black">{sub.date}</span>
+                            <span className="text-[10px] text-slate-500 font-bold mt-1 flex items-center gap-1">
+                              <Clock size={10} />
+                              {sub.inspectionTime}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-2 text-center">
+                          <span className={`text-[10px] font-black px-3 py-1.5 rounded-lg border-2 shadow-sm ${
+                            sub.submissionCount > 1 
+                              ? 'bg-rose-50 text-rose-700 border-rose-200' 
+                              : 'bg-white text-black border-black group-hover:border-purple-700 group-hover:text-purple-700'
+                          }`}>
+                            {sub.submissionCount === 1 ? 'التقديم الأول' : `تكرار رقم ${sub.submissionCount}`}
                           </span>
                         </td>
-                        <td className="py-2 text-center">{getStatusBadge(sub.status)}</td>
-                        <td className="pl-4 py-2">
-                          <div className="flex items-center justify-center gap-1.5">
+                        <td className="py-2 text-center">
+                          {getStatusBadge(sub.status)}
+                        </td>
+                        <td className="pl-8 py-2">
+                          <div className="flex items-center justify-center gap-2.5">
                             <button
                               onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية تعديل الطلبات') : () => handleEditClick(sub)}
-                              className={`p-1.5 rounded-lg transition ${
+                              className={`p-2.5 rounded-xl transition-all shadow-sm border-2 ${
                                 userRole === 'viewer' 
-                                  ? 'text-slate-300 cursor-not-allowed' 
-                                  : 'text-slate-500 hover:text-indigo-600 hover:bg-indigo-50'
+                                  ? 'text-slate-300 border-slate-100 cursor-not-allowed bg-slate-50' 
+                                  : 'text-black bg-white border-black hover:text-purple-700 hover:border-purple-700 hover:shadow-lg active:scale-90'
                               }`}
                               title="تعديل تفاصيل الطلب"
                             >
-                              <Edit size={14} />
+                              <Edit size={16} />
                             </button>
                             <button
                               onClick={() => printDocument(sub)}
-                              className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                              className="p-2.5 bg-white border-2 border-black text-black hover:text-emerald-700 hover:border-emerald-600 rounded-xl transition-all shadow-sm hover:shadow-lg active:scale-90"
                               title="تصدير وطباعة طلب الفحص المعتمد"
                             >
-                              <Printer size={14} />
+                              <Printer size={16} />
                             </button>
                             {userRole === 'admin' && (
                               <button
                                 onClick={() => handleDelete(sub.id)}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                                className="p-2.5 bg-white border-2 border-black text-slate-400 hover:text-rose-600 hover:border-rose-600 rounded-xl transition-all shadow-sm hover:shadow-lg active:scale-90"
                                 title="حذف نهائياً"
                               >
-                                <Trash2 size={14} />
+                                <Trash2 size={16} />
                               </button>
                             )}
                           </div>
@@ -783,502 +702,380 @@ export default function SubmissionsTab({
           </div>
         </>
       ) : (
-        /* Edit / Add New Form View */
-        <form onSubmit={handleSave} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-5 space-y-6" id="sub-form">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-            <div className="flex items-center gap-2">
+        /* Unified Add/Edit Form Overlay Interface */
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md no-print animate-fade-in" dir="rtl">
+          <form onSubmit={handleSave} className="bg-white rounded-[2.5rem] border-2 border-black shadow-[0_30px_90px_rgba(0,0,0,0.5)] max-w-5xl w-full max-h-[90vh] overflow-y-auto font-sans animate-scale-up relative">
+            
+            {/* Form Header */}
+            <div className="sticky top-0 z-10 bg-slate-50 px-8 py-6 border-b-2 border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-purple-700 rounded-2xl shadow-xl shadow-purple-200">
+                  <FileCheck className="text-white" size={24} />
+                </div>
+                <div className="border-r-4 border-purple-700 pr-4">
+                  <h2 className="text-black font-black text-2xl tracking-tight">
+                    {isNew ? 'تسجيل طلب فحص / تسليم جديد' : `تعديل طلب تسليم جاري: ${submissionNumber}`}
+                  </h2>
+                  <p className="text-slate-500 text-[11px] font-bold mt-1">يرجى استكمال ومراجعة البيانات الفنية الموضحة أدناه بدقة هندسية</p>
+                </div>
+              </div>
               <button 
                 type="button"
-                onClick={() => { setIsEditing(false); setSelectedSub(null); }}
-                className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 transition ml-2"
+                onClick={() => { setIsEditing(false); setIsNew(false); setSelectedSub(null); }}
+                className="p-2 text-slate-400 hover:text-black hover:bg-white rounded-xl transition-all border border-transparent hover:border-slate-200"
               >
-                <ArrowRight size={18} />
+                <X size={28} />
               </button>
-              <h1 className="text-base md:text-lg font-black text-slate-900">
-                {isNew ? 'تسجيل وإرسال طلب تسليم وفحص أعمال جديد' : `تعديل طلب تسليم جاري: ${submissionNumber}`}
-              </h1>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-slate-500 text-xs font-bold">حالة الطلب:</span>
-              <select
-                value={status}
-                disabled={userRole === 'viewer'}
-                onChange={(e) => setStatus(e.target.value as any)}
-                className={`px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-black focus:outline-none focus:ring-2 focus:ring-indigo-600/20 transition-all duration-200 ${
-                  userRole === 'viewer'
-                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                    : 'bg-slate-50 text-indigo-700'
-                }`}
+
+            <div className="p-10 space-y-12">
+              {/* 0. Status Selection Section (At the Top) */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 border-r-4 border-purple-700 pr-4">
+                  <ShieldCheck className="text-purple-700" size={22} />
+                  <h3 className="font-black text-lg text-black">الحالة الفنية والقرار الهندسي للطلب</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-slate-50 p-6 rounded-3xl border-2 border-slate-100">
+                  {[
+                    { id: 'Pending', label: 'قيد الفحص والانتظار', color: 'bg-purple-500' },
+                    { id: 'Approved', label: 'معتمد وموافق كلياً', color: 'bg-emerald-500' },
+                    { id: 'ApprovedWithRemarks', label: 'موافق بملاحظات', color: 'bg-amber-500' },
+                    { id: 'Rejected', label: 'مرفوض ويعاد تقديمه', color: 'bg-rose-500' },
+                    { id: 'SurveyRejected', label: 'رفض مساحي', color: 'bg-red-600' }
+                  ].map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      disabled={userRole === 'viewer'}
+                      onClick={() => setStatus(s.id as any)}
+                      className={`flex items-center justify-center gap-3 py-5 rounded-2xl font-black text-sm transition-all border-2 ${
+                        status === s.id 
+                          ? `bg-black border-black text-white shadow-xl scale-[1.03]` 
+                          : `bg-white border-slate-200 text-slate-500 hover:border-purple-300 hover:text-purple-700`
+                      } ${userRole === 'viewer' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <div className={`w-3 h-3 rounded-full ${s.color} ${status === s.id ? 'ring-2 ring-white' : ''}`} />
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 1. Basic Project Data */}
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 border-r-4 border-purple-700 pr-4">
+                  <LayoutGrid className="text-purple-700" size={22} />
+                  <h3 className="font-black text-lg text-black">بيانات المشروع والعملية الأساسية</h3>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-black text-slate-500 mr-2 uppercase tracking-wider">رقم الاستمارة / الطلب:</label>
+                    <input 
+                      type="text" 
+                      value={submissionNumber}
+                      onChange={(e) => setSubmissionNumber(e.target.value)}
+                      placeholder="IR-202X-XXX"
+                      className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-mono font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-black text-slate-500 mr-2">تاريخ تقديم البيان:</label>
+                    <div className="relative">
+                      <input 
+                        type="date" 
+                        value={date}
+                        onChange={(e) => setDate(e.target.value)}
+                        className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-black text-slate-500 mr-2">رقم تكرار التقديم:</label>
+                    <select
+                      value={submissionCount}
+                      onChange={(e) => setSubmissionCount(Number(e.target.value))}
+                      className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm appearance-none"
+                    >
+                      <option value={1}>التقديم الأول (Original Submission)</option>
+                      <option value={2}>إعادة تقديم رقم 2</option>
+                      <option value={3}>إعادة تقديم رقم 3</option>
+                      <option value={4}>إعادة تقديم رقم 4</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Work Location and Details */}
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 border-r-4 border-purple-700 pr-4">
+                  <MapPin className="text-purple-700" size={22} />
+                  <h3 className="font-black text-lg text-black">موقع ونوع الأعمال المراد فحصها</h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="md:col-span-2 space-y-2">
+                    <label className="block text-[11px] font-black text-slate-500 mr-2 uppercase tracking-wider">وصف العمل / البند بالكامل:</label>
+                    <input 
+                      type="text" 
+                      value={itemDescription}
+                      onChange={(e) => setItemDescription(e.target.value)}
+                      placeholder="مثال: طبقة الأساس المساعد المدموكة..."
+                      className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-black text-slate-500 mr-2">المنسوب الفعلي (أو المرجع):</label>
+                    <input 
+                      type="text" 
+                      value={levelElevation}
+                      onChange={(e) => setLevelElevation(e.target.value)}
+                      placeholder="مثال: +42.000"
+                      className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2 bg-slate-50 p-6 rounded-3xl border-2 border-slate-100">
+                  <label className="block text-[11px] font-black text-slate-500 mr-2 uppercase tracking-wider">مكان وتفاصيل الأعمال المراد تسليمها (Station / Location Details):</label>
+                  <textarea 
+                    value={locationDetails}
+                    onChange={(e) => setLocationDetails(e.target.value)}
+                    placeholder="قم بكتابة المحطات أو الموضع الجغرافي أو أرقام البلاطات بدقة..."
+                    className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black outline-none transition-all shadow-sm min-h-[100px] resize-none"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-black text-slate-500 mr-2">الطول (م ط):</label>
+                    <input 
+                      type="text" 
+                      value={length}
+                      onChange={(e) => setLength(e.target.value)}
+                      className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-black text-slate-500 mr-2">المسطح (م٢):</label>
+                    <input 
+                      type="text" 
+                      value={areaArea}
+                      onChange={(e) => setAreaArea(e.target.value)}
+                      className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-black text-slate-500 mr-2">الاتجاه:</label>
+                    <select
+                      value={direction}
+                      onChange={(e) => setDirection(e.target.value as DirectionCategory)}
+                      className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm appearance-none"
+                    >
+                      <option value="شمال (North)">شمال (North)</option>
+                      <option value="جنوب (South)">جنوب (South)</option>
+                      <option value="شرق (East)">شرق (East)</option>
+                      <option value="غرب (West)">غرب (West)</option>
+                      <option value="شمال شرق">شمال شرق</option>
+                      <option value="شمال غرب">شمال غرب</option>
+                      <option value="جنوب شرق">جنوب شرق</option>
+                      <option value="جنوب غرب">جنوب غرب</option>
+                      <option value="قبلي">قبلي</option>
+                      <option value="بحرى">بحرى</option>
+                      <option value="اخرى">اخرى</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* NEW FIELDS ROW 1 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-100 p-6 rounded-3xl border border-slate-200">
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-black text-slate-500 mr-2">المهندس المسؤول:</label>
+                    <input type="text" value={engineerName} onChange={(e) => setEngineerName(e.target.value)} className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black outline-none transition-all shadow-sm" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-black text-slate-500 mr-2">المساح المسؤول:</label>
+                    <input type="text" value={surveyorName} onChange={(e) => setSurveyorName(e.target.value)} className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black outline-none transition-all shadow-sm" />
+                  </div>
+                </div>
+                
+                {/* NEW FIELDS ROW 2 */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 bg-slate-50 p-6 rounded-3xl border-2 border-slate-100">
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-black text-slate-500 mr-2">اعمال مساحية:</label>
+                    <select value={surveyStatus} onChange={(e) => setSurveyStatus(e.target.value as InspectionStatus)} className="w-full bg-white border-2 border-slate-200 rounded-2xl px-2 py-4 font-black text-black text-sm outline-none">
+                      <option value="none">بدون أعمال مساحية</option>
+                      <option value="accepted">مقبول</option>
+                      <option value="remarked">مقبول بملاحظات</option>
+                      <option value="rejected">مرفوض</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-black text-slate-500 mr-2">جودة واختبارات:</label>
+                    <select value={qualityStatus} onChange={(e) => setQualityStatus(e.target.value as InspectionStatus)} className="w-full bg-white border-2 border-slate-200 rounded-2xl px-2 py-4 font-black text-black text-sm outline-none">
+                      <option value="none">لا يوجد</option>
+                      <option value="accepted">مقبول</option>
+                      <option value="remarked">مقبول بملاحظات</option>
+                      <option value="rejected">مرفوض</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-black text-slate-500 mr-2">اعتماد استشاري:</label>
+                    <select value={consultantStatus} onChange={(e) => setConsultantStatus(e.target.value as ConsultantInspectionStatus)} className="w-full bg-white border-2 border-slate-200 rounded-2xl px-2 py-4 font-black text-black text-sm outline-none">
+                      <option value="accepted">مقبول</option>
+                      <option value="remarked">مقبول بملاحظات</option>
+                      <option value="rejected">مرفوض</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-black text-slate-500 mr-2">نوع الأعمال:</label>
+                    <select value={workCategory} onChange={(e) => setWorkCategory(e.target.value as WorkCategory)} className="w-full bg-white border-2 border-slate-200 rounded-2xl px-2 py-4 font-black text-black text-sm outline-none">
+                      <option value="مدنى">مدنى</option>
+                      <option value="كهربا">كهربا</option>
+                      <option value="معمارى">معمارى</option>
+                      <option value="أخرى">أخرى</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-black text-slate-500 mr-2">تاريخ الفحص المطلوب:</label>
+                    <input 
+                      type="date" 
+                      value={inspectionDate}
+                      onChange={(e) => setInspectionDate(e.target.value)}
+                      className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-black text-slate-500 mr-2">الميعاد / التوقيت المفضل:</label>
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        value={inspectionTime}
+                        onChange={(e) => setInspectionTime(e.target.value)}
+                        placeholder="12:00 م"
+                        className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm"
+                      />
+                      <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Footer Actions */}
+              <div className="flex flex-col md:flex-row items-center justify-end gap-4 pt-10 border-t-2 border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => { setIsEditing(false); setIsNew(false); setSelectedSub(null); }}
+                  className="w-full md:w-auto px-10 py-5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black rounded-2xl transition-all active:scale-95 border border-slate-200"
+                >
+                  إلغاء الأمر
+                </button>
+                <button
+                  type="submit"
+                  disabled={userRole === 'viewer'}
+                  className="w-full md:w-auto px-16 py-5 bg-black hover:bg-slate-900 text-white font-black rounded-2xl transition-all shadow-[0_10px_40px_rgba(0,0,0,0.2)] hover:-translate-y-1 active:translate-y-0 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Save size={20} />
+                  <span>{isNew ? 'حفظ الطلب الجديد' : 'حفظ التعديلات الفنية'}</span>
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Custom Confirmation Modal */}
+      {confirmState && confirmState.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md no-print animate-fade-in" dir="rtl">
+          <div className="bg-white rounded-3xl border-2 border-slate-200 shadow-[0_20px_50px_rgba(0,0,0,0.3)] max-w-md w-full overflow-hidden font-sans animate-scale-up">
+            {/* Modal Header - Matching Form Header Style */}
+            <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-700 rounded-lg shadow-md shadow-purple-200">
+                  <Trash2 className="text-white" size={20} />
+                </div>
+                <h3 className="text-black font-black text-lg">
+                  {confirmState.title}
+                </h3>
+              </div>
+              <button 
+                onClick={() => { setConfirmState(null); setDeleteCode(''); }}
+                className="text-slate-400 hover:text-black transition-colors"
               >
-                <option value="Pending">⏱️ قيد الفحص والانتظار</option>
-                <option value="Approved">✔️ موافق ومعتمد كلياً</option>
-                <option value="ApprovedWithRemarks">⚠️ معتمد مع عمل الملاحظات</option>
-                <option value="Rejected">❌ مرفوض ويعاد تقديمه</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Section A: Basic project metadata */}
-          <div className="space-y-4">
-            <h3 className="text-xs md:text-sm font-black text-slate-900 bg-slate-100 p-2.5 rounded-lg border-r-4 border-indigo-600 flex items-center gap-1.5">
-              <Building size={16} className="text-indigo-600" />
-              <span>بيانات المشروع والعملية الأساسية</span>
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-slate-700 font-extrabold text-[11px] mb-1">رقم الاستمارة / الطلب:</label>
-                <input 
-                  type="text"
-                  value={submissionNumber}
-                  onChange={(e) => setSubmissionNumber(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs md:text-sm bg-slate-50 font-mono font-black"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-extrabold text-[11px] mb-1">الشركة المنفذة:</label>
-                <input 
-                  type="text"
-                  value={executingContractor}
-                  onChange={(e) => setExecutingContractor(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs md:text-sm font-black"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-extrabold text-[11px] mb-1">تاريخ تقديم البيان:</label>
-                <input 
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs md:text-sm font-mono font-black"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-extrabold text-[11px] mb-1">رقم تكرار التقديم:</label>
-                <select
-                  value={submissionCount}
-                  onChange={(e) => setSubmissionCount(Number(e.target.value))}
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs md:text-sm font-black bg-white"
-                >
-                  <option value={1}>التقديم الأول (Original Submission)</option>
-                  <option value={2}>إعادة تقديم ثانية (Re-Submission 2)</option>
-                  <option value={3}>إعادة تقديم ثالثة (Re-Submission 3)</option>
-                  <option value={4}>إعادة تقديم رابعة (Re-Submission 4)</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Section B: Block Location & Target details */}
-          <div className="space-y-4">
-            <h3 className="text-xs md:text-sm font-black text-slate-900 bg-slate-100 p-2.5 rounded-lg border-r-4 border-indigo-600 flex items-center gap-1.5">
-              <MapPin size={16} className="text-indigo-600" />
-              <span>موضع ونوع الأعمال المراد فحصها</span>
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-slate-700 font-extrabold text-[11px] mb-1">وصف العمل / البند بالكامل:</label>
-                <input 
-                  type="text"
-                  value={itemDescription}
-                  onChange={(e) => setItemDescription(e.target.value)}
-                  placeholder="مثال: إطماء ميول وصندوق / توريد سن طبقة أساسية"
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs md:text-sm font-black"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-extrabold text-[11px] mb-1">المنسوب الفعلي (أو المرجع):</label>
-                <input 
-                  type="text"
-                  value={levelElevation}
-                  onChange={(e) => setLevelElevation(e.target.value)}
-                  placeholder="مثال: القبلي / منسوب قاع الحفر"
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs md:text-sm font-bold"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              <div>
-                <label className="block text-slate-700 font-extrabold text-[11px] mb-1">من محطة (الاستيشن):</label>
-                <input 
-                  type="text"
-                  value={stationFrom}
-                  onChange={(e) => setStationFrom(e.target.value)}
-                  placeholder="مثال: 41+780"
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs md:text-sm font-mono font-black"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-extrabold text-[11px] mb-1">إلى محطة (الاستيشن):</label>
-                <input 
-                  type="text"
-                  value={stationTo}
-                  onChange={(e) => setStationTo(e.target.value)}
-                  placeholder="مثال: 41+840"
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs md:text-sm font-mono font-black"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-extrabold text-[11px] mb-1">الطول بالمتر الخطي:</label>
-                <input 
-                  type="text"
-                  value={length}
-                  onChange={(e) => setLength(e.target.value)}
-                  placeholder="مثال: 40 م"
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs md:text-sm font-mono font-black"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-extrabold text-[11px] mb-1">المسطح بالمتر المربع:</label>
-                <input 
-                  type="text"
-                  value={areaArea}
-                  onChange={(e) => setAreaArea(e.target.value)}
-                  placeholder="مثال: 120 م٢"
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs md:text-sm font-mono font-black"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-extrabold text-[11px] mb-1">الاتجاه الجغرافي:</label>
-                <select
-                  value={direction}
-                  onChange={(e) => setDirection(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs md:text-sm font-black bg-white"
-                >
-                  <option value="القبلي">القبلي (قبلي)</option>
-                  <option value="البحري">البحري (بحري)</option>
-                  <option value="الرئيسي">اليمين الرئيسي</option>
-                  <option value="اليسار الفرعي">اليسار الفرعي</option>
-                </select>
-              </div>
+                <X size={24} />
+              </button>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-slate-700 font-extrabold text-[11px] mb-1">التاريخ المطلوب للفحص:</label>
-                <input 
-                  type="date"
-                  value={inspectionDate}
-                  onChange={(e) => setInspectionDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs md:text-sm font-mono font-black"
-                />
+            <div className="p-8 space-y-6">
+              {/* Section style like the form */}
+              <div className="border-r-4 border-purple-700 pr-4 py-1">
+                <p className="text-slate-900 text-sm font-black leading-relaxed">
+                  {confirmState.message}
+                </p>
               </div>
 
-              <div>
-                <label className="block text-slate-700 font-extrabold text-[11px] mb-1">الميعاد / التوقيت المفضل للفحص:</label>
-                <input 
-                  type="text"
-                  value={inspectionTime}
-                  onChange={(e) => setInspectionTime(e.target.value)}
-                  placeholder="مثال: 12:00 م"
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs md:text-sm font-black"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Section C: Project-wise specific options like workType & soilType */}
-          <div className="space-y-4">
-            <h3 className="text-xs md:text-sm font-black text-slate-900 bg-slate-100 p-2.5 rounded-lg border-r-4 border-indigo-600 flex items-center justify-between">
-              <span>الفحص والتدقيق الموقعي (خاص بالمشاريع)</span>
-              <span className="text-[10px] text-slate-400 font-bold">يمكنك تحديد خيارات الجودة أدناه</span>
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Checkboxes: Work Types */}
-              <div className="p-3 border border-slate-200 rounded-xl bg-slate-50/50 space-y-3">
-                <span className="block text-xs font-black text-indigo-700">توصيف عناصر الأعمال للفحص البصري:</span>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 h-48 overflow-y-auto pr-1">
-                  {workTypesList.map(type => {
-                    const checked = selectedWorkTypes.includes(type);
-                    return (
-                      <label key={type} className="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-slate-100 transition">
-                        <input 
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleWorkType(type)}
-                          className="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 rounded"
-                        />
-                        <span className="text-[11px] font-bold text-slate-700">{type}</span>
-                      </label>
-                    );
-                  })}
+              <div className="space-y-4 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] text-purple-700 font-black flex items-center gap-1.5 bg-purple-50 px-2 py-1 rounded-md border border-purple-100">
+                    <ShieldCheck size={12} />
+                    كود التحقق المطلوب:
+                  </span>
+                  <span className="text-2xl font-black tracking-widest text-black select-none opacity-80">
+                    {confirmState.randomCode}
+                  </span>
                 </div>
-                {/* Custom Work Type Adder */}
-                <div className="flex gap-2 border-t border-slate-250 pt-2">
+                
+                <div className="relative">
                   <input 
                     type="text"
-                    value={customWorkType}
-                    onChange={(e) => setCustomWorkType(e.target.value)}
-                    placeholder="إضافة نوع عمل مخصص للعملية..."
-                    className="flex-1 px-2 py-1 border border-slate-200 rounded text-xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddCustomWorkType}
-                    className="px-3 py-1 bg-indigo-600 text-white font-extrabold text-[11px] rounded hover:bg-indigo-700 transition"
-                  >
-                    أضف
-                  </button>
-                </div>
-              </div>
-
-              {/* Radios: Soil Type */}
-              <div className="p-3 border border-slate-200 rounded-xl bg-slate-50/50 space-y-4 flex flex-col justify-between">
-                <div>
-                  <span className="block text-xs font-black text-indigo-700 mb-2">نوع عينات التربة الحالية:</span>
-                  <div className="flex gap-4">
-                    {DEFAULT_SOIL_TYPES.map(st => (
-                      <label key={st} className="flex items-center gap-2 cursor-pointer">
-                        <input 
-                          type="radio"
-                          name="soilType"
-                          value={st}
-                          checked={selectedSoilType === st}
-                          onChange={(e) => setSelectedSoilType(e.target.value)}
-                          className="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <span className="text-xs font-bold text-slate-700">{st}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Visual inspection controls */}
-                <div className="border-t border-slate-200 pt-3">
-                  <label className="block text-xs font-black text-indigo-700 mb-2">أعمال الفحص البصري الفوري بالموقع:</label>
-                  <div className="flex gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input 
-                        type="radio"
-                        name="visualInspection"
-                        value="accepted"
-                        checked={visualInspection === 'accepted'}
-                        onChange={() => setVisualInspection('accepted')}
-                        className="w-3.5 h-3.5 text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <span className="text-xs font-bold text-slate-700">☑️ مقبول مبدئياً</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input 
-                        type="radio"
-                        name="visualInspection"
-                        value="rejected"
-                        checked={visualInspection === 'rejected'}
-                        onChange={() => setVisualInspection('rejected')}
-                        className="w-3.5 h-3.5 text-rose-600 focus:ring-rose-500"
-                      />
-                      <span className="text-xs font-bold text-slate-700">☒ مرفوض بالعين المجردة</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input 
-                        type="radio"
-                        name="visualInspection"
-                        value="pending"
-                        checked={visualInspection === 'pending'}
-                        onChange={() => setVisualInspection('pending')}
-                        className="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500"
-                      />
-                      <span className="text-xs font-bold text-slate-700">⏱️ قيد التفتيش</span>
-                    </label>
-                  </div>
-                  <input 
-                    type="text"
-                    value={visualInspectionNotes}
-                    onChange={(e) => setVisualInspectionNotes(e.target.value)}
-                    placeholder="ملاحظات وشروط الفحص البصري للموقع..."
-                    className="w-full mt-2 px-3 py-1.5 border border-slate-200 rounded-lg text-xs"
+                    value={deleteCode}
+                    onChange={(e) => setDeleteCode(e.target.value)}
+                    placeholder="أدخل الكود الموضح أعلاه"
+                    className="w-full bg-white border-2 border-black rounded-xl px-4 py-4 text-center font-black text-black text-xl outline-none focus:ring-4 focus:ring-purple-700/10 transition-all placeholder:text-slate-300 shadow-sm"
+                    autoFocus
                   />
                 </div>
+                <p className="text-[10px] text-slate-500 font-bold text-center">يرجى كتابة الكود بدقة لتأكيد الحذف النهائي</p>
               </div>
-            </div>
-          </div>
 
-          {/* Section D: Detailed Work Checklist (وصف الأعمال) */}
-          <div className="space-y-4">
-            <h3 className="text-xs md:text-sm font-black text-slate-900 bg-slate-100 p-2.5 rounded-lg border-r-4 border-indigo-600 flex items-center justify-between">
-              <span>الفحص الفني التفصيلي واستيفاء الشروط الموقعية للسلامة والجودة</span>
-              <span className="text-[10px] text-[#cc1111] font-black">أدخل تقييم الفحوصات الطوبوغرافية والهندسية</span>
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-3 p-3 bg-indigo-50/20 border border-indigo-100/50 rounded-xl">
-                <span className="block text-xs font-black text-indigo-800">1- طوبوغرافيا ومناسيب الأعمال المساحية:</span>
-                <select
-                  value={surveyLevels}
-                  onChange={(e) => setSurveyLevels(e.target.value as any)}
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs font-black bg-white"
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (deleteCode === confirmState.randomCode) {
+                      confirmState.onConfirm();
+                      setConfirmState(null);
+                      setDeleteCode('');
+                    } else {
+                      alert('عذراً، كود التحقق غير صحيح. يرجى إدخال الكود الموضح باللون الأسود أعلاه.');
+                    }
+                  }}
+                  className="py-4 bg-black hover:bg-slate-900 text-white text-sm font-black rounded-xl transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2"
                 >
-                  <option value="pending">⏱️ جاري الفحص والمطابقة</option>
-                  <option value="accepted">✅ مستوفى ومقبول تماماً</option>
-                  <option value="accepted_with_remarks">✔️ مستوفى بملاحظات طفيفة</option>
-                  <option value="rejected">❌ غير مستوفى / مرفوض</option>
-                </select>
-              </div>
-
-              <div className="space-y-3 p-3 bg-indigo-50/20 border border-indigo-100/50 rounded-xl">
-                <span className="block text-xs font-black text-indigo-800">2- صلاحية وتصاميم المواد الموردة وحالات المحجر:</span>
-                <select
-                  value={materialSuitability}
-                  onChange={(e) => setMaterialSuitability(e.target.value as any)}
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs font-black bg-white"
+                  <Trash2 size={16} />
+                  تأكيد الحذف
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirmState(null);
+                    setDeleteCode('');
+                  }}
+                  className="py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm font-black rounded-xl transition-all border border-slate-200 active:scale-95"
                 >
-                  <option value="pending">⏱️ جاري الفحص والاختيار</option>
-                  <option value="accepted">✅ مستوفى ومقبول تماماً</option>
-                  <option value="accepted_with_remarks">✔️ مستوفى بملاحظات طفيفة</option>
-                  <option value="rejected">❌ غير مستوفى / مرفوض</option>
-                </select>
-              </div>
-
-              <div className="space-y-3 p-3 bg-indigo-50/20 border border-indigo-100/50 rounded-xl">
-                <span className="block text-xs font-black text-indigo-800">3- جودة وخطوات التشغيل والرش بالماء والدمك:</span>
-                <select
-                  value={executionOperations}
-                  onChange={(e) => setExecutionOperations(e.target.value as any)}
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs font-black bg-white"
-                >
-                  <option value="pending">⏱️ جاري الفحص وسركي الدمك</option>
-                  <option value="accepted">✅ مستوفى ومقبول تماماً</option>
-                  <option value="accepted_with_remarks">✔️ مستوفى بملاحظات طفيفة</option>
-                  <option value="rejected">❌ غير مستوفى / مرفوض</option>
-                </select>
-              </div>
-
-              <div className="space-y-3 p-3 bg-indigo-50/20 border border-indigo-100/50 rounded-xl">
-                <span className="block text-xs font-black text-indigo-800">4- عـرض القطاع العرضي والتحقق الميداني:</span>
-                <div className="flex gap-2">
-                  <select
-                    value={sectionWidth}
-                    onChange={(e) => setSectionWidth(e.target.value as any)}
-                    className="flex-1 px-3 py-1.5 border border-slate-205 rounded-xl text-xs font-black bg-white"
-                  >
-                    <option value="pending">⏱️ جاري الفحص للقطاعات</option>
-                    <option value="accepted">✅ مستوفى ومقبول تماماً</option>
-                    <option value="accepted_with_remarks">✔️ مستوفى بملاحظات طفيفة</option>
-                    <option value="rejected">❌ غير مستوفى / مرفوض</option>
-                  </select>
-                  <input 
-                    type="text"
-                    value={currentWidth}
-                    onChange={(e) => setCurrentWidth(e.target.value)}
-                    placeholder="العرض الحالي (بالمتر)..."
-                    className="w-36 px-2 py-1 px-3 py-1.5 border border-slate-205 rounded-xl text-xs font-mono font-black"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-slate-700 font-extrabold text-[11px] mb-1">ملاحظات ونتائج الرفع المساحي الميداني:</label>
-                <textarea
-                  value={surveyNotes}
-                  onChange={(e) => setSurveyNotes(e.target.value)}
-                  placeholder="مثال: تم مراجعة المناسيب ومطابقتها بمحضر ميزان القامة..."
-                  className="w-full h-16 p-2 border border-slate-200 rounded-lg text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-extrabold text-[11px] mb-1">تقرير مختبر ضبط جودة المواد والتربة والمعمل:</label>
-                <textarea
-                  value={labNotes}
-                  onChange={(e) => setLabNotes(e.target.value)}
-                  placeholder="مثال: نتيجة الاختبار مقبولة بنسبة دمك أعلى من 95% جاف قياسي ومقاومة سحق..."
-                  className="w-full h-16 p-2 border border-slate-200 rounded-lg text-xs"
-                />
+                  إلغاء الأمر
+                </button>
               </div>
             </div>
           </div>
-
-          {/* Section E: Engineering Signatories */}
-          <div className="space-y-4">
-            <h3 className="text-xs md:text-sm font-black text-slate-900 bg-slate-100 p-2.5 rounded-lg border-r-4 border-indigo-600 flex items-center gap-1.5">
-              <User size={16} className="text-indigo-600" />
-              <span>المدراء والفاحصون المسجلون للتواقيع والاعتمادات</span>
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-slate-700 font-extrabold text-[11px] mb-1">مهندس الشركة المنفذة:</label>
-                <input 
-                  type="text"
-                  value={contractorEngineer}
-                  onChange={(e) => setContractorEngineer(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-extrabold text-[11px] mb-1">استشاري الأعمال المساحية:</label>
-                <input 
-                  type="text"
-                  value={surveyConsultant}
-                  onChange={(e) => setSurveyConsultant(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-extrabold text-[11px] mb-1">المهندس الاستشاري لضبط الجودة:</label>
-                <input 
-                  type="text"
-                  value={qaEngineer}
-                  onChange={(e) => setQaEngineer(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-extrabold text-[11px] mb-1">الاستشاري العام للمشروع:</label>
-                <input 
-                  type="text"
-                  value={generalConsultant}
-                  onChange={(e) => setGeneralConsultant(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-205 rounded-xl text-xs font-bold"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Form Actions Footer */}
-          <div className="border-t border-slate-100 pt-4 flex items-center justify-end gap-2.5">
-            <button
-              type="button"
-              onClick={() => { setIsEditing(false); setSelectedSub(null); }}
-              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-extrabold text-xs rounded-xl"
-            >
-              إلغاء وتراجع
-            </button>
-            <button
-              type={userRole === 'viewer' ? 'button' : 'submit'}
-              onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية حفظ التعديلات') : undefined}
-              className={`px-6 py-2 text-white font-extrabold text-xs rounded-xl shadow-md transition ${
-                userRole === 'viewer'
-                  ? 'bg-slate-400 cursor-not-allowed'
-                  : 'bg-indigo-600 hover:bg-indigo-700'
-              }`}
-            >
-              حفظ التفاصيل ومزامنة البيانات
-            </button>
-          </div>
-        </form>
+        </div>
       )}
     </div>
   );

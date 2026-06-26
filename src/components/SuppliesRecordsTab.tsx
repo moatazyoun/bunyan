@@ -290,8 +290,8 @@ export default function SuppliesRecordsTab({
       const queries = searchQuery.toLowerCase().trim().split(/\s+/);
       result = result.filter(r => {
         return queries.every(q => 
-          r.ticketNo.toLowerCase().includes(q) ||
-          r.truckPlate.toLowerCase().includes(q) ||
+          (r.ticketNo || '').toLowerCase().includes(q) ||
+          (r.truckPlate || '').toLowerCase().includes(q) ||
           (r.trailerPlate || '').toLowerCase().includes(q) ||
           (r.driverName || '').toLowerCase().includes(q) ||
           (r.notes || '').toLowerCase().includes(q)

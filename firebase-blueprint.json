@@ -80,9 +80,68 @@
         "payload": { "type": "object" }
       },
       "required": ["siteId", "backupDate", "createdAt", "payload"]
+    },
+    "HSEIncident": {
+      "title": "HSEIncident",
+      "description": "Health, Safety, and Environment Incident",
+      "type": "object",
+      "properties": {
+        "refNumber": { "type": "string" },
+        "projectId": { "type": "string" },
+        "date": { "type": "string" },
+        "description": { "type": "string" },
+        "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "type": { "type": "string", "enum": ["injury", "near_miss", "property_damage", "environmental"] },
+        "status": { "type": "string", "enum": ["active", "closed"] },
+        "reportedBy": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["refNumber", "projectId", "description", "status"]
+    },
+    "HSEAudit": {
+      "title": "HSEAudit",
+      "description": "Health, Safety, and Environment Audit",
+      "type": "object",
+      "properties": {
+        "refNumber": { "type": "string" },
+        "projectId": { "type": "string" },
+        "date": { "type": "string" },
+        "type": { "type": "string", "enum": ["ppe", "equipment", "fire_extinguisher"] },
+        "score": { "type": "number" },
+        "status": { "type": "string", "enum": ["passed", "failed", "needs_action"] },
+        "inspector": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["refNumber", "projectId", "score", "status"]
+    },
+    "HSEActivityLog": {
+      "title": "HSEActivityLog",
+      "description": "Audit log for HSE actions",
+      "type": "object",
+      "properties": {
+        "refNumber": { "type": "string" },
+        "action": { "type": "string" },
+        "module": { "type": "string" },
+        "performedBy": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "severity": { "type": "string" }
+      },
+      "required": ["refNumber", "action", "module"]
     }
   },
   "firestore": {
+    "/hse_incidents/{incidentId}": {
+      "schema": "HSEIncident",
+      "description": "Collection of HSE incidents"
+    },
+    "/hse_audits/{auditId}": {
+      "schema": "HSEAudit",
+      "description": "Collection of HSE audits"
+    },
+    "/hse_activity_logs/{logId}": {
+      "schema": "HSEActivityLog",
+      "description": "Audit logs for HSE actions"
+    },
     "/users/{username}": {
       "schema": "User",
       "description": "Collection of system management users"

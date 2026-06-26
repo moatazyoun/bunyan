@@ -63,7 +63,7 @@ export default function WarehouseDashboard({
   addAuditLog
 }: WarehouseDashboardProps) {
   // Navigation tabs
-  const [activeTab, setActiveTab] = useState<'strategy' | 'ledger' | 'mrir' | 'mrn' | 'audit'>('strategy');
+  const [activeTab, setActiveTab] = useState<'ledger' | 'mrir' | 'mrn' | 'audit'>('ledger');
 
   // Search & Filter state for live ledger
   const [searchTerm, setSearchTerm] = useState('');
@@ -520,61 +520,51 @@ export default function WarehouseDashboard({
     <div className="space-y-6" dir="rtl" id="smart-warehouse-module">
       
       {/* 1. Header with Gradient Accent */}
-      <header className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <header className="bg-white p-4 md:p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div className="absolute right-0 top-0 h-1 bg-gradient-to-l from-indigo-500 via-purple-500 to-pink-600 w-full" />
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-2xl flex items-center justify-center shadow-md">
-            <Boxes size={28} />
+        <div className="flex items-center gap-3 md:gap-4 w-full lg:w-auto">
+          <div className="w-10 h-10 md:w-14 md:h-14 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl md:rounded-2xl flex items-center justify-center shadow-md shrink-0">
+            <Boxes className="w-5 h-5 md:w-7 md:h-7" />
           </div>
-          <div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">إدارة المخازن والمستودعات الذكية</h1>
-            <p className="text-sm text-slate-500 font-medium mt-1">منظومة حوكمة سلاسل الإمداد، الجرد الفوري ومراقبة جودة حفظ المواد الفنية بالموقع</p>
+          <div className="min-w-0">
+            <h1 className="text-base md:text-2xl font-black text-slate-900 tracking-tight leading-snug">إدارة المخازن والمستودعات الذكية</h1>
+            <p className="text-[11px] md:text-sm text-slate-500 font-medium mt-0.5 leading-normal">منظومة حوكمة سلاسل الإمداد، الجرد الفوري ومراقبة جودة حفظ المواد الفنية بالموقع</p>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 w-full lg:w-auto">
           <button 
             onClick={() => setShowAddItemModal(true)}
-            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl flex items-center gap-2 transition shadow-xs"
+            className="px-3 py-2 md:px-4 md:py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] md:text-xs font-black rounded-xl flex items-center gap-1.5 transition shadow-xs"
           >
-            <Plus size={15} />
+            <Plus size={14} />
             <span>تكويد خامة جديدة</span>
           </button>
           
           <button 
             onClick={() => setShowMrirModal(true)}
-            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl flex items-center gap-2 transition shadow-xs"
+            className="px-3 py-2 md:px-4 md:py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] md:text-xs font-black rounded-xl flex items-center gap-1.5 transition shadow-xs"
           >
-            <ArrowDownLeft size={15} />
+            <ArrowDownLeft size={14} />
             <span>تسجيل استلام وفحص (MRIR)</span>
           </button>
 
           <button 
             onClick={() => setShowMrnModal(true)}
-            className="px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-black rounded-xl flex items-center gap-2 transition shadow-xs"
+            className="px-3 py-2 md:px-4 md:py-2.5 bg-orange-600 hover:bg-orange-700 text-white text-[11px] md:text-xs font-black rounded-xl flex items-center gap-1.5 transition shadow-xs"
           >
-            <ArrowUpRight size={15} />
+            <ArrowUpRight size={14} />
             <span>طلب صرف مواد للموقع (MRN)</span>
           </button>
         </div>
       </header>
 
       {/* 2. Interactive Navigation Tabs */}
-      <div className="flex overflow-x-auto gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shrink-0">
-        <button
-          onClick={() => setActiveTab('strategy')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-black transition whitespace-nowrap flex items-center gap-2 ${
-            activeTab === 'strategy' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:bg-white/50'
-          }`}
-        >
-          <Compass size={14} />
-          <span>الرؤية الإستراتيجية والدورة المخزنية</span>
-        </button>
-
+      <div className="flex overflow-x-auto gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shrink-0 scrollbar-none snap-x snap-mandatory">
         <button
           onClick={() => setActiveTab('ledger')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-black transition whitespace-nowrap flex items-center gap-2 ${
-            activeTab === 'ledger' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:bg-white/50'
+          className={`px-4 py-2.5 rounded-xl text-xs font-black transition whitespace-nowrap flex items-center gap-2 snap-center ${
+            activeTab === 'ledger' ? 'bg-white text-indigo-700 shadow-sm font-extrabold' : 'text-slate-600 hover:bg-white/50'
           }`}
         >
           <Layers size={14} />
@@ -583,8 +573,8 @@ export default function WarehouseDashboard({
 
         <button
           onClick={() => setActiveTab('mrir')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-black transition whitespace-nowrap flex items-center gap-2 ${
-            activeTab === 'mrir' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:bg-white/50'
+          className={`px-4 py-2.5 rounded-xl text-xs font-black transition whitespace-nowrap flex items-center gap-2 snap-center ${
+            activeTab === 'mrir' ? 'bg-white text-indigo-700 shadow-sm font-extrabold' : 'text-slate-600 hover:bg-white/50'
           }`}
         >
           <FileSignature size={14} />
@@ -593,8 +583,8 @@ export default function WarehouseDashboard({
 
         <button
           onClick={() => setActiveTab('mrn')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-black transition whitespace-nowrap flex items-center gap-2 ${
-            activeTab === 'mrn' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:bg-white/50'
+          className={`px-4 py-2.5 rounded-xl text-xs font-black transition whitespace-nowrap flex items-center gap-2 snap-center ${
+            activeTab === 'mrn' ? 'bg-white text-indigo-700 shadow-sm font-extrabold' : 'text-slate-600 hover:bg-white/50'
           }`}
         >
           <ClipboardList size={14} />
@@ -603,8 +593,8 @@ export default function WarehouseDashboard({
 
         <button
           onClick={() => setActiveTab('audit')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-black transition whitespace-nowrap flex items-center gap-2 ${
-            activeTab === 'audit' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:bg-white/50'
+          className={`px-4 py-2.5 rounded-xl text-xs font-black transition whitespace-nowrap flex items-center gap-2 snap-center ${
+            activeTab === 'audit' ? 'bg-white text-indigo-700 shadow-sm font-extrabold' : 'text-slate-600 hover:bg-white/50'
           }`}
         >
           <Scale size={14} />
@@ -658,153 +648,6 @@ export default function WarehouseDashboard({
       {/* 4. Tab Contents View */}
       <AnimatePresence mode="wait">
         
-        {/* TAB 1: STRATEGY & SOPS (The master text content requested by the user) */}
-        {activeTab === 'strategy' && (
-          <motion.div
-            key="strategy"
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
-            transition={{ duration: 0.25 }}
-            className="space-y-6"
-          >
-            {/* 1.1 Introduction */}
-            <section className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-              <h2 className="text-lg font-black text-slate-900 border-b pb-3 border-slate-100 flex items-center gap-2">
-                <Compass className="text-indigo-600" size={20} />
-                <span>المقدمة والرؤية الإستراتيجية لإدارة المواد وحفظ الأصول</span>
-              </h2>
-              <p className="text-xs text-slate-600 leading-relaxed text-justify">
-                تُعد إدارة المخازن والمستودعات العصب الرئيسي والمحرك الأساسي لتدفق السيولة النقدية والمواد الإنشائية في كبرى شركات المقاولات والهندسة المدنية. إن المواد المخزنة لا تُمثل مجرد بضاعة مادية بل هي <strong className="text-slate-900 font-black">أصل مالي إستراتيجي فوري وسرعة حركتها تحكم بشكل مباشر مؤشرات التدفق النقدي ومعدلات ربحية المشاريع</strong>. تهدف هذه المنظومة إلى حوكمة المخزون لضمان صفر هدر، وتحديد دقيق لتوقيتات الطلب بما يمنع توقف خلاطات الإسفلت أو تجميد معدات صب الخرسانة بالميدان، وهو ما يُترجم إلى استمرار عجلة الإنتاج اليومي للموقع بكل كفاءة وسلاسة.
-              </p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4">
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
-                  <h4 className="text-xs font-black text-indigo-700">١. صفر فاقد (Zero Waste)</h4>
-                  <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">منع تلف الرطوبة في مخازن الأسمنت والمواد الكيميائية وحفظ المواد طبقاً لكتالوجات المصنعين العالمية.</p>
-                </div>
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
-                  <h4 className="text-xs font-black text-indigo-700">٢. التتبع اللحظي الفعال</h4>
-                  <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">تحديث أرصدة المخازن كودياً بمحاضر الفحص والاستلام وربط الصرف بأذونات المهندسين والبرنامج الزمني.</p>
-                </div>
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
-                  <h4 className="text-xs font-black text-indigo-700">٣. تخفيض تكاليف التجميد</h4>
-                  <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">تجنب تكديس كميات فائضة تعطل السيولة المالية، وتطبيق نظرية التوريد الفوري JIT بمجرد تفعيل أنشطة الـ WBS.</p>
-                </div>
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
-                  <h4 className="text-xs font-black text-indigo-700">٤. إمداد مستمر دون توقف</h4>
-                  <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">ضمان وجود مخزون أمان فني كافٍ لمواجهة تغيرات سلاسل الإمداد العالمية وأزمات الأسعار الفجائية.</p>
-                </div>
-              </div>
-            </section>
-
-            {/* 1.2 Warehouse Operational Cycle */}
-            <section className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
-              <h2 className="text-lg font-black text-slate-900 border-b pb-3 border-slate-100 flex items-center gap-2">
-                <Truck className="text-emerald-600" size={20} />
-                <span>الدورة المخزنية القياسية وحوكمة الاستلام والصرف</span>
-              </h2>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                إن توثيق وضبط كل خطوة في دورة المواد يمثل صمام الأمان لمنع التسريب المالي والمادي. تخضع حركات المستودعات لدينا إلى ثلاثة بروتوكولات فنية صارمة:
-              </p>
-
-              <div className="space-y-4">
-                <div className="p-5 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-6 h-6 bg-emerald-600 text-white rounded-full flex items-center justify-center text-xs font-black">A</span>
-                    <h3 className="text-xs font-black text-slate-800">محاضر فحص واستلام المواد الميدانية (MRIR - Material Receiving & Inspection Report)</h3>
-                  </div>
-                  <p className="text-[11px] text-slate-600 mt-2 leading-relaxed text-justify pr-8">
-                    عند وصول شحنات الخامات للموقع من الموردين، يلتزم أمين المخزن بإنشاء مستند فحص فني بالتنسيق المباشر مع مهندس ضبط الجودة (QC Inspector). يتم مطابقة المواصفات ضد أمر الشراء (PO)، والتأكد من عدم تلف العبوات أو تعرض الأسمنت للرطوبة، أو التواء حديد التسليح. لا يتم قيد أي كمية بالرصيد الفعلي للمخازن إلا بعد توقيع محضر الاستلام مع كود طلب الفحص الهندسي المعتمد وتوقيع المهندس الفاحص.
-                  </p>
-                </div>
-
-                <div className="p-5 bg-indigo-50/50 border border-indigo-100 rounded-2xl">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-6 h-6 bg-indigo-600 text-white rounded-full flex items-center justify-center text-xs font-black">B</span>
-                    <h3 className="text-xs font-black text-slate-800">التكويد المعياري والتخزين الآمن المنظم</h3>
-                  </div>
-                  <p className="text-[11px] text-slate-600 mt-2 leading-relaxed text-justify pr-8">
-                    يتم تقسيم المخازن جغرافياً وهندسياً وفق طبيعة المواد؛ حيث تخصص مساحات مسقوفة ومجهزة ضد الرطوبة للمواد الكيميائية وخامات الأسمنت والدهانات، بينما تخزن كتل الانترلوك والبلدورات والركام الرملي في ساحات خارجية ممهدة وآمنة. يتم تزويد كل بند بكود فرعي معياري (SKU Code) يسهل الوصول إليه وتتبعه رقمياً، مما يسرع عمليات الصرف ويمنع خلط الخامات الإنشائية من رتب ومقاومات مختلفة.
-                  </p>
-                </div>
-
-                <div className="p-5 bg-orange-50/50 border border-orange-100 rounded-2xl">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-6 h-6 bg-orange-600 text-white rounded-full flex items-center justify-center text-xs font-black">C</span>
-                    <h3 className="text-xs font-black text-slate-800">أذونات صرف المواد والربط المالي (MRN - Material Requisition Note)</h3>
-                  </div>
-                  <p className="text-[11px] text-slate-600 mt-2 leading-relaxed text-justify pr-8">
-                    يمنع تماماً صرف أي كمية إسمنت أو حديد أو مواسير للميدان إلا بموجب إذن صرف رسمي موقع من مهندس التنفيذ ومدير المشروع، يوضح فيه البند الفرعي المستفيد في المقايسة التقديرية (BOQ Code) والنشاط المرتبط بالجدول الزمني. يساهم هذا الربط في رصد استهلاك كل مهندس ومقارنته بالمعدلات التصميمية المسموحة لردع الفاقد والهدر العشوائي بالموقع.
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            {/* 1.3 AI Powered Automation & RFID Tracking */}
-            <section className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
-              <h2 className="text-lg font-black text-slate-900 border-b pb-3 border-slate-100 flex items-center gap-2">
-                <Sparkles className="text-purple-600" size={20} />
-                <span>التحكم والأتمتة الرقمية المدعومة بالذكاء الاصطناعي</span>
-              </h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-slate-800 font-black">
-                    <Barcode className="text-indigo-600 animate-pulse" size={18} />
-                    <h4 className="text-xs">تتبع RFID والباركود المتقدم</h4>
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-relaxed text-justify">
-                    ربط الخامات الضخمة والمستوردة بملصقات ذكية لتسجيل حركتها بدقة عند الخروج والدخول من بوابات التخزين الرئيسية للمشاريع تلقائياً.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-slate-800 font-black">
-                    <TrendingUp className="text-emerald-600" size={18} />
-                    <h4 className="text-xs">التنبؤ التلقائي بنقاط إعادة الطلب (JIT)</h4>
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-relaxed text-justify">
-                    يحلل الذكاء الاصطناعي معدل الاستهلاك الفعلي للموقع ويتوقع زمن توريد الموردين (Lead Time)، ثم يحسب تلقائياً نقطة إعادة الطلب الفنية لتجنب توقف صب الخرسانات.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-slate-800 font-black">
-                    <Layers className="text-purple-600" size={18} />
-                    <h4 className="text-xs">التكامل مع برنامج المقايسات الفعلي (BOQ)</h4>
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-relaxed text-justify">
-                    مطابقة المسحوبات الفعلية للموقع مع جداول الكميات والأسعار المقدرة بالمقايسة، لكشف أي تجاوز غير مبرر في معدلات استهلاك الاسمنت والمعدن فوراً.
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            {/* 1.4 Waste Control & Scrap Mitigation */}
-            <section className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-              <h2 className="text-lg font-black text-slate-900 border-b pb-3 border-slate-100 flex items-center gap-2">
-                <ShieldAlert className="text-rose-600" size={20} />
-                <span>الرقابة، الجرد وتقليل فاقد الخامات بالمواقع</span>
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-slate-600 leading-relaxed">
-                <div className="space-y-2">
-                  <h4 className="font-black text-slate-800">١. الجرد الدوري والمستمر (Cycle Counting)</h4>
-                  <p className="text-justify">
-                    بدلاً من الجرد السنوي التقليدي الذي يوقف عجلة العمل، تطبق المنظومة سياسة الجرد المستمر العشوائي (Continuous Audits). يتم جرد أصناف مختلفة يومياً لضمان عدم وجود أي فروقات أو عجز مخزني بين دفاتر المحاسبة والواقع الفعلي بالموقع والتحقيق في المسببات بشكل فوري.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <h4 className="font-black text-slate-800">٢. إدارة الرواكد والكهنة والمواد الفائضة (Surplus Control)</h4>
-                  <p className="text-justify">
-                    عند انتهاء أحد بنود المشروع وحضور خامات فائضة، تتولى إدارة المستودعات التنسيق لإعادة توجيهها لمواقع العمل الأخرى للشركة بدلاً من تعرضها للتلف بالموقع القديم، أو يتم فرزها وبيع حديد الخردة وكهنة الأخشاب بمزاد دوري لتعظيم العائد والتدفق المالي للشركة.
-                  </p>
-                </div>
-              </div>
-            </section>
-          </motion.div>
-        )}
-
         {/* TAB 2: LIVE LEDGER & STOCK MANAGEMENT (Highly interactive React State) */}
         {activeTab === 'ledger' && (
           <motion.div
@@ -875,73 +718,127 @@ export default function WarehouseDashboard({
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-right border-collapse text-xs">
-                    <thead>
-                      <tr className="bg-slate-50 text-slate-500 font-black border-b border-slate-100">
-                        <th className="p-4">كود SKU المعتمد</th>
-                        <th className="p-4">وصف الخامة الفنية</th>
-                        <th className="p-4">التصنيف والفرع</th>
-                        <th className="p-4 text-center">الرصيد الفعلي الحالي</th>
-                        <th className="p-4 text-center">الحد الأدنى الفني</th>
-                        <th className="p-4">المستودع الرئيسي لحفظ الخامة</th>
-                        <th className="p-4 text-center">حالة مستوى الطلب</th>
-                        <th className="p-4 text-center">خيارات</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 font-bold">
-                      {filteredLedger.map(item => {
-                        const isUnderMin = item.currentStock <= item.minLimit;
-                        const isZero = item.currentStock === 0;
-
-                        return (
-                          <tr key={item.id} className="hover:bg-slate-50/40 transition">
-                            <td className="p-4 font-mono text-indigo-900">{item.code}</td>
-                            <td className="p-4 text-slate-900 max-w-xs font-black leading-relaxed">{item.name}</td>
-                            <td className="p-4 text-slate-600 font-medium">
-                              <span className="px-2 py-1 bg-slate-100 rounded-lg text-[10px]">
-                                {item.categoryAr || categoryMap[item.category]}
+                <>
+                  {/* Mobile Card List View */}
+                  <div className="block md:hidden divide-y divide-slate-100 bg-white overflow-hidden">
+                    {filteredLedger.map(item => {
+                      const isUnderMin = item.currentStock <= item.minLimit;
+                      const isZero = item.currentStock === 0;
+                      return (
+                        <div key={item.id} className="p-4 space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className="font-mono text-xs text-indigo-900 bg-indigo-50 px-2 py-0.5 rounded-lg">{item.code}</span>
+                            <span className="text-[10px] text-slate-500 font-bold bg-slate-100 px-2 py-0.5 rounded-lg">{item.warehouseName.replace('מ', 'م')}</span>
+                          </div>
+                          <div>
+                            <h5 className="text-xs font-black text-slate-900 leading-relaxed">{item.name}</h5>
+                            <p className="text-[10px] text-slate-400 mt-1">{item.categoryAr || categoryMap[item.category]}</p>
+                          </div>
+                          <div className="flex justify-between items-center pt-2 border-t border-slate-50 text-xs">
+                            <div>
+                              <span className="text-slate-400">الرصيد: </span>
+                              <span className="font-black text-slate-950 font-mono text-sm">{item.currentStock.toLocaleString()} {item.unit}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400">الحد الأدنى: </span>
+                              <span className="font-mono text-slate-600">{item.minLimit} {item.unit}</span>
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-center pt-2">
+                            {isZero ? (
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-red-100 text-red-800">
+                                منتهي تماماً (إعادة طلب فورية)
                               </span>
-                            </td>
-                            <td className="p-4 text-center font-mono text-slate-900 text-sm">
-                              {item.currentStock.toLocaleString()} <span className="text-[10px] text-slate-400 font-sans font-bold">{item.unit}</span>
-                            </td>
-                            <td className="p-4 text-center font-mono text-slate-500">
-                              {item.minLimit} {item.unit}
-                            </td>
-                            <td className="p-4 text-indigo-950 font-black">
-                              {item.warehouseName.replace('מ', 'م')}
-                            </td>
-                            <td className="p-4 text-center">
-                              {isZero ? (
-                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black inline-block bg-red-100 text-red-800">
-                                  منتهي تماماً (إعادة طلب فورية)
+                            ) : isUnderMin ? (
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 animate-pulse">
+                                حرج (تحت حد الأمان)
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800">
+                                رصيد آمن ومطابق فُنياً
+                              </span>
+                            )}
+                            <button
+                              onClick={() => handleDeleteItem(item.id)}
+                              className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-right border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-500 font-black border-b border-slate-100">
+                          <th className="p-4">كود SKU المعتمد</th>
+                          <th className="p-4">وصف الخامة الفنية</th>
+                          <th className="p-4">التصنيف والفرع</th>
+                          <th className="p-4 text-center">الرصيد الفعلي الحالي</th>
+                          <th className="p-4 text-center">الحد الأدنى الفني</th>
+                          <th className="p-4">المستودع الرئيسي لحفظ الخامة</th>
+                          <th className="p-4 text-center">حالة مستوى الطلب</th>
+                          <th className="p-4 text-center">خيارات</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-bold">
+                        {filteredLedger.map(item => {
+                          const isUnderMin = item.currentStock <= item.minLimit;
+                          const isZero = item.currentStock === 0;
+
+                          return (
+                            <tr key={item.id} className="hover:bg-slate-50/40 transition">
+                              <td className="p-4 font-mono text-indigo-900">{item.code}</td>
+                              <td className="p-4 text-slate-900 max-w-xs font-black leading-relaxed">{item.name}</td>
+                              <td className="p-4 text-slate-600 font-medium">
+                                <span className="px-2 py-1 bg-slate-100 rounded-lg text-[10px]">
+                                  {item.categoryAr || categoryMap[item.category]}
                                 </span>
-                              ) : isUnderMin ? (
-                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black inline-block bg-amber-100 text-amber-800 animate-pulse">
-                                  حرج (تحت حد الأمان)
-                                </span>
-                              ) : (
-                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black inline-block bg-emerald-100 text-emerald-800">
-                                  رصيد آمن ومطابق فُنياً
-                                </span>
-                              )}
-                            </td>
-                            <td className="p-4 text-center">
-                              <button
-                                onClick={() => handleDeleteItem(item.id)}
-                                className="p-1.5 text-rose-500 hover:text-rose-700 rounded-lg hover:bg-rose-50 transition"
-                                title="إلغاء تكويد المادة"
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                              </td>
+                              <td className="p-4 text-center font-mono text-slate-900 text-sm">
+                                {item.currentStock.toLocaleString()} <span className="text-[10px] text-slate-400 font-sans font-bold">{item.unit}</span>
+                              </td>
+                              <td className="p-4 text-center font-mono text-slate-500">
+                                {item.minLimit} {item.unit}
+                              </td>
+                              <td className="p-4 text-indigo-950 font-black">
+                                {item.warehouseName.replace('מ', 'م')}
+                              </td>
+                              <td className="p-4 text-center">
+                                {isZero ? (
+                                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black inline-block bg-red-100 text-red-800">
+                                    منتهي تماماً (إعادة طلب فورية)
+                                  </span>
+                                ) : isUnderMin ? (
+                                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black inline-block bg-amber-100 text-amber-800 animate-pulse">
+                                    حرج (تحت حد الأمان)
+                                  </span>
+                                ) : (
+                                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black inline-block bg-emerald-100 text-emerald-800">
+                                    رصيد آمن ومطابق فُنياً
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-4 text-center">
+                                <button
+                                  onClick={() => handleDeleteItem(item.id)}
+                                  className="p-1.5 text-rose-500 hover:text-rose-700 rounded-lg hover:bg-rose-50 transition"
+                                  title="إلغاء تكويد المادة"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
           </motion.div>
@@ -975,7 +872,42 @@ export default function WarehouseDashboard({
                 محاضر استلام المواد للمشاريع الحالية
               </div>
 
-              <div className="overflow-x-auto">
+              {/* Mobile Card List View */}
+              <div className="block md:hidden divide-y divide-slate-100 bg-white overflow-hidden">
+                {mrirLogs.map(log => (
+                  <div key={log.id} className="p-4 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="font-mono text-xs text-emerald-900 bg-emerald-50 px-2 py-0.5 rounded-lg">{log.code}</span>
+                      <span className="font-mono text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg">{log.itemCode}</span>
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-black text-slate-900 leading-relaxed">{log.itemName}</h5>
+                      <div className="flex justify-between items-center mt-1 text-[10px] text-slate-500">
+                        <span>المورد: {log.supplier}</span>
+                        <span>الفاحص: {log.inspector}</span>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-slate-50 text-xs">
+                      <div>
+                        <span className="text-slate-400">الكمية المقبولة: </span>
+                        <span className="font-black text-emerald-950 font-mono text-sm">{log.receivedQty.toLocaleString()}</span>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
+                        log.status === 'Approved' ? 'bg-emerald-100 text-emerald-800' :
+                        log.status === 'Rejected' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        {log.status === 'Approved' ? 'مقبول هندسياً ومقيد بالرصيد' : 'مرفوض ومحجوز'}
+                      </span>
+                    </div>
+                    {log.notes && (
+                      <p className="text-[10px] text-slate-500 leading-relaxed bg-slate-50 p-2 rounded-xl text-justify border border-slate-100">{log.notes}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-right border-collapse text-xs">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500 font-black border-b border-slate-100">
@@ -1044,7 +976,39 @@ export default function WarehouseDashboard({
                 سجل أذونات الصرف الفعلي
               </div>
 
-              <div className="overflow-x-auto">
+              {/* Mobile Card List View */}
+              <div className="block md:hidden divide-y divide-slate-100 bg-white overflow-hidden">
+                {mrnLogs.map(log => (
+                  <div key={log.id} className="p-4 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="font-mono text-xs text-orange-900 bg-orange-50 px-2 py-0.5 rounded-lg">{log.code}</span>
+                      <span className="font-mono text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg">{log.date}</span>
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-black text-slate-900 leading-relaxed">{log.itemName}</h5>
+                      <div className="flex justify-between items-center mt-1 text-[10px] text-slate-500">
+                        <span>كود الصنف: {log.itemCode}</span>
+                        <span>الطالب: {log.requester}</span>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-slate-50 text-xs">
+                      <div>
+                        <span className="text-slate-400">الكمية المنصرفة: </span>
+                        <span className="font-black text-orange-950 font-mono text-sm">{log.requestedQty.toLocaleString()}</span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800">
+                        تم الخصم والصرف بالموقع
+                      </span>
+                    </div>
+                    {log.purpose && (
+                      <p className="text-[10px] text-slate-500 leading-relaxed bg-slate-50 p-2 rounded-xl text-justify border border-slate-100">{log.purpose}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-right border-collapse text-xs">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500 font-black border-b border-slate-100">
@@ -1110,7 +1074,51 @@ export default function WarehouseDashboard({
                 سجل التسويات وحالة المطابقة الدفترية
               </div>
 
-              <div className="overflow-x-auto">
+              {/* Mobile Card List View */}
+              <div className="block md:hidden divide-y divide-slate-100 bg-white overflow-hidden">
+                {auditLogs.map(log => (
+                  <div key={log.id} className="p-4 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="font-mono text-xs text-indigo-900 bg-indigo-50 px-2 py-0.5 rounded-lg">{log.itemCode}</span>
+                      <span className="font-mono text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg">{log.date}</span>
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-black text-slate-900 leading-relaxed">{log.itemName}</h5>
+                      <div className="flex justify-between items-center mt-1 text-[10px] text-slate-500">
+                        <span>المسؤول: {log.auditor}</span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t border-slate-50 text-[11px]">
+                      <div>
+                        <span className="text-slate-400 block text-[10px]">دفتري:</span>
+                        <span className="font-black text-slate-900 font-mono">{log.systemQty.toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px]">فعلي:</span>
+                        <span className="font-black text-slate-900 font-mono">{log.physicalQty.toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px]">الفروقات:</span>
+                        <span className="font-mono">
+                          {log.discrepancy === 0 ? (
+                            <span className="text-emerald-600 font-bold">0</span>
+                          ) : log.discrepancy > 0 ? (
+                            <span className="text-emerald-600 font-black">+{log.discrepancy}</span>
+                          ) : (
+                            <span className="text-rose-600 font-black">{log.discrepancy}</span>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                    {log.actionTaken && (
+                      <p className="text-[10px] text-slate-500 leading-relaxed bg-slate-50 p-2 rounded-xl text-justify border border-slate-100">{log.actionTaken}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-right border-collapse text-xs">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500 font-black border-b border-slate-100">

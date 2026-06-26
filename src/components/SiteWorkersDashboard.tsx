@@ -110,6 +110,11 @@ export default function SiteWorkersDashboard({
   defaultTab?: 'workers' | 'settlements' | 'hr-strategy'
 }) {
   const [activeTab, setActiveTab] = useState<'workers' | 'settlements' | 'hr-strategy'>(defaultTab);
+
+  // Sync tab with defaultTab prop if it changes
+  useEffect(() => {
+    setActiveTab(defaultTab);
+  }, [defaultTab]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedWorkerType, setSelectedWorkerType] = useState<WorkerEmploymentType | 'all'>('all');
@@ -132,7 +137,10 @@ export default function SiteWorkersDashboard({
     phone2: '',
     whatsAppOn: 'none',
     governorate: 'القاهرة',
-    salaryTransferNo: ''
+    salaryTransferNo: '',
+    performanceRating: 3,
+    trainingCompleted: [],
+    hrNotes: ''
   });
 
   // Details Modal
@@ -335,7 +343,10 @@ export default function SiteWorkersDashboard({
       phone2: '',
       whatsAppOn: 'none',
       governorate: 'القاهرة',
-      salaryTransferNo: ''
+      salaryTransferNo: '',
+      performanceRating: 3,
+      trainingCompleted: [],
+      hrNotes: ''
     });
     setEditingWorker(null);
   };
@@ -496,15 +507,15 @@ export default function SiteWorkersDashboard({
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto w-full" dir="rtl" style={{ fontFamily: 'Inter, sans-serif' }}>
+    <div className="p-0 md:p-1 space-y-6 max-w-7xl mx-auto w-full" dir="rtl" style={{ fontFamily: 'Inter, sans-serif' }}>
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <div>
-          <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-            <Users className="text-indigo-600" />
-            إدارة العاملين بالموقع (اليوميات)
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="min-w-0">
+          <h2 className="text-base md:text-xl font-black text-slate-800 flex items-center gap-2">
+            <Users className="text-indigo-600 shrink-0" />
+            <span>إدارة العاملين بالموقع (اليوميات)</span>
           </h2>
-          <p className="text-sm text-slate-500 font-medium mt-1">حصر الحضور، الغياب، السلف، والسهرات وتصفية أجور العمالة المباشرة.</p>
+          <p className="text-[11px] md:text-sm text-slate-500 font-medium mt-0.5 leading-normal">حصر الحضور، الغياب، السلف، والسهرات وتصفية أجور العمالة المباشرة.</p>
         </div>
         <button
           onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية إضافة عاملين') : () => {
@@ -522,18 +533,22 @@ export default function SiteWorkersDashboard({
               phone2: '',
               whatsAppOn: 'none',
               governorate: 'القاهرة',
-              salaryTransferNo: ''
+              salaryTransferNo: '',
+              performanceRating: 3,
+              trainingCompleted: [],
+              hrNotes: ''
             });
             setShowWorkerModal(true);
           }}
           disabled={userRole === 'viewer'}
-          className={`px-5 py-2.5 rounded-xl font-bold text-sm shadow transition flex items-center gap-2 ${
+          className={`px-3.5 py-2 md:px-5 md:py-2.5 rounded-xl font-bold text-xs md:text-sm shadow transition flex items-center gap-1.5 shrink-0 ${
             userRole === 'viewer'
               ? 'bg-slate-300 text-slate-100 cursor-not-allowed'
               : 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer'
           }`}
         >
-          <UserPlus size={16} /> اضافة عامل جديد
+          <UserPlus size={15} />
+          <span>اضافة عامل جديد</span>
         </button>
       </div>
 
@@ -787,7 +802,10 @@ export default function SiteWorkersDashboard({
                           phone2: selectedWorker.phone2 || '',
                           whatsAppOn: selectedWorker.whatsAppOn || 'none',
                           governorate: selectedWorker.governorate || 'القاهرة',
-                          salaryTransferNo: selectedWorker.salaryTransferNo || ''
+                          salaryTransferNo: selectedWorker.salaryTransferNo || '',
+                          performanceRating: selectedWorker.performanceRating || 3,
+                          trainingCompleted: selectedWorker.trainingCompleted || [],
+                          hrNotes: selectedWorker.hrNotes || ''
                         }); 
                         setShowWorkerModal(true); 
                       }} 
@@ -851,6 +869,10 @@ export default function SiteWorkersDashboard({
                             {selectedWorker.phone2 || '-'}
                             {(selectedWorker.whatsAppOn === 'phone2' || selectedWorker.whatsAppOn === 'both') && <Check size={12} className="text-emerald-500" title="واتساب متاح" />}
                           </span>
+                        </div>
+                        <div className="bg-white border border-slate-100 p-3 rounded-2xl shadow-sm">
+                          <span className="block text-[10px] text-slate-400 font-extrabold mb-1">تقييم الأداء</span>
+                          <span className="text-sm font-black text-indigo-600">{selectedWorker.performanceRating || 3}/5</span>
                         </div>
                         <div className="bg-white border border-slate-100 p-3 rounded-2xl shadow-sm">
                           <span className="block text-[10px] text-slate-400 font-extrabold mb-1">تحويل الراتب</span>
@@ -968,9 +990,10 @@ export default function SiteWorkersDashboard({
                     </div>
                 
                     <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
-                      <table className="w-full text-right">
-                        {/* Table header and body content remains the same but inside this motion.div */}
-                        <thead className="bg-slate-100/50 text-[10px] font-black text-slate-500 sticky top-0 z-10">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-right min-w-[650px]">
+                          {/* Table header and body content remains the same but inside this motion.div */}
+                          <thead className="bg-slate-100/50 text-[10px] font-black text-slate-500 sticky top-0 z-10">
                           <tr>
                             <th className="p-3 rounded-r-xl">اليوم</th>
                             <th className="p-3">التاريخ</th>
@@ -1082,6 +1105,7 @@ export default function SiteWorkersDashboard({
                         </tbody>
                       </table>
                     </div>
+                    </div>
                   </motion.div>
                 )}
 
@@ -1166,46 +1190,48 @@ export default function SiteWorkersDashboard({
 
                     {/* Payments List */}
                     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                      <table className="w-full text-right text-[11px]">
-                        <thead className="bg-slate-50 border-b border-slate-100 text-slate-400 font-black">
-                          <tr>
-                            <th className="p-3">التاريخ</th>
-                            <th className="p-3">المبلغ</th>
-                            <th className="p-3">الطريقة</th>
-                            <th className="p-3">ملاحظات</th>
-                            <th className="p-3 text-left">إجراءات</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
-                          {salaryPayments.filter(p => p.workerId === selectedWorker.id).length === 0 ? (
-                            <tr><td colSpan={5} className="p-8 text-center text-slate-400 font-bold">لا يوجد دفعات مسجلة حتى الآن.</td></tr>
-                          ) : (
-                            salaryPayments.filter(p => p.workerId === selectedWorker.id).sort((a,b) => b.date.localeCompare(a.date)).map(p => (
-                              <tr key={p.id} className="hover:bg-slate-50/50 transition group">
-                                <td className="p-3 font-mono font-bold text-slate-700">{p.date}</td>
-                                <td className="p-3 font-black text-indigo-700 font-mono text-xs">{p.amount.toLocaleString()} ج.م</td>
-                                <td className="p-3">
-                                  <span className="px-1.5 py-0.5 bg-slate-100 rounded text-[9px] font-black">{p.paymentMethod}</span>
-                                </td>
-                                <td className="p-3 text-slate-500 font-medium">{p.notes || '-'}</td>
-                                <td className="p-3 text-left">
-                                 <button 
-                                  onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية حذف الدفعات') : () => handleDeletePayment(p.id)} 
-                                  disabled={userRole === 'viewer'}
-                                  className={`p-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100 ${
-                                    userRole === 'viewer'
-                                      ? 'text-slate-200 cursor-not-allowed'
-                                      : 'text-slate-300 hover:text-rose-500 hover:bg-rose-50 cursor-pointer'
-                                  }`}
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-right text-[11px] min-w-[500px]">
+                          <thead className="bg-slate-50 border-b border-slate-100 text-slate-400 font-black">
+                            <tr>
+                              <th className="p-3">التاريخ</th>
+                              <th className="p-3">المبلغ</th>
+                              <th className="p-3">الطريقة</th>
+                              <th className="p-3">ملاحظات</th>
+                              <th className="p-3 text-left">إجراءات</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50">
+                            {salaryPayments.filter(p => p.workerId === selectedWorker.id).length === 0 ? (
+                              <tr><td colSpan={5} className="p-8 text-center text-slate-400 font-bold">لا يوجد دفعات مسجلة حتى الآن.</td></tr>
+                            ) : (
+                              salaryPayments.filter(p => p.workerId === selectedWorker.id).sort((a,b) => b.date.localeCompare(a.date)).map(p => (
+                                <tr key={p.id} className="hover:bg-slate-50/50 transition group">
+                                  <td className="p-3 font-mono font-bold text-slate-700">{p.date}</td>
+                                  <td className="p-3 font-black text-indigo-700 font-mono text-xs">{p.amount.toLocaleString()} ج.م</td>
+                                  <td className="p-3">
+                                    <span className="px-1.5 py-0.5 bg-slate-100 rounded text-[9px] font-black">{p.paymentMethod}</span>
+                                  </td>
+                                  <td className="p-3 text-slate-500 font-medium">{p.notes || '-'}</td>
+                                  <td className="p-3 text-left">
+                                   <button 
+                                    onClick={userRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية حذف الدفعات') : () => handleDeletePayment(p.id)} 
+                                    disabled={userRole === 'viewer'}
+                                    className={`p-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100 ${
+                                      userRole === 'viewer'
+                                        ? 'text-slate-200 cursor-not-allowed'
+                                        : 'text-slate-300 hover:text-rose-500 hover:bg-rose-50 cursor-pointer'
+                                    }`}
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -1220,35 +1246,37 @@ export default function SiteWorkersDashboard({
                       <p className="text-[10px] text-slate-400 font-bold">هذه الحركات مسجلة تلقائياً من عمليات التصفية الأسبوعية أو العهد.</p>
                     </div>
                     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                      <table className="w-full text-right text-[11px]">
-                        <thead className="bg-slate-50 border-b border-slate-100 text-slate-400 font-black">
-                          <tr>
-                            <th className="p-3">التاريخ</th>
-                            <th className="p-3">البيان</th>
-                            <th className="p-3">طريقة الدفع</th>
-                            <th className="p-3 text-left">المبلغ</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {transactions.filter(tx => tx.recipient === selectedWorker.name && tx.type === 'spent').length === 0 ? (
-                            <tr><td colSpan={4} className="p-8 text-center text-slate-400 font-bold">لا يوجد مسحوبات مسجلة.</td></tr>
-                          ) : (
-                            transactions.filter(tx => tx.recipient === selectedWorker.name && tx.type === 'spent').sort((a,b) => b.date.localeCompare(a.date)).map(tx => (
-                              <tr key={tx.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition">
-                                <td className="p-3 font-mono">
-                                  <div>{tx.date}</div>
-                                  <div className="text-[9px] text-indigo-500 font-bold">Ref: {tx.id}</div>
-                                </td>
-                                <td className="p-3 font-bold text-slate-700">{tx.description}</td>
-                                <td className="p-3">
-                                  <span className="px-1.5 py-0.5 bg-slate-100 rounded text-[9px] font-black">{tx.paymentMethod}</span>
-                                </td>
-                                <td className="p-3 text-left font-black text-rose-600 font-mono">-{tx.amount} ج</td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-right text-[11px] min-w-[500px]">
+                          <thead className="bg-slate-50 border-b border-slate-100 text-slate-400 font-black">
+                            <tr>
+                              <th className="p-3">التاريخ</th>
+                              <th className="p-3">البيان</th>
+                              <th className="p-3">طريقة الدفع</th>
+                              <th className="p-3 text-left">المبلغ</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {transactions.filter(tx => tx.recipient === selectedWorker.name && tx.type === 'spent').length === 0 ? (
+                              <tr><td colSpan={4} className="p-8 text-center text-slate-400 font-bold">لا يوجد مسحوبات مسجلة.</td></tr>
+                            ) : (
+                              transactions.filter(tx => tx.recipient === selectedWorker.name && tx.type === 'spent').sort((a,b) => b.date.localeCompare(a.date)).map(tx => (
+                                <tr key={tx.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition">
+                                  <td className="p-3 font-mono">
+                                    <div>{tx.date}</div>
+                                    <div className="text-[9px] text-indigo-500 font-bold">Ref: {tx.id}</div>
+                                  </td>
+                                  <td className="p-3 font-bold text-slate-700">{tx.description}</td>
+                                  <td className="p-3">
+                                    <span className="px-1.5 py-0.5 bg-slate-100 rounded text-[9px] font-black">{tx.paymentMethod}</span>
+                                  </td>
+                                  <td className="p-3 text-left font-black text-rose-600 font-mono">-{tx.amount} ج</td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -1441,6 +1469,17 @@ export default function SiteWorkersDashboard({
                     />
                   </div>
                   <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-1 flex items-center gap-1 font-sans">تقييم الأداء (1-5)</label>
+                    <input 
+                      type="number"
+                      min={1}
+                      max={5}
+                      value={workerForm.performanceRating || 3} 
+                      onChange={e => setWorkerForm(prev => ({ ...prev, performanceRating: Number(e.target.value) }))} 
+                      className="w-full bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4 text-sm font-mono font-bold text-slate-100 focus:ring-4 focus:ring-indigo-500/10 outline-none focus:border-indigo-500 transition-all shadow-sm" 
+                    />
+                  </div>
+                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-1 flex items-center gap-1 font-sans">
                       المسمى الوظيفي <span className="text-rose-500">*</span>
                     </label>
@@ -1455,6 +1494,27 @@ export default function SiteWorkersDashboard({
                   </div>
                 </div>
 
+                <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-1 flex items-center gap-1 font-sans">الدورات التدريبية المكتملة (افصل بينها بفاصلة)</label>
+                    <input 
+                      type="text" 
+                      value={workerForm.trainingCompleted?.join(', ') || ''} 
+                      onChange={e => setWorkerForm(prev => ({ ...prev, trainingCompleted: e.target.value.split(',').map(s => s.trim()) }))} 
+                      className="w-full bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4 text-sm font-bold text-slate-100 focus:ring-4 focus:ring-indigo-500/10 outline-none focus:border-indigo-500 transition-all shadow-sm" 
+                      placeholder="مثال: دورة أمن وسلامة، دورة رصف" 
+                    />
+                </div>
+                
+                <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-1 flex items-center gap-1 font-sans">ملاحظات الموارد البشرية</label>
+                    <textarea 
+                      value={workerForm.hrNotes || ''} 
+                      onChange={e => setWorkerForm(prev => ({ ...prev, hrNotes: e.target.value }))} 
+                      className="w-full bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4 text-sm font-bold text-slate-100 focus:ring-4 focus:ring-indigo-500/10 outline-none focus:border-indigo-500 transition-all shadow-sm" 
+                      placeholder="ملاحظات إدارية..." 
+                    />
+                </div>
+                
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-1 flex items-center gap-1 font-sans">فئة التوظيف</label>
