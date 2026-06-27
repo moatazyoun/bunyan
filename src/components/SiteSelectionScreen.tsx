@@ -732,7 +732,7 @@ export default function SiteSelectionScreen({
               <div className="flex items-center gap-3 p-3.5 bg-rose-50/75 border border-rose-150 rounded-2xl w-full">
                 <AlertTriangle className="text-rose-600 shrink-0 animate-pulse" size={18} />
                 <div className="text-right">
-                  <p className="font-extrabold text-xs text-rose-700">وضع العمل بدون إنترنت (أوفلاين) نشط</p>
+                  <p className="font-extrabold text-xs text-rose-700">وضع العمل بدون اتصال نشط</p>
                   <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed font-semibold">
                     تم إيقاف إضافة أو تعديل الهياكل التنظيمية أو الفروع مؤقتاً لحماية الاتساق السحابي لحين إعادة الاتصال.
                   </p>

@@ -42,6 +42,7 @@ interface SubmissionsTabProps {
   userRole?: string;
   userNameAr?: string;
   addAuditLog?: (action: string, module: string, details: string) => void;
+  workers?: any[];
 }
 
 const DEFAULT_WORK_TYPES = [
@@ -70,7 +71,8 @@ export default function SubmissionsTab({
   setSubmissions,
   userRole,
   userNameAr,
-  addAuditLog
+  addAuditLog,
+  workers = []
 }: SubmissionsTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -703,291 +705,347 @@ export default function SubmissionsTab({
         </>
       ) : (
         /* Unified Add/Edit Form Overlay Interface */
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md no-print animate-fade-in" dir="rtl">
-          <form onSubmit={handleSave} className="bg-white rounded-[2.5rem] border-2 border-black shadow-[0_30px_90px_rgba(0,0,0,0.5)] max-w-5xl w-full max-h-[90vh] overflow-y-auto font-sans animate-scale-up relative">
-            
-            {/* Form Header */}
-            <div className="sticky top-0 z-10 bg-slate-50 px-8 py-6 border-b-2 border-slate-200 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-purple-700 rounded-2xl shadow-xl shadow-purple-200">
-                  <FileCheck className="text-white" size={24} />
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md no-print animate-fade-in animate-duration-300" dir="rtl">
+          <div className="bg-white rounded-[32px] w-full max-w-5xl shadow-2xl flex overflow-hidden min-h-[620px] max-h-[92vh]">
+            {/* Left side: Main Content & Inputs */}
+            <div className="flex-1 p-10 flex flex-col justify-between overflow-y-auto">
+              <div>
+                {/* Header inside left panel */}
+                <div className="flex justify-between items-center mb-8 pb-4 border-b border-slate-100">
+                  <h3 className="font-black text-2xl text-slate-900">
+                    {isNew ? 'إضافة طلب جديد' : `تعديل الطلب: ${submissionNumber}`}
+                  </h3>
+                  <button 
+                    type="button"
+                    onClick={() => { setIsEditing(false); setIsNew(false); setSelectedSub(null); }} 
+                    className="text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    <X size={24} />
+                  </button>
                 </div>
-                <div className="border-r-4 border-purple-700 pr-4">
-                  <h2 className="text-black font-black text-2xl tracking-tight">
-                    {isNew ? 'تسجيل طلب فحص / تسليم جديد' : `تعديل طلب تسليم جاري: ${submissionNumber}`}
-                  </h2>
-                  <p className="text-slate-500 text-[11px] font-bold mt-1">يرجى استكمال ومراجعة البيانات الفنية الموضحة أدناه بدقة هندسية</p>
-                </div>
-              </div>
-              <button 
-                type="button"
-                onClick={() => { setIsEditing(false); setIsNew(false); setSelectedSub(null); }}
-                className="p-2 text-slate-400 hover:text-black hover:bg-white rounded-xl transition-all border border-transparent hover:border-slate-200"
-              >
-                <X size={28} />
-              </button>
-            </div>
 
-            <div className="p-10 space-y-12">
-              {/* 0. Status Selection Section (At the Top) */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 border-r-4 border-purple-700 pr-4">
-                  <ShieldCheck className="text-purple-700" size={22} />
-                  <h3 className="font-black text-lg text-black">الحالة الفنية والقرار الهندسي للطلب</h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-slate-50 p-6 rounded-3xl border-2 border-slate-100">
-                  {[
-                    { id: 'Pending', label: 'قيد الفحص والانتظار', color: 'bg-purple-500' },
-                    { id: 'Approved', label: 'معتمد وموافق كلياً', color: 'bg-emerald-500' },
-                    { id: 'ApprovedWithRemarks', label: 'موافق بملاحظات', color: 'bg-amber-500' },
-                    { id: 'Rejected', label: 'مرفوض ويعاد تقديمه', color: 'bg-rose-500' },
-                    { id: 'SurveyRejected', label: 'رفض مساحي', color: 'bg-red-600' }
-                  ].map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      disabled={userRole === 'viewer'}
-                      onClick={() => setStatus(s.id as any)}
-                      className={`flex items-center justify-center gap-3 py-5 rounded-2xl font-black text-sm transition-all border-2 ${
-                        status === s.id 
-                          ? `bg-black border-black text-white shadow-xl scale-[1.03]` 
-                          : `bg-white border-slate-200 text-slate-500 hover:border-purple-300 hover:text-purple-700`
-                      } ${userRole === 'viewer' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      <div className={`w-3 h-3 rounded-full ${s.color} ${status === s.id ? 'ring-2 ring-white' : ''}`} />
-                      {s.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* 1. Basic Project Data */}
-              <div className="space-y-6">
-                <div className="flex items-center gap-3 border-r-4 border-purple-700 pr-4">
-                  <LayoutGrid className="text-purple-700" size={22} />
-                  <h3 className="font-black text-lg text-black">بيانات المشروع والعملية الأساسية</h3>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-2">
-                    <label className="block text-[11px] font-black text-slate-500 mr-2 uppercase tracking-wider">رقم الاستمارة / الطلب:</label>
-                    <input 
-                      type="text" 
-                      value={submissionNumber}
-                      onChange={(e) => setSubmissionNumber(e.target.value)}
-                      placeholder="IR-202X-XXX"
-                      className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-mono font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-[11px] font-black text-slate-500 mr-2">تاريخ تقديم البيان:</label>
-                    <div className="relative">
-                      <input 
-                        type="date" 
-                        value={date}
-                        onChange={(e) => setDate(e.target.value)}
-                        className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm"
-                        required
-                      />
+                <form id="submission-form" onSubmit={handleSave} className="space-y-8">
+                  {/* Section 1: الأطراف والبند */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 mb-4 text-xs font-black text-[#8676FF]">
+                      <span className="text-lg font-black">|</span>
+                      <span>المقاول والبند</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-xs font-black text-slate-400 mb-2 mr-1">نوع الأعمال / المادة *</label>
+                        <select 
+                          value={workCategory} 
+                          onChange={(e) => setWorkCategory(e.target.value as WorkCategory)} 
+                          className="w-full bg-white border border-slate-200 rounded-[20px] py-4 px-5 text-sm font-bold text-slate-700 focus:border-[#C8C2F5] focus:ring-1 focus:ring-[#C8C2F5] transition appearance-none cursor-pointer outline-none"
+                        >
+                          <option value="مدنى">مدنى</option>
+                          <option value="كهربا">كهربا</option>
+                          <option value="معمارى">معمارى</option>
+                          <option value="أخرى">أخرى</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black text-slate-400 mb-2 mr-1">المهندس المسؤول / المقاول *</label>
+                        <select 
+                          value={engineerName} 
+                          onChange={(e) => setEngineerName(e.target.value)} 
+                          className="w-full bg-white border border-slate-200 rounded-[20px] py-4 px-5 text-sm font-bold text-slate-700 focus:border-[#C8C2F5] focus:ring-1 focus:ring-[#C8C2F5] transition appearance-none cursor-pointer outline-none"
+                          required
+                        >
+                          <option value="">-- اختر المهندس / المقاول --</option>
+                          {engineerName && !workers.some(w => w.name === engineerName) && (
+                            <option value={engineerName}>{engineerName}</option>
+                          )}
+                          {workers.map(w => (
+                            <option key={w.id} value={w.name}>{w.name} - {w.jobTitle}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="block text-[11px] font-black text-slate-500 mr-2">رقم تكرار التقديم:</label>
-                    <select
-                      value={submissionCount}
-                      onChange={(e) => setSubmissionCount(Number(e.target.value))}
-                      className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm appearance-none"
-                    >
-                      <option value={1}>التقديم الأول (Original Submission)</option>
-                      <option value={2}>إعادة تقديم رقم 2</option>
-                      <option value={3}>إعادة تقديم رقم 3</option>
-                      <option value={4}>إعادة تقديم رقم 4</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
 
-              {/* 2. Work Location and Details */}
-              <div className="space-y-6">
-                <div className="flex items-center gap-3 border-r-4 border-purple-700 pr-4">
-                  <MapPin className="text-purple-700" size={22} />
-                  <h3 className="font-black text-lg text-black">موقع ونوع الأعمال المراد فحصها</h3>
-                </div>
+                  {/* Section 2: تفاصيل الموقع */}
+                  <div className="space-y-4 pt-4">
+                    <div className="flex items-center gap-2 mb-4 text-xs font-black text-teal-500">
+                      <span className="text-lg font-black">|</span>
+                      <span>تفاصيل الموقع</span>
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="md:col-span-2 space-y-2">
-                    <label className="block text-[11px] font-black text-slate-500 mr-2 uppercase tracking-wider">وصف العمل / البند بالكامل:</label>
-                    <input 
-                      type="text" 
-                      value={itemDescription}
-                      onChange={(e) => setItemDescription(e.target.value)}
-                      placeholder="مثال: طبقة الأساس المساعد المدموكة..."
-                      className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-[11px] font-black text-slate-500 mr-2">المنسوب الفعلي (أو المرجع):</label>
-                    <input 
-                      type="text" 
-                      value={levelElevation}
-                      onChange={(e) => setLevelElevation(e.target.value)}
-                      placeholder="مثال: +42.000"
-                      className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2 bg-slate-50 p-6 rounded-3xl border-2 border-slate-100">
-                  <label className="block text-[11px] font-black text-slate-500 mr-2 uppercase tracking-wider">مكان وتفاصيل الأعمال المراد تسليمها (Station / Location Details):</label>
-                  <textarea 
-                    value={locationDetails}
-                    onChange={(e) => setLocationDetails(e.target.value)}
-                    placeholder="قم بكتابة المحطات أو الموضع الجغرافي أو أرقام البلاطات بدقة..."
-                    className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black outline-none transition-all shadow-sm min-h-[100px] resize-none"
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-2">
-                    <label className="block text-[11px] font-black text-slate-500 mr-2">الطول (م ط):</label>
-                    <input 
-                      type="text" 
-                      value={length}
-                      onChange={(e) => setLength(e.target.value)}
-                      className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-[11px] font-black text-slate-500 mr-2">المسطح (م٢):</label>
-                    <input 
-                      type="text" 
-                      value={areaArea}
-                      onChange={(e) => setAreaArea(e.target.value)}
-                      className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-[11px] font-black text-slate-500 mr-2">الاتجاه:</label>
-                    <select
-                      value={direction}
-                      onChange={(e) => setDirection(e.target.value as DirectionCategory)}
-                      className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm appearance-none"
-                    >
-                      <option value="شمال (North)">شمال (North)</option>
-                      <option value="جنوب (South)">جنوب (South)</option>
-                      <option value="شرق (East)">شرق (East)</option>
-                      <option value="غرب (West)">غرب (West)</option>
-                      <option value="شمال شرق">شمال شرق</option>
-                      <option value="شمال غرب">شمال غرب</option>
-                      <option value="جنوب شرق">جنوب شرق</option>
-                      <option value="جنوب غرب">جنوب غرب</option>
-                      <option value="قبلي">قبلي</option>
-                      <option value="بحرى">بحرى</option>
-                      <option value="اخرى">اخرى</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* NEW FIELDS ROW 1 */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-100 p-6 rounded-3xl border border-slate-200">
-                  <div className="space-y-2">
-                    <label className="block text-[11px] font-black text-slate-500 mr-2">المهندس المسؤول:</label>
-                    <input type="text" value={engineerName} onChange={(e) => setEngineerName(e.target.value)} className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black outline-none transition-all shadow-sm" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-[11px] font-black text-slate-500 mr-2">المساح المسؤول:</label>
-                    <input type="text" value={surveyorName} onChange={(e) => setSurveyorName(e.target.value)} className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black outline-none transition-all shadow-sm" />
-                  </div>
-                </div>
-                
-                {/* NEW FIELDS ROW 2 */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 bg-slate-50 p-6 rounded-3xl border-2 border-slate-100">
-                  <div className="space-y-2">
-                    <label className="block text-[11px] font-black text-slate-500 mr-2">اعمال مساحية:</label>
-                    <select value={surveyStatus} onChange={(e) => setSurveyStatus(e.target.value as InspectionStatus)} className="w-full bg-white border-2 border-slate-200 rounded-2xl px-2 py-4 font-black text-black text-sm outline-none">
-                      <option value="none">بدون أعمال مساحية</option>
-                      <option value="accepted">مقبول</option>
-                      <option value="remarked">مقبول بملاحظات</option>
-                      <option value="rejected">مرفوض</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-[11px] font-black text-slate-500 mr-2">جودة واختبارات:</label>
-                    <select value={qualityStatus} onChange={(e) => setQualityStatus(e.target.value as InspectionStatus)} className="w-full bg-white border-2 border-slate-200 rounded-2xl px-2 py-4 font-black text-black text-sm outline-none">
-                      <option value="none">لا يوجد</option>
-                      <option value="accepted">مقبول</option>
-                      <option value="remarked">مقبول بملاحظات</option>
-                      <option value="rejected">مرفوض</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-[11px] font-black text-slate-500 mr-2">اعتماد استشاري:</label>
-                    <select value={consultantStatus} onChange={(e) => setConsultantStatus(e.target.value as ConsultantInspectionStatus)} className="w-full bg-white border-2 border-slate-200 rounded-2xl px-2 py-4 font-black text-black text-sm outline-none">
-                      <option value="accepted">مقبول</option>
-                      <option value="remarked">مقبول بملاحظات</option>
-                      <option value="rejected">مرفوض</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-[11px] font-black text-slate-500 mr-2">نوع الأعمال:</label>
-                    <select value={workCategory} onChange={(e) => setWorkCategory(e.target.value as WorkCategory)} className="w-full bg-white border-2 border-slate-200 rounded-2xl px-2 py-4 font-black text-black text-sm outline-none">
-                      <option value="مدنى">مدنى</option>
-                      <option value="كهربا">كهربا</option>
-                      <option value="معمارى">معمارى</option>
-                      <option value="أخرى">أخرى</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="block text-[11px] font-black text-slate-500 mr-2">تاريخ الفحص المطلوب:</label>
-                    <input 
-                      type="date" 
-                      value={inspectionDate}
-                      onChange={(e) => setInspectionDate(e.target.value)}
-                      className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-[11px] font-black text-slate-500 mr-2">الميعاد / التوقيت المفضل:</label>
-                    <div className="relative">
-                      <input 
-                        type="text" 
-                        value={inspectionTime}
-                        onChange={(e) => setInspectionTime(e.target.value)}
-                        placeholder="12:00 م"
-                        className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 font-black text-black text-sm focus:border-black focus:bg-white outline-none transition-all shadow-sm"
-                      />
-                      <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <div className="grid grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-xs font-black text-slate-400 mb-2 mr-1">المساح المسؤول *</label>
+                        <select 
+                          value={surveyorName} 
+                          onChange={(e) => setSurveyorName(e.target.value)} 
+                          className="w-full bg-white border border-slate-200 rounded-[20px] py-4 px-5 text-sm font-bold text-slate-700 focus:border-[#C8C2F5] focus:ring-1 focus:ring-[#C8C2F5] transition appearance-none cursor-pointer outline-none"
+                          required
+                        >
+                          <option value="">-- اختر المساح --</option>
+                          <option value="بدون أعمال مساحية">بدون أعمال مساحية</option>
+                          {surveyorName && surveyorName !== 'بدون أعمال مساحية' && !workers.some(w => w.name === surveyorName) && (
+                            <option value={surveyorName}>{surveyorName}</option>
+                          )}
+                          {workers.filter(w => w.jobTitle?.includes('مساح') || w.jobTitle?.includes('المساح')).map(w => (
+                            <option key={w.id} value={w.name}>{w.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black text-slate-400 mb-2 mr-1">مكان وتفاصيل الأعمال / الزون *</label>
+                        <div className="relative">
+                          <input 
+                            type="text" 
+                            placeholder="بحث رقم المنطقة أو الزون..." 
+                            value={locationDetails} 
+                            onChange={(e) => setLocationDetails(e.target.value)} 
+                            className="w-full bg-white border border-slate-200 rounded-[20px] py-4 pr-12 pl-5 text-sm font-bold text-slate-700 focus:border-[#C8C2F5] focus:ring-1 focus:ring-[#C8C2F5] transition outline-none" 
+                            required 
+                          />
+                          <MapPin size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
+
+                  {/* Section 3: المخططات والوصف */}
+                  <div className="space-y-4 pt-4">
+                    <div className="flex items-center gap-2 mb-4 text-xs font-black text-purple-500">
+                      <span className="text-lg font-black">|</span>
+                      <span>المخططات والوصف والماليات</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-xs font-black text-slate-400 mb-2 mr-1">رقم الطلب / الاستمارة *</label>
+                        <input 
+                          type="text" 
+                          value={submissionNumber}
+                          onChange={(e) => setSubmissionNumber(e.target.value)}
+                          placeholder="IR-202X-XXX"
+                          className="w-full bg-white border border-slate-200 rounded-[20px] py-4 px-5 text-sm font-bold text-slate-700 focus:border-[#C8C2F5] focus:ring-1 focus:ring-[#C8C2F5] transition outline-none"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black text-slate-400 mb-2 mr-1">تاريخ تقديم البيان *</label>
+                        <input 
+                          type="date" 
+                          value={date}
+                          onChange={(e) => setDate(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-[20px] py-4 px-5 text-sm font-bold text-slate-700 focus:border-[#C8C2F5] focus:ring-1 focus:ring-[#C8C2F5] transition outline-none"
+                          required
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-xs font-black text-slate-400 mb-2 mr-1">وصف العمل / البند بالكامل *</label>
+                        <input 
+                          type="text" 
+                          value={itemDescription}
+                          onChange={(e) => setItemDescription(e.target.value)}
+                          placeholder="مثال: طبقة الأساس المساعد المدموكة..."
+                          className="w-full bg-white border border-slate-200 rounded-[20px] py-4 px-5 text-sm font-bold text-slate-700 focus:border-[#C8C2F5] focus:ring-1 focus:ring-[#C8C2F5] transition outline-none"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black text-slate-400 mb-2 mr-1">رقم تكرار التقديم *</label>
+                        <select
+                          value={submissionCount}
+                          onChange={(e) => setSubmissionCount(Number(e.target.value))}
+                          className="w-full bg-white border border-slate-200 rounded-[20px] py-4 px-5 text-sm font-bold text-slate-700 focus:border-[#C8C2F5] focus:ring-1 focus:ring-[#C8C2F5] transition appearance-none cursor-pointer outline-none"
+                        >
+                          <option value={1}>التقديم الأول (Original Submission)</option>
+                          <option value={2}>إعادة تقديم رقم 2</option>
+                          <option value={3}>إعادة تقديم رقم 3</option>
+                          <option value={4}>إعادة تقديم رقم 4</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black text-slate-400 mb-2 mr-1">المنسوب الفعلي (أو المرجع)</label>
+                        <input 
+                          type="text" 
+                          value={levelElevation}
+                          onChange={(e) => setLevelElevation(e.target.value)}
+                          placeholder="مثال: +42.000"
+                          className="w-full bg-white border border-slate-200 rounded-[20px] py-4 px-5 text-sm font-bold text-slate-700 focus:border-[#C8C2F5] focus:ring-1 focus:ring-[#C8C2F5] transition outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black text-slate-400 mb-2 mr-1">الطول (م ط)</label>
+                        <input 
+                          type="text" 
+                          value={length}
+                          onChange={(e) => setLength(e.target.value)}
+                          placeholder="متر طولي..."
+                          className="w-full bg-white border border-slate-200 rounded-[20px] py-4 px-5 text-sm font-bold text-slate-700 focus:border-[#C8C2F5] focus:ring-1 focus:ring-[#C8C2F5] transition outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black text-slate-400 mb-2 mr-1">المسطح (م٢)</label>
+                        <input 
+                          type="text" 
+                          value={areaArea}
+                          onChange={(e) => setAreaArea(e.target.value)}
+                          placeholder="متر مربع..."
+                          className="w-full bg-white border border-slate-200 rounded-[20px] py-4 px-5 text-sm font-bold text-slate-700 focus:border-[#C8C2F5] focus:ring-1 focus:ring-[#C8C2F5] transition outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black text-slate-400 mb-2 mr-1">تاريخ الفحص المطلوب</label>
+                        <input 
+                          type="date" 
+                          value={inspectionDate}
+                          onChange={(e) => setInspectionDate(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-[20px] py-4 px-5 text-sm font-bold text-slate-700 focus:border-[#C8C2F5] focus:ring-1 focus:ring-[#C8C2F5] transition outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black text-slate-400 mb-2 mr-1">الميعاد / التوقيت المفضل</label>
+                        <input 
+                          type="text" 
+                          value={inspectionTime}
+                          onChange={(e) => setInspectionTime(e.target.value)}
+                          placeholder="12:00 م"
+                          className="w-full bg-white border border-slate-200 rounded-[20px] py-4 px-5 text-sm font-bold text-slate-700 focus:border-[#C8C2F5] focus:ring-1 focus:ring-[#C8C2F5] transition outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black text-slate-400 mb-2 mr-1">الاتجاه</label>
+                        <select
+                          value={direction}
+                          onChange={(e) => setDirection(e.target.value as DirectionCategory)}
+                          className="w-full bg-white border border-slate-200 rounded-[20px] py-4 px-5 text-sm font-bold text-slate-700 focus:border-[#C8C2F5] focus:ring-1 focus:ring-[#C8C2F5] transition appearance-none cursor-pointer outline-none"
+                        >
+                          <option value="شمال (North)">شمال (North)</option>
+                          <option value="جنوب (South)">جنوب (South)</option>
+                          <option value="شرق (East)">شرق (East)</option>
+                          <option value="غرب (West)">غرب (West)</option>
+                          <option value="شمال شرق">شمال شرق</option>
+                          <option value="شمال غرب">شمال غرب</option>
+                          <option value="جنوب شرق">جنوب شرق</option>
+                          <option value="جنوب غرب">جنوب غرب</option>
+                          <option value="قبلي">قبلي</option>
+                          <option value="بحرى">بحرى</option>
+                          <option value="اخرى">اخرى</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black text-slate-400 mb-2 mr-1">القرار الهندسي / الحالة النهائية</label>
+                        <select
+                          value={status}
+                          onChange={(e) => setStatus(e.target.value as any)}
+                          className="w-full bg-white border border-slate-200 rounded-[20px] py-4 px-5 text-sm font-bold text-slate-700 focus:border-[#C8C2F5] focus:ring-1 focus:ring-[#C8C2F5] transition appearance-none cursor-pointer outline-none"
+                        >
+                          <option value="Pending">قيد الفحص والانتظار</option>
+                          <option value="Approved">معتمد وموافق كلياً</option>
+                          <option value="ApprovedWithRemarks">موافق بملاحظات هندسية</option>
+                          <option value="Rejected">مرفوض ويعاد تقديمه</option>
+                          <option value="SurveyRejected">مرفوض مساحياً</option>
+                        </select>
+                      </div>
+
+                      {/* QA & Verification Fields nested elegantly */}
+                      <div className="col-span-2 mt-4 p-5 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
+                        <span className="text-xs font-black text-slate-500 block">تدقيق الجودة والفحوصات الفنية (الرصد والملاحظات)</span>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-black text-slate-400 mb-1.5 mr-1">أعمال مساحية</label>
+                            <select value={surveyStatus} onChange={(e) => setSurveyStatus(e.target.value as InspectionStatus)} className="w-full bg-white border border-slate-200 rounded-xl py-2 px-3 text-xs font-bold text-slate-700 outline-none">
+                              <option value="none">بدون أعمال مساحية</option>
+                              <option value="accepted">مقبول</option>
+                              <option value="remarked">مقبول بملاحظات</option>
+                              <option value="rejected">مرفوض</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black text-slate-400 mb-1.5 mr-1">جودة واختبارات</label>
+                            <select value={qualityStatus} onChange={(e) => setQualityStatus(e.target.value as InspectionStatus)} className="w-full bg-white border border-slate-200 rounded-xl py-2 px-3 text-xs font-bold text-slate-700 outline-none">
+                              <option value="none">لا يوجد</option>
+                              <option value="accepted">مقبول</option>
+                              <option value="remarked">مقبول بملاحظات</option>
+                              <option value="rejected">مرفوض</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black text-slate-400 mb-1.5 mr-1">اعتماد استشاري</label>
+                            <select value={consultantStatus} onChange={(e) => setConsultantStatus(e.target.value as ConsultantInspectionStatus)} className="w-full bg-white border border-slate-200 rounded-xl py-2 px-3 text-xs font-bold text-slate-700 outline-none">
+                              <option value="accepted">مقبول</option>
+                              <option value="remarked">مقبول بملاحظات</option>
+                              <option value="rejected">مرفوض</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 mt-2">
+                          <div>
+                            <label className="block text-[10px] font-black text-slate-400 mb-1 mr-1">ملاحظات المسّاح</label>
+                            <input type="text" value={surveyNotes} onChange={(e) => setSurveyNotes(e.target.value)} placeholder="ملاحظات المسّاح الفنية..." className="w-full bg-white border border-slate-200 rounded-xl py-2 px-3 text-xs font-bold text-slate-700 outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black text-slate-400 mb-1 mr-1">ملاحظات مختبر الجودة</label>
+                            <input type="text" value={labNotes} onChange={(e) => setLabNotes(e.target.value)} placeholder="نتائج الدمك والكسر الفنية..." className="w-full bg-white border border-slate-200 rounded-xl py-2 px-3 text-xs font-bold text-slate-700 outline-none" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </form>
               </div>
 
-              {/* 4. Footer Actions */}
-              <div className="flex flex-col md:flex-row items-center justify-end gap-4 pt-10 border-t-2 border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => { setIsEditing(false); setIsNew(false); setSelectedSub(null); }}
-                  className="w-full md:w-auto px-10 py-5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black rounded-2xl transition-all active:scale-95 border border-slate-200"
+              {/* Action Buttons at the Bottom of Left Content Panel */}
+              <div className="flex justify-between items-center gap-4 mt-10 pt-6 border-t border-slate-100">
+                <button 
+                  type="button" 
+                  onClick={() => { setIsEditing(false); setIsNew(false); setSelectedSub(null); }} 
+                  className="w-48 py-4 bg-[#F8F9FB] text-slate-600 rounded-[24px] text-sm font-bold hover:bg-slate-100 transition duration-200 text-center border border-slate-100"
                 >
-                  إلغاء الأمر
+                  إلغاء
                 </button>
-                <button
-                  type="submit"
-                  disabled={userRole === 'viewer'}
-                  className="w-full md:w-auto px-16 py-5 bg-black hover:bg-slate-900 text-white font-black rounded-2xl transition-all shadow-[0_10px_40px_rgba(0,0,0,0.2)] hover:-translate-y-1 active:translate-y-0 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                <button 
+                  type="submit" 
+                  form="submission-form" 
+                  className="flex-1 py-4 bg-[#C8C2F5] text-white rounded-[24px] text-sm font-black hover:bg-[#B5ADF0] shadow-sm transition duration-200 text-center"
                 >
-                  <Save size={20} />
-                  <span>{isNew ? 'حفظ الطلب الجديد' : 'حفظ التعديلات الفنية'}</span>
+                  اعتماد وتسجيل الطلب
                 </button>
               </div>
             </div>
-          </form>
+
+            {/* Right side: Beautiful Sidebar Status Panel */}
+            <div className="w-96 bg-[#F8F9FB] border-r border-slate-100 p-10 flex flex-col justify-between">
+              <div className="space-y-6 mt-12 text-center flex flex-col items-center">
+                <div className="w-20 h-20 bg-[#E8E6FC] text-[#8676FF] rounded-3xl flex items-center justify-center rotate-3 mb-4 shadow-sm">
+                  <FileCheck size={36} strokeWidth={1.5} />
+                </div>
+                <div>
+                  <h4 className="font-black text-2xl text-slate-900 mb-3">تسجيل تسليم</h4>
+                  <p className="text-sm text-slate-500 leading-relaxed max-w-[260px] mx-auto font-medium">
+                    نظام تسجيل طلبات تسليم الأعمال لربط المهندسين وموقع المشروع بدقة تامة.
+                  </p>
+                </div>
+              </div>
+
+              {/* Progression Tracker Steps */}
+              <div className="mt-16 space-y-5 px-4 pb-12">
+                <div className="flex items-center gap-3">
+                  <div className="text-sm font-black text-[#8676FF]">1. الأطراف والبند</div>
+                  <div className="flex-1 h-px bg-slate-200"></div>
+                  <div className="w-1.5 h-4 bg-[#8676FF] rounded-full"></div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-sm font-black text-slate-400">2. تفاصيل الموقع</div>
+                  <div className="flex-1 h-px bg-slate-200"></div>
+                  <div className="w-1.5 h-4 bg-slate-300 rounded-full"></div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-sm font-black text-slate-400">3. المخططات والوصف</div>
+                  <div className="flex-1 h-px bg-slate-200"></div>
+                  <div className="w-1.5 h-4 bg-slate-300 rounded-full"></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

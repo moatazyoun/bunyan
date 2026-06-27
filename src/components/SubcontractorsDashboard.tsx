@@ -25,6 +25,7 @@ import {
   X
 } from 'lucide-react';
 import { Transaction, Subcontractor, SubcontractorWorkItem, SubcontractorDiscount, Contract } from '../types';
+import { confirmWithRandomCode } from '../utils/confirmHelper';
 
 interface SubcontractorsDashboardProps {
   transactions: Transaction[];
@@ -773,7 +774,7 @@ export default function SubcontractorsDashboard({
    const handleDelete = (id: string) => {
     if (userRole === 'viewer') return;
     const subToDelete = subcontractors.find(c => c.id === id);
-    if (window.confirm('هل أنت متأكد من حذف حساب هذا المقاول وجميع البنود؟')) {
+    if (confirmWithRandomCode('هل أنت متأكد من حذف حساب هذا المقاول وجميع البنود؟')) {
       setSubcontractors(prev => prev.filter(c => c.id !== id));
       if (subToDelete) {
         addAuditLog('حذف مقاول', 'بيانات مقاولي الباطن', `تم حذف المقاول: ${subToDelete.name}`);

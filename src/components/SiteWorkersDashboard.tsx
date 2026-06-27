@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Users, UserPlus, Calendar, DollarSign, Save, Trash2, Check, X, FileText, AlertCircle, Edit, ArrowDownToLine, Clock, Search, Briefcase, UserCheck, Timer, Wallet, Calculator, ChevronRight, ChevronLeft, MapPin, Info, ChevronDown, CheckCircle2, XCircle, Home, Banknote, Building2, Ticket, MoreHorizontal, ShieldCheck, ExternalLink, CheckSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Transaction, SiteWorker, WorkerAttendance, WorkerEmploymentType, WorkerSalaryPayment } from '../types';
+import { confirmWithRandomCode } from '../utils/confirmHelper';
 import { INITIAL_WORKERS } from '../data/initialData';
 import HrStrategyTab from './HrStrategyTab';
 
@@ -478,7 +479,7 @@ export default function SiteWorkersDashboard({
       alert('عذراً، لا تملك صلاحية حذف الدفعات');
       return;
     }
-    if (confirm(`هل أنت متأكد من حذف هذه الدفعة [${id}] من السجل؟`)) {
+    if (confirmWithRandomCode(`هل أنت متأكد من حذف هذه الدفعة [${id}] من السجل؟`)) {
       const payment = salaryPayments.find(p => p.id === id);
       setSalaryPayments(prev => prev.filter(p => p.id !== id));
       addAuditLog?.(

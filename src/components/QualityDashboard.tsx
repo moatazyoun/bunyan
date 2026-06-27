@@ -6,6 +6,7 @@ import {
   X, FlaskConical
 } from 'lucide-react';
 import { LabTestRecord, Project } from '../types';
+import { confirmWithRandomCode } from '../utils/confirmHelper';
 
 interface QualityDashboardProps {
   labTests: LabTestRecord[];
@@ -98,7 +99,7 @@ export default function QualityDashboard({
       alert('عذراً، لا تملك الصلاحية لحذف السجلات.');
       return;
     }
-    if (confirm('هل أنت متأكد من حذف هذا الاختبار الفني نهائياً؟')) {
+    if (confirmWithRandomCode('هل أنت متأكد من حذف هذا الاختبار الفني نهائياً؟')) {
       const target = labTests.find(t => t.id === id);
       setLabTests(prev => prev.filter(t => t.id !== id));
       if (addAuditLog && target) {

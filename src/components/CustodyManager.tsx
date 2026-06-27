@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Briefcase, 
   UserPlus, 
@@ -128,14 +128,50 @@ export default function CustodyManager({ custodies, transactions, onAddCustody, 
     return new Intl.NumberFormat('ar-EG', { style: 'currency', currency: 'EGP', maximumFractionDigits: 0 }).format(val);
   };
 
-  // Calculations for overall overview
-  const totalGiven = custodies.reduce((sum, c) => sum + c.totalGiven, 0);
-  const totalSettled = custodies.reduce((sum, c) => sum + c.totalSettled, 0);
-  const totalRemaining = custodies.reduce((sum, c) => sum + c.remaining, 0);
+  // Dynamic calculation helper for any custody record based on ledger transactions
+  const getDynamicCustodyStats = (cust: CustodyRecord) => {
+    const cleanName = cust.engineerName.replace('م.', '').replace('المهندس', '').trim().split(' ')[0];
+    const cleanSearchName = (cleanName || '').toLowerCase();
+    const engSearchName = (cust.engineerName || '').toLowerCase();
+
+    // Find all transactions of category 'custody' that match this engineer
+    const matches = transactions.filter(tx => {
+      if (tx.category !== 'custody') return false;
+      const txRecipient = (tx.recipient || '').toLowerCase();
+      const txDesc = (tx.description || '').toLowerCase();
+      const matchesRecipient = txRecipient.includes(cleanSearchName) || txRecipient.includes(engSearchName);
+      const matchesDesc = txDesc.includes(cleanSearchName) || txDesc.includes(engSearchName);
+      return matchesRecipient || matchesDesc;
+    });
+
+    const totalGivenFromTx = matches.filter(tx => tx.type === 'spent' && tx.nature === 'outside_custody').reduce((sum, tx) => sum + tx.amount, 0);
+    const totalSettledFromTx = matches.filter(tx => tx.type === 'executed_work').reduce((sum, tx) => sum + tx.amount, 0);
+    const remainingFromTx = Math.max(0, totalGivenFromTx - totalSettledFromTx);
+
+    return {
+      totalGiven: totalGivenFromTx || cust.totalGiven,
+      totalSettled: totalSettledFromTx || cust.totalSettled,
+      remaining: totalGivenFromTx ? remainingFromTx : cust.remaining,
+      notes: cust.notes
+    };
+  };
+
+  // Map all custodies to their dynamic calculations
+  const dynamicCustodies = useMemo(() => {
+    return custodies.map(c => ({
+      ...c,
+      ...getDynamicCustodyStats(c)
+    }));
+  }, [custodies, transactions]);
+
+  // Calculations for overall overview using dynamic data
+  const totalGiven = dynamicCustodies.reduce((sum, c) => sum + c.totalGiven, 0);
+  const totalSettled = dynamicCustodies.reduce((sum, c) => sum + c.totalSettled, 0);
+  const totalRemaining = dynamicCustodies.reduce((sum, c) => sum + c.remaining, 0);
   const settlementPercentage = totalGiven > 0 ? Math.round((totalSettled / totalGiven) * 100) : 0;
 
   // Filter & Search Logic
-  const filteredCustodies = custodies.filter(cust => {
+  const filteredCustodies = dynamicCustodies.filter(cust => {
     const matchesSearch = cust.engineerName.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           (cust.notes && cust.notes.toLowerCase().includes(searchQuery.toLowerCase()));
     
@@ -149,7 +185,7 @@ export default function CustodyManager({ custodies, transactions, onAddCustody, 
   });
 
   // Load selected engineer details
-  const currentSelectedEngineer = custodies.find(c => c.id === selectedEngineerId) || custodies[0];
+  const currentSelectedEngineer = dynamicCustodies.find(c => c.id === selectedEngineerId) || dynamicCustodies[0];
 
   // Generate dynamic statement of account from global transactions
   const getSelectedEngineerStatement = () => {

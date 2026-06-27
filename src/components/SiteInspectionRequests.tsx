@@ -6,34 +6,35 @@ import {
   Edit, 
   Printer, 
   ArrowLeft, 
-  Check, 
   CheckCircle2, 
   AlertTriangle, 
   Clock, 
   User, 
   MapPin, 
   FileText, 
-  FileCheck2, 
   Building2, 
-  BookOpen, 
-  Award, 
   ShieldCheck, 
-  Layers, 
-  Zap, 
-  CheckSquare, 
-  Database, 
   Calendar, 
-  Camera, 
-  BarChart3, 
   XCircle, 
-  TrendingUp, 
-  FileSpreadsheet,
   Eye,
-  Download,
-  ChevronDown,
-  Activity,
-  RefreshCw
+  RefreshCw,
+  MoreVertical,
+  X
 } from 'lucide-react';
+import { 
+  collection, 
+  query, 
+  where, 
+  onSnapshot, 
+  doc, 
+  setDoc, 
+  updateDoc, 
+  deleteDoc, 
+  serverTimestamp,
+  getFirestore
+} from 'firebase/firestore';
+import { db } from '../lib/firebase'; // Assuming setup is in lib/firebase
+import { confirmWithRandomCode } from '../utils/confirmHelper';
 
 interface ActivityLogItem {
   id: string;
@@ -73,6 +74,7 @@ interface InspectionRequest {
   signOffSignature?: string;
   activityHistory: ActivityLogItem[];
   dateCreated: string;
+  projectId?: string;
 }
 
 interface SiteInspectionRequestsProps {
@@ -146,94 +148,17 @@ export default function SiteInspectionRequests({
   const [signatureDrawn, setSignatureDrawn] = useState(false);
 
   useEffect(() => {
-    if (submissions && submissions.length > 0) {
-      const mapped = submissions.map((sub: any) => {
-        if (sub.drawingRefNo !== undefined) {
-          const original = sub as InspectionRequest;
-          return {
-            ...original,
-            surveyConsultant: original.surveyConsultant || sub.signatories?.surveyConsultant || '',
-            structuralConsultant: original.structuralConsultant || sub.signatories?.structuralConsultant || '',
-            surveyorRepresentative: original.surveyorRepresentative || sub.signatories?.surveyorRepresentative || 'بدون أعمال مساحية'
-          } as InspectionRequest;
-        }
-        const subIdStr = sub.id ? String(sub.id) : `sub-${Math.random()}`;
-        const refNo = sub.submissionNumber || `IR-2026-GEN-${subIdStr.substring(Math.max(0, subIdStr.length - 4))}`;
-        const dateStr = sub.date || new Date().toISOString().split('T')[0];
-        return {
-          id: subIdStr,
-          refNo: refNo,
-          projectName: 'مشروع تطوير قطاع الطرق والأعمال الموقعية',
-          locationZoneLevel: sub.levelElevation || (sub.stationFrom !== undefined ? `محطة ${sub.stationFrom} - ${sub.stationTo}` : 'الموقع العام'),
-          discipline: 'Civil' as const,
-          workDescription: sub.itemDescription || 'فحص أعمال عامة في الموقع',
-          drawingRefNo: sub.drawingRefNo || 'DWG-RD-001',
-          specificationClause: sub.specificationClause || 'SEC-301-ROAD',
-          requestedInspectionDate: sub.inspectionDate || dateStr,
-          requestedInspectionTime: sub.inspectionTime || '12:00 م',
-          contractorRepresentative: sub.signatories?.contractorEngineer || 'م. فوزي الرفاعي',
-          consultantInspector: sub.signatories?.qaEngineer || '',
-          surveyConsultant: sub.signatories?.surveyConsultant || '',
-          structuralConsultant: sub.signatories?.structuralConsultant || '',
-          surveyorRepresentative: sub.signatories?.surveyorRepresentative || 'بدون أعمال مساحية',
-          attachments: sub.attachments || [],
-          status: sub.status === 'ApprovedWithRemarks' ? 'Approved as Noted' : (sub.status || 'Pending'),
-          reviewComments: sub.remarks || '',
-          signOffName: sub.signatories?.qaEngineer || '',
-          signOffSignature: 'SIGNED_DIGITAL_LOCK',
-          activityHistory: sub.activityHistory || [
-            {
-              id: `act-${Date.now()}-1`,
-              refNo: `REF-ACT-0001`,
-              timestamp: dateStr + ' 10:00:00',
-              user: sub.signatories?.contractorEngineer || 'م. فوزي الرفاعي',
-              actionType: 'Submission' as const,
-              description: 'تم تسجيل وإرسال طلب تسليم وفحص أعمال جديد بالمنظومة.'
-            }
-          ],
-          dateCreated: dateStr
-        } as InspectionRequest;
-      });
-      setRequests(mapped);
-    } else {
-      setRequests([]);
-    }
-  }, [submissions]);
-
-  const saveRequestsToApp = (updatedRequests: InspectionRequest[]) => {
-    const mappedToSubmissions = updatedRequests.map(ir => {
-      return {
-        id: ir.id,
-        projectId: projectId,
-        submissionNumber: ir.refNo,
-        date: ir.dateCreated,
-        inspectionDate: ir.requestedInspectionDate,
-        inspectionTime: ir.requestedInspectionTime,
-        itemDescription: ir.workDescription,
-        levelElevation: ir.locationZoneLevel,
-        executingContractor: ir.contractorRepresentative,
-        direction: ir.discipline,
-        status: ir.status === 'Approved as Noted' ? 'ApprovedWithRemarks' : ir.status,
-        remarks: ir.reviewComments || '',
-        signatories: {
-          contractorEngineer: ir.contractorRepresentative,
-          surveyConsultant: ir.surveyConsultant || '', 
-          qaEngineer: ir.consultantInspector || '',
-          generalConsultant: ir.specificationClause,
-          structuralConsultant: ir.structuralConsultant || '',
-          surveyorRepresentative: ir.surveyorRepresentative || 'بدون أعمال مساحية'
-        },
-        drawingRefNo: ir.drawingRefNo,
-        specificationClause: ir.specificationClause,
-        attachments: ir.attachments,
-        activityHistory: ir.activityHistory,
-        surveyConsultant: ir.surveyConsultant || '',
-        structuralConsultant: ir.structuralConsultant || '',
-        surveyorRepresentative: ir.surveyorRepresentative || 'بدون أعمال مساحية'
-      };
+    const q = query(collection(db, 'inspectionRequests'), where('projectId', '==', projectId));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedRequests: InspectionRequest[] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as InspectionRequest));
+      setRequests(fetchedRequests);
     });
-    setSubmissions(mappedToSubmissions);
-  };
+    return () => unsubscribe();
+  }, [projectId]);
+
 
   const totalSubmitted = requests.length;
   const pendingCount = requests.filter(r => r.status === 'Pending').length;
@@ -321,7 +246,7 @@ export default function SiteInspectionRequests({
     }
   };
 
-  const handleCreateIR = (e: React.FormEvent) => {
+  const handleCreateIR = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!formLocation || !formDescription || !formDrawingRef || !formSpecClause) {
@@ -361,24 +286,19 @@ export default function SiteInspectionRequests({
           description: `تم إعداد وتصدير طلب فحص أعمال الموقع وإرفاق المستندات والمخططات التنفيذية.`
         }
       ],
-      dateCreated: new Date().toISOString().split('T')[0]
+      dateCreated: new Date().toISOString().split('T')[0],
+      projectId: projectId // Ensure projectId is stored for the query
     };
 
-    const updated = [newRequest, ...requests];
-    setRequests(updated);
-    saveRequestsToApp(updated);
-
-    const logDetails = `إنشاء طلب فحص موقع جديد بالرقم المرجعي ${nextRef} لتسليم أعمال ${formDiscipline} في ${formLocation}`;
-    fetch('/api/users/logs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: userNameAr || 'engineer',
-        actionAr: `تسجيل طلب فحص [${nextRef}]`,
-        type: 'site',
-        detailsAr: logDetails
-      })
-    }).catch(console.error);
+    try {
+      await setDoc(doc(db, 'inspectionRequests', newIRId), newRequest);
+      // Log interaction
+      console.log('Inspection request created successfully.');
+    } catch (error) {
+      console.error('Error creating inspection request:', error);
+      alert('حدث خطأ أثناء حفظ الطلب.');
+      return;
+    }
 
     setFormLocation('');
     setFormDescription('');
@@ -392,7 +312,7 @@ export default function SiteInspectionRequests({
     setShowCreateModal(false);
   };
 
-  const handleSaveReview = (e: React.FormEvent) => {
+  const handleSaveReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedIR) return;
 
@@ -421,34 +341,21 @@ export default function SiteInspectionRequests({
       description: `تم إخضاع الطلب للمراجعة الفنية واتخاذ قرار: [${actionLabel}]. الملاحظات: ${reviewComments || 'لا يوجد ملاحظات إضافية'}`
     };
 
-    const updatedRequests = requests.map(r => {
-      if (r.id === selectedIR.id) {
-        return {
-          ...r,
-          status: reviewStatus,
-          reviewComments: reviewComments,
-          signOffName: reviewSignOffName || userDisplay,
-          signOffSignature: signatureDrawn ? 'SIGNED_DIGITAL_QC' : r.signOffSignature,
-          activityHistory: [newActivity, ...r.activityHistory]
-        };
-      }
-      return r;
-    });
-
-    setRequests(updatedRequests);
-    saveRequestsToApp(updatedRequests);
-
-    const logDetails = `تغيير حالة طلب الفحص ${selectedIR.refNo} إلى ${reviewStatus} بواسطة الاستشاري ${reviewSignOffName || userDisplay}`;
-    fetch('/api/users/logs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: userNameAr || 'engineer',
-        actionAr: `اعتماد طلب فحص [${selectedIR.refNo}]`,
-        type: 'site',
-        detailsAr: logDetails
-      })
-    }).catch(console.error);
+    try {
+      const irRef = doc(db, 'inspectionRequests', selectedIR.id);
+      await updateDoc(irRef, {
+        status: reviewStatus,
+        reviewComments: reviewComments,
+        signOffName: reviewSignOffName || userDisplay,
+        signOffSignature: signatureDrawn ? 'SIGNED_DIGITAL_QC' : selectedIR.signOffSignature,
+        activityHistory: [newActivity, ...selectedIR.activityHistory]
+      });
+      console.log('Inspection request updated successfully.');
+    } catch (error) {
+      console.error('Error updating inspection request:', error);
+      alert('حدث خطأ أثناء حفظ التعديلات.');
+      return;
+    }
 
     setReviewComments('');
     setReviewSignOffName('');
@@ -457,23 +364,15 @@ export default function SiteInspectionRequests({
     setSelectedIR(null);
   };
 
-  const handleDeleteIR = (id: string, refNo: string) => {
-    if (window.confirm(`هل أنت متأكد من حذف طلب فحص الموقع ذو الرقم المرجعي ${refNo} نهائياً؟`)) {
-      const updated = requests.filter(r => r.id !== id);
-      setRequests(updated);
-      saveRequestsToApp(updated);
-
-      const logDetails = `حذف طلب فحص موقع بالرقم المرجعي ${refNo}`;
-      fetch('/api/users/logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: userNameAr || 'engineer',
-          actionAr: `حذف طلب فحص [${refNo}]`,
-          type: 'site',
-          detailsAr: logDetails
-        })
-      }).catch(console.error);
+  const handleDeleteIR = async (id: string, refNo: string) => {
+    if (confirmWithRandomCode(`هل أنت متأكد من حذف طلب فحص الموقع ذو الرقم المرجعي ${refNo} نهائياً؟`)) {
+      try {
+        await deleteDoc(doc(db, 'inspectionRequests', id));
+        console.log('Inspection request deleted successfully.');
+      } catch (error) {
+        console.error('Error deleting inspection request:', error);
+        alert('حدث خطأ أثناء حذف الطلب.');
+      }
     }
   };
 
@@ -546,7 +445,7 @@ export default function SiteInspectionRequests({
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-xs">
             <Clock size={12} className="text-indigo-500 shrink-0 animate-spin" />
-            <span>قيد الانتظار والتدقيق</span>
+            <span>قيد الانتظار</span>
           </span>
         );
     }
@@ -883,18 +782,136 @@ export default function SiteInspectionRequests({
       </div>
 
       {showCreateModal && (
-        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-5xl shadow-2xl p-6">
-            <h3 className="font-black text-lg mb-4">تسجيل طلب فحص جديد</h3>
-            <form onSubmit={handleCreateIR} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} className="border p-2 rounded-lg" required />
-                <input type="text" placeholder="الموقع" value={formLocation} onChange={(e) => setFormLocation(e.target.value)} className="border p-2 rounded-lg" required />
+        <div className="fixed inset-0 bg-slate-900/60 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[32px] w-full max-w-5xl shadow-2xl flex overflow-hidden min-h-[600px]" dir="rtl">
+            <div className="flex-1 p-10 flex flex-col justify-between">
+              <div>
+                <div className="flex justify-between items-center mb-10 pb-6 border-b border-slate-100">
+                  <h3 className="font-black text-2xl text-slate-900">إضافة طلب فحص جديد</h3>
+                  <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                    <X size={24} />
+                  </button>
+                </div>
+
+                <form id="create-ir-form" onSubmit={handleCreateIR} className="space-y-8">
+                  {/* Section 1 */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1 h-5 bg-indigo-500 rounded-full"></div>
+                      <span className="text-sm font-black text-indigo-500">الأطراف والبند</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-xs font-black text-slate-500 mb-2">بند العمل *</label>
+                            <select value={formDiscipline} onChange={(e) => setFormDiscipline(e.target.value as any)} className="w-full bg-white border border-slate-200 rounded-2xl py-3.5 px-4 text-sm font-bold text-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition appearance-none">
+                                <option value="Civil">إنشائي / مدني</option>
+                                <option value="Architectural">معماري</option>
+                                <option value="Mechanical">ميكانيكا</option>
+                                <option value="Electrical">كهرباء</option>
+                                <option value="Plumbing">سباكة</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-black text-slate-500 mb-2">المهندس المسؤول / المقاول *</label>
+                            <select value={formContractorRep} onChange={(e) => setFormContractorRep(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-3.5 px-4 text-sm font-bold text-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition appearance-none">
+                                <option value="" className="text-slate-400">-- اختر المقاول --</option>
+                                {workers.filter(w => w.type === 'appointed' || w.type === 'saraky').map(w => (
+                                    <option key={w.id} value={w.name}>{w.name} - {w.jobTitle}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                  </div>
+
+                  {/* Section 2 */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 mt-8">
+                      <div className="w-1 h-5 bg-teal-400 rounded-full"></div>
+                      <span className="text-sm font-black text-teal-400">الموقع والتفاصيل</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-xs font-black text-slate-500 mb-2">المساح المسؤول *</label>
+                            <select value={formSurveyorRepresentative} onChange={(e) => setFormSurveyorRepresentative(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-3.5 px-4 text-sm font-bold text-slate-700 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition appearance-none">
+                                <option value="بدون أعمال مساحية" className="text-slate-400">-- بدون أعمال مساحية --</option>
+                                {workers.filter(w => w.jobTitle.includes('مساح')).map(w => (
+                                    <option key={w.id} value={w.name}>{w.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-black text-slate-500 mb-2">الموقع / الزون *</label>
+                            <div className="relative">
+                                <MapPin size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input type="text" placeholder="بحث رقم المنطقة أو الزون..." value={formLocation} onChange={(e) => setFormLocation(e.target.value)} className="w-full bg-slate-50/50 border border-slate-100 rounded-2xl py-3.5 pr-12 pl-4 text-sm font-bold text-slate-700 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition" required />
+                            </div>
+                        </div>
+                    </div>
+                  </div>
+
+                  {/* Section 3 Hidden/Compact for required fields */}
+                  <div className="space-y-4">
+                      <div className="flex items-center gap-2 mt-8">
+                        <div className="w-1 h-5 bg-purple-400 rounded-full"></div>
+                        <span className="text-sm font-black text-purple-400">المخططات والوصف</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                            <input type="text" placeholder="رقم المخطط (Drawing Ref) *" value={formDrawingRef} onChange={(e) => setFormDrawingRef(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-3.5 px-4 text-sm font-bold focus:border-purple-500 transition" required />
+                        </div>
+                        <div>
+                            <input type="text" placeholder="بند المواصفات (Spec Clause) *" value={formSpecClause} onChange={(e) => setFormSpecClause(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-3.5 px-4 text-sm font-bold focus:border-purple-500 transition" required />
+                        </div>
+                        <div className="col-span-2">
+                            <input type="text" placeholder="وصف الأعمال المطلوب فحصها *" value={formDescription} onChange={(e) => setFormDescription(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl py-3.5 px-4 text-sm font-bold focus:border-purple-500 transition" required />
+                        </div>
+                      </div>
+                  </div>
+                </form>
               </div>
-              <textarea placeholder="الوصف" value={formDescription} onChange={(e) => setFormDescription(e.target.value)} className="w-full border p-2 rounded-lg" required></textarea>
-              <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg">إرسال</button>
-              <button type="button" onClick={() => setShowCreateModal(false)} className="bg-slate-200 px-4 py-2 rounded-lg mr-2">إلغاء</button>
-            </form>
+              
+              <div className="flex justify-between items-center gap-4 mt-12 pt-8 border-t border-slate-100">
+                  <button type="button" onClick={() => setShowCreateModal(false)} className="w-48 py-4 bg-slate-50 text-slate-600 rounded-2xl text-sm font-bold hover:bg-slate-100 transition border border-slate-100">
+                      إلغاء
+                  </button>
+                  <button type="submit" form="create-ir-form" className="flex-1 py-4 bg-[#C8C2F5] text-white rounded-2xl text-sm font-black hover:bg-[#B5ADF0] shadow-sm transition">
+                      اعتماد وتسجيل الطلب
+                  </button>
+              </div>
+            </div>
+
+            <div className="w-96 bg-slate-50/50 border-r border-slate-100 p-10 flex flex-col">
+                <div className="space-y-6 mt-12 text-center flex flex-col items-center">
+                    <div className="w-20 h-20 bg-[#E8E6FC] text-[#8676FF] rounded-3xl flex items-center justify-center rotate-3">
+                        <FileText size={36} strokeWidth={1.5} />
+                    </div>
+                    <div>
+                        <h4 className="font-black text-2xl text-slate-900 mb-3">تسجيل فحص موقعي</h4>
+                        <p className="text-sm text-slate-500 leading-relaxed max-w-[260px] mx-auto font-medium">
+                            نظام تسجيل الفحوصات الموقعية الذكي لربط المهندسين والمقاولين بموقع المشروع بدقة تامة.
+                        </p>
+                    </div>
+                </div>
+                <div className="mt-20 space-y-5 px-4">
+                    <div className="flex items-center gap-3">
+                        <div className="text-sm font-black text-indigo-500">1. الأطراف والبند</div>
+                        <div className="flex-1 h-px bg-slate-200"></div>
+                        <div className="w-1 h-4 bg-indigo-500 rounded-full"></div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <div className="text-sm font-black text-slate-400">2. تفاصيل الموقع</div>
+                        <div className="flex-1 h-px bg-slate-200"></div>
+                        <div className="w-1 h-4 bg-slate-300 rounded-full"></div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <div className="text-sm font-black text-slate-400">3. المخططات والوصف</div>
+                        <div className="flex-1 h-px bg-slate-200"></div>
+                        <div className="w-1 h-4 bg-slate-300 rounded-full"></div>
+                    </div>
+                </div>
+            </div>
           </div>
         </div>
       )}

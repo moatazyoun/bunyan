@@ -23,6 +23,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { UserItem } from '../types';
+import { confirmWithRandomCode } from '../utils/confirmHelper';
 
 interface NotificationsTabProps {
   currentUser: UserItem | null;
@@ -149,7 +150,7 @@ export default function NotificationsTab({ currentUser, selectedSite, dbConnecte
   };
 
   const handleDeleteNotification = async (id: string) => {
-    if (!window.confirm('هل أنت متأكد من حذف هذا التعميم نهائياً من قاعدة البيانات السحابية؟')) return;
+    if (!confirmWithRandomCode('هل أنت متأكد من حذف هذا التعميم نهائياً من قاعدة البيانات السحابية؟')) return;
     try {
       await deleteDoc(doc(db, 'notifications', id));
       setSuccessMsg('تم حذف التعميم الإداري نهائياً وبنجاح.');

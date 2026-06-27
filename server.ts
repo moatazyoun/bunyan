@@ -9,14 +9,14 @@ import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import fs from "fs";
 import * as XLSX from "xlsx";
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore, initializeFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 
 const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8"));
 
 dotenv.config();
 
-const firebaseApp = initializeApp(firebaseConfig);
+const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 const dbId = (firebaseConfig.firestoreDatabaseId === "(default)" || firebaseConfig.firestoreDatabaseId === "") ? undefined : firebaseConfig.firestoreDatabaseId;
 
@@ -146,20 +146,20 @@ app.post("/api/projects/:projectId/assign-users", async (req, res) => {
     const usersBatch = writeBatch(db);
     const allUsers = await getDocs(collection(db, 'users'));
     
-    allUsers.docs.forEach(doc => {
-      const userData = doc.data();
+    allUsers.docs.forEach(d => {
+      const userData = d.data();
       let assignedProjects = userData.assignedProjects || [];
-      const username = doc.id;
+      const username = d.id;
       
       const shouldHaveAccess = usernames.includes(username);
       const currentlyHasAccess = assignedProjects.includes(projectId);
       
       if (shouldHaveAccess && !currentlyHasAccess) {
         assignedProjects.push(projectId);
-        usersBatch.set(doc.ref, { assignedProjects }, { merge: true });
+        usersBatch.set(d.ref, { assignedProjects }, { merge: true });
       } else if (!shouldHaveAccess && currentlyHasAccess) {
         assignedProjects = assignedProjects.filter((id: string) => id !== projectId);
-        usersBatch.set(doc.ref, { assignedProjects }, { merge: true });
+        usersBatch.set(d.ref, { assignedProjects }, { merge: true });
       }
     });
 

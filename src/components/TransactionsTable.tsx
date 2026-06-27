@@ -181,8 +181,10 @@ export default function TransactionsTable({
     isOpen: boolean;
     title: string;
     message: string;
+    expectedCode?: string;
     onConfirm: () => void;
   } | null>(null);
+  const [deleteCodeInput, setDeleteCodeInput] = useState('');
 
   // Category mapping helper
   const getCategoryNameAr = (cat: string) => {
@@ -786,10 +788,13 @@ export default function TransactionsTable({
                             {userRole !== 'viewer' && userRole !== 'engineer' && (
                               <button
                                 onClick={() => {
+                                  const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
+                                  setDeleteCodeInput('');
                                   setConfirmState({
                                     isOpen: true,
                                     title: 'تأكيد الحذف كلياً من السجلات وبنيان الـ ERP',
                                     message: 'تحذير قاطع: هل أنت متأكد تماماً من رغبتك في حذف هذه الحركة المالية وصاحبها نهائياً من دفاتر القيود؟ لا يمكن استرجاع هذه البيانات بعد إتمام الحذف!',
+                                    expectedCode: generatedCode,
                                     onConfirm: () => onDeleteTransaction(tx.id)
                                   });
                                 }}
@@ -857,14 +862,38 @@ export default function TransactionsTable({
             <p className="text-slate-700 text-xs font-semibold leading-relaxed">
               {confirmState.message}
             </p>
+            {confirmState.expectedCode && (
+              <div className="bg-rose-50 border border-rose-100 p-4 rounded-xl space-y-3 mt-4">
+                <label className="block text-[10px] font-black text-rose-500 uppercase tracking-widest text-center">
+                  أدخل كود التحقق لتأكيد الحذف: <span className="bg-rose-100 px-2 py-0.5 rounded text-rose-700 text-sm ml-1 select-all font-mono tracking-widest">{confirmState.expectedCode}</span>
+                </label>
+                <input 
+                  type="text"
+                  value={deleteCodeInput}
+                  onChange={(e) => setDeleteCodeInput(e.target.value)}
+                  placeholder="أدخل الكود هنا..."
+                  className="w-full bg-white border border-rose-200 rounded-lg px-4 py-2 text-center font-mono text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 transition-all"
+                  autoFocus
+                />
+              </div>
+            )}
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => {
+                  if (confirmState.expectedCode && deleteCodeInput !== confirmState.expectedCode) {
+                    alert('كود التحقق غير صحيح');
+                    return;
+                  }
                   confirmState.onConfirm();
                   setConfirmState(null);
                 }}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-xl transition shadow active:scale-95 cursor-pointer"
+                disabled={!!(confirmState.expectedCode && deleteCodeInput !== confirmState.expectedCode)}
+                className={`px-4 py-2 text-white text-xs font-black rounded-xl transition shadow active:scale-95 cursor-pointer ${
+                  confirmState.expectedCode && deleteCodeInput !== confirmState.expectedCode
+                    ? 'bg-slate-300 cursor-not-allowed shadow-none'
+                    : 'bg-rose-600 hover:bg-rose-700'
+                }`}
               >
                 تأكيد وبدء النقل الفوري
               </button>

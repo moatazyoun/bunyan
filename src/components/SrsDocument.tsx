@@ -306,7 +306,7 @@ export default function SrsDocument() {
             <div>
               <h4 className="font-bold text-slate-900 text-xs text-right">رؤية تصميم معمارية المؤسسات (Enterprise Architecture)</h4>
               <p className="text-[11.5px] text-indigo-900/90 leading-relaxed mt-1 text-right">
-                يعتمد نظام <strong>بنيان الذكي</strong> على بنية برمجية مفصولة بالكامل (Decoupled Full-Stack Architecture) تجمع بين سرعة الاستجابة الميدانية والتحكم المالي المركزي. تم تصميم النظام ليحاكي أسلوب الـ Headless ERP مدمجاً بدعم الأجهزة الذكية والأوفلاين في المواقع البعيدة لتمكين مهندسي الطرق من رفع البيانات فورياً ومزامنة الكيلومترات المنجزة.
+                يعتمد نظام <strong>بنيان الذكي</strong> على بنية برمجية مفصولة بالكامل (Decoupled Full-Stack Architecture) تجمع بين سرعة الاستجابة الميدانية والتحكم المالي المركزي. تم تصميم النظام ليحاكي أسلوب الـ Headless ERP مدمجاً بدعم الأجهزة الذكية والعمل دون اتصال في المواقع البعيدة لتمكين مهندسي الطرق من رفع البيانات فورياً ومزامنة الكيلومترات المنجزة.
               </p>
             </div>
           </div>

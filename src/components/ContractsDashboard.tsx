@@ -5,6 +5,7 @@ import {
   Briefcase, Users, User, Landmark, Tag, Calendar, ShieldAlert, ArrowLeftRight, HelpCircle, Info
 } from 'lucide-react';
 import { Contract, Project, ContractCategory, Subcontractor, SiteWorker } from '../types';
+import { confirmWithRandomCode } from '../utils/confirmHelper';
 
 interface ContractsDashboardProps {
   contracts: Contract[];
@@ -194,7 +195,7 @@ export default function ContractsDashboard({
 
   const deleteContract = (id: string) => {
     if (userRole === 'viewer') return;
-    if (window.confirm('هل أنت متأكد من حذف هذا العقد نهائياً؟')) {
+    if (confirmWithRandomCode('هل أنت متأكد من حذف هذا العقد نهائياً؟')) {
       setContracts(prev => prev.filter(c => c.id !== id));
       addAuditLog('حذف عقد', 'إدارة العقود', `تم حذف العقد ذو الرقم المرجعي: ${id}`);
     }

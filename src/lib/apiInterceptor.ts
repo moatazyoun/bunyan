@@ -612,7 +612,7 @@ function getMockFallbackResponse(path: string): Response {
 
 
 // --- HOOK WINDOW FETCH TO FORCE HYBRID LOCAL PERSISTENCE ---
-const originalFetch = window.fetch;
+const originalFetch = window.fetch.bind(window);
 
 async function callDirectGeminiClientSide(path: string, bodyData: any): Promise<Response> {
   const meta = import.meta as any;
@@ -876,6 +876,26 @@ async function logUserActivity(username: string, actionAr: string, type: 'auth' 
   }
 }
 
+async function checkRealOnlineStatus(): Promise<boolean> {
+  if (typeof window !== 'undefined' && window.navigator && window.navigator.onLine === false) {
+    return false;
+  }
+  try {
+    const testDocRef = doc(db, 'system', 'ping');
+    const timeout = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('Timeout')), 1500)
+    );
+    await Promise.race([
+      getDoc(testDocRef),
+      timeout
+    ]);
+    return true;
+  } catch (err) {
+    console.warn("[Online Check] Lost connection to Firestore:", err);
+    return false;
+  }
+}
+
 async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const urlStr = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : (input as Request).url);
 
@@ -971,6 +991,15 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
   const path = url.pathname;
   const method = (init?.method || 'GET').toUpperCase();
   const bodyData = init?.body ? JSON.parse(init.body as string) : {};
+
+  // Prevent modifying operations when offline to avoid data conflicts/loss
+  const isWriteDbRoute = isDatabaseRoute && method !== 'GET' && !urlStr.includes('/api/auth/login') && !urlStr.includes('/api/auth/google-start');
+  if (isWriteDbRoute) {
+    const isOnline = await checkRealOnlineStatus();
+    if (!isOnline) {
+      return mockResponseErr('عذراً، تم إيقاف وتعطيل تسجيل أو تعديل البيانات أثناء العمل دون اتصال لمنع تعارض البيانات وتداخل الحسابات بين المستخدمين الآخرين. يرجى استعادة الاتصال بالإنترنت أولاً للحفظ بأمان.', 503);
+    }
+  }
 
   // Route 0: GET /api/db-status
   if (path === '/api/db-status' && method === 'GET') {
@@ -1350,7 +1379,7 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
         {
           id: 'fb_log_1',
           username: baseUser,
-          actionAr: 'تفعيل الجلسة الحالية (وضع الاتصال المباشر أوفلاين)',
+          actionAr: 'تفعيل الجلسة الحالية (وضع العمل بدون اتصال)',
           timestamp: new Date().toISOString(),
           type: 'auth',
           detailsAr: 'تحميل البيانات مؤقتاً في ذاكرة التخزين المحلية للمتصفح',

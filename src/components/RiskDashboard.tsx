@@ -5,6 +5,7 @@ import {
   Activity, Check, X, Shield, RefreshCw, BarChart2
 } from 'lucide-react';
 import { RiskItem, Project, SiteWorker } from '../types';
+import { confirmWithRandomCode } from '../utils/confirmHelper';
 
 interface RiskDashboardProps {
   risks: RiskItem[];
@@ -79,7 +80,7 @@ export default function RiskDashboard({
       alert('عذراً، لا تملك الصلاحية لحذف السجلات.');
       return;
     }
-    if (confirm('هل أنت متأكد من حذف هذا الخطر من السجل نهائياً؟')) {
+    if (confirmWithRandomCode('هل أنت متأكد من حذف هذا الخطر من السجل نهائياً؟')) {
       const target = risks.find(r => r.id === id);
       setRisks(prev => prev.filter(r => r.id !== id));
       if (addAuditLog && target) {

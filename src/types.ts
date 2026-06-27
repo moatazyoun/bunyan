@@ -44,6 +44,7 @@ export interface CustodyRecord {
   totalSettled: number; // العهدة المسواة بفواتير
   remaining: number; // المتبقي طرف المهندس
   notes?: string;
+  referenceNo?: string;
 }
 
 export interface ContractorCertificate {
@@ -54,6 +55,7 @@ export interface ContractorCertificate {
   executedWorkValue: number; // قيمة الأعمال المنفذة والمستحقة (مستخلصات)
   totalPaid: number; // إجمالي الدفعات المسلمة له فعلياً
   remainingBalance: number; // المتبقي له طرف المشروع
+  referenceNo?: string;
 }
 
 export type ModulePermissionType = 'none' | 'view' | 'edit';
@@ -102,6 +104,7 @@ export interface EquipmentRecord {
   fuelConsumed: number; // Liters
   operator: string;
   lastServiceDate: string;
+  referenceNo?: string;
 }
 
 export interface MaintenanceOrder {
@@ -113,6 +116,7 @@ export interface MaintenanceOrder {
   cost: number;
   description: string;
   status: 'pending' | 'in_progress' | 'completed';
+  referenceNo?: string;
 }
 
 export interface LabTestRecord {
@@ -127,6 +131,7 @@ export interface LabTestRecord {
   cbrValue?: number; // نسبة تحمل كالفورنيا %
   sieveGrading?: string; // التدرج الحبيبي (مقبول / غير مقبول)
   engineer: string;
+  referenceNo?: string;
 }
 
 export interface HseIncidentRecord {
@@ -139,6 +144,7 @@ export interface HseIncidentRecord {
   actionTaken: string;
   closed: boolean;
   reportedBy: string;
+  referenceNo?: string;
 }
 
 export interface WbsTaskRecord {
@@ -153,6 +159,45 @@ export interface WbsTaskRecord {
   endDate: string;
   criticalPath: boolean;
   status: 'behind' | 'on_track' | 'ahead' | 'completed';
+  referenceNo?: string;
+}
+
+export interface MRIRRecord {
+  id: string;
+  code: string;
+  date: string;
+  poNumber: string;
+  itemCode: string;
+  itemName: string;
+  receivedQty: number;
+  supplier: string;
+  inspector: string;
+  status: 'Approved' | 'Rejected' | 'Pending_Testing';
+  notes: string;
+}
+
+export interface MRNRecord {
+  id: string;
+  code: string;
+  date: string;
+  itemCode: string;
+  itemName: string;
+  requestedQty: number;
+  requester: string;
+  purpose: string;
+  status: 'Approved' | 'Rejected' | 'Pending_Approval';
+}
+
+export interface AuditCountRecord {
+  id: string;
+  date: string;
+  itemCode: string;
+  itemName: string;
+  systemQty: number;
+  physicalQty: number;
+  discrepancy: number;
+  auditor: string;
+  actionTaken: string;
 }
 
 export interface WarehouseItemRecord {
@@ -165,6 +210,7 @@ export interface WarehouseItemRecord {
   unit: string;
   minLimit: number;
   warehouseName: 'מخزن المشروع الرئيسي' | 'مستودع الميدان الفرعي';
+  referenceNo?: string;
 }
 
 export type WorkerEmploymentType = 'appointed' | 'saraky' | 'laborer';
@@ -189,6 +235,7 @@ export interface SiteWorker {
   performanceRating?: number; // 1-5
   trainingCompleted?: string[];
   hrNotes?: string;
+  referenceNo?: string;
 }
 
 export interface WorkerAttendance {
@@ -203,6 +250,7 @@ export interface WorkerAttendance {
   advances: number;
   notes: string;
   isSettled: boolean;
+  referenceNo?: string;
 }
 
 export interface WorkerSalaryPayment {
@@ -248,6 +296,7 @@ export interface FuelStation {
   delegateName: string;
   delegatePhone: string;
   isInfinite?: boolean;
+  referenceNo?: string;
 }
 
 export interface OperationalLog {
@@ -291,6 +340,7 @@ export interface Project {
   durationMonths: number;
   description?: string;
   status?: 'Active' | 'Completed' | 'Suspended';
+  referenceNo?: string;
 }
 
 export interface BOQItem {
@@ -381,6 +431,7 @@ export interface CustomExtract {
   withholdingNotes: string;
   items: ExtractItem[];
   subcontractorId?: string;
+  referenceNo?: string;
 }
 
 // ==========================================
@@ -388,7 +439,7 @@ export interface CustomExtract {
 // ==========================================
 
 export interface SupplyItem {
-  id?: string;        // ID for persistence
+  id: string;        // ID for persistence
   referenceNo?: string; // رقم مرجعي للبند
   code: string;       // كود البند (مثلا: "سن-1", "رمل-أ", "خرسانة- جاهزة")
   name: string;       // اسم البند (مثال: سن طبقة 1، سن طبقة 2، خرسانة، رمل)
@@ -638,6 +689,8 @@ export interface DcrRecord {
   author: string;
   projectId: string;
   workflowStep: 'Draft' | 'Under Review' | 'Approved' | 'Distributed';
+  boqItemId?: string;
+  boqItemCode?: string;
 }
 
 export interface RiskItem {

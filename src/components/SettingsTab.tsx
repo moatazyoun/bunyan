@@ -29,9 +29,9 @@ import {
   CheckCircle2,
   Lock
 } from 'lucide-react';
-import { getAuth, signInWithPopup, GoogleAuthProvider, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import { getSessionLogs, SessionEvent } from '../lib/sessionTracker';
 import { UserItem } from '../types';
+import { confirmWithRandomCode } from '../utils/confirmHelper';
 
 interface SettingsTabProps {
   selectedSite: { id: string; nameAr: string; location: string } | null;
@@ -40,6 +40,7 @@ interface SettingsTabProps {
   currentUser?: UserItem | null;
   currentUserRole?: string;
   dbConnected: boolean | null;
+  triggerTestBackupReminder: () => void;
 }
 
 interface BackupFile {
@@ -54,18 +55,12 @@ export default function SettingsTab({
   onRestoreBackup, 
   currentUser,
   currentUserRole,
-  dbConnected
+  dbConnected,
+  triggerTestBackupReminder
 }: SettingsTabProps) {
-  // Nested sub-tab state inside Settings
   const [activeSubTab, setActiveSubTab] = useState<'cloud' | 'local' | 'session'>('cloud');
 
-  const [googleUser, setGoogleUser] = useState<any>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-
-  const [isConnecting, setIsConnecting] = useState(false);
-  
   // Backups lists state
-  const [backups, setBackups] = useState<BackupFile[]>([]);
   const [isLoadingBackups, setIsLoadingBackups] = useState(false);
   const [isBackupSaving, setIsBackupSaving] = useState(false);
   const [isBackupRestoring, setIsBackupRestoring] = useState<string | null>(null);
@@ -147,17 +142,7 @@ export default function SettingsTab({
       try {
         const result = await getRedirectResult(auth);
         if (result) {
-          const credential = GoogleAuthProvider.credentialFromResult(result);
-          if (credential?.accessToken) {
-            setAccessToken(credential.accessToken);
-            setGoogleUser({
-              displayName: result.user.displayName,
-              email: result.user.email,
-              photoURL: result.user.photoURL
-            });
-            fetchBackupsList(credential.accessToken);
-            setSuccessMsg('تم ربط حساب Google بنجاح وإتاحة الوصول لجوجل درايف!');
-          }
+          // Google Drive functionality removed
         }
       } catch (err) {
         console.error(err);
@@ -165,79 +150,6 @@ export default function SettingsTab({
     };
     processRedirect();
   }, []);
-
-  // Auto-connect on mount if authenticated with Google providers in Firebase
-  useEffect(() => {
-    const auth = getAuth();
-    
-    const user = auth.currentUser;
-    if (user) {
-      const googleProvider = user.providerData.find(p => p.providerId === 'google.com');
-      if (googleProvider) {
-        setGoogleUser({
-          displayName: user.displayName,
-          email: user.email,
-          photoURL: user.photoURL
-        });
-        
-        if (accessToken) {
-          fetchBackupsList(accessToken);
-        }
-      }
-    }
-  }, [accessToken]);
-
-  const handleConnectGoogle = async () => {
-    setIsConnecting(true);
-    setErrorMsg(null);
-    setSuccessMsg(null);
-    try {
-      const auth = getAuth();
-      const provider = new GoogleAuthProvider();
-      provider.addScope('https://www.googleapis.com/auth/drive.file');
-      
-      await signInWithRedirect(auth, provider);
-    } catch (err: any) {
-      if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
-        console.error(err);
-        setErrorMsg(err.message || 'فشل التوصيل بحساب Google المصرح به.');
-      }
-      setIsConnecting(false);
-    }
-  };
-
-  const fetchBackupsList = async (token = accessToken) => {
-    const activeToken = token || accessToken;
-    if (!activeToken) return;
-
-    setIsLoadingBackups(true);
-    setErrorMsg(null);
-    try {
-      const q = encodeURIComponent("name contains 'bunyan_backup_' and trashed = false");
-      const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id, name, createdTime)&orderBy=createdTime desc`, {
-        headers: {
-          'Authorization': `Bearer ${activeToken}`
-        }
-      });
-      
-      if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
-            setAccessToken(null);
-            setGoogleUser(null);
-            throw new Error('انتهت صلاحية الاتصال. يرجى إعادة ربط حساب جوجل من جديد.');
-        }
-        throw new Error('فشل جلب قائمة الملخص السحابي من Google Drive.');
-      }
-      
-      const data = await res.json();
-      setBackups(data.files || []);
-    } catch (err: any) {
-      console.error(err);
-      setErrorMsg('خطأ أثناء مزامنة وقراءة قائمة النسخ السحابية: ' + err.message);
-    } finally {
-      setIsLoadingBackups(false);
-    }
-  };
 
   const fetchDbBackupsList = async () => {
     if (!selectedSite) return;
@@ -300,7 +212,7 @@ export default function SettingsTab({
 
   const handleRestoreDbBackup = async (file: BackupFile) => {
     if (!selectedSite) return;
-    const isConfirmed = window.confirm(
+    const isConfirmed = confirmWithRandomCode(
       `تنبيه هام جداً:\n\nهل أنت متأكد بنسبة 100% من استعادة النسخة الاحتياطية السحابية المباشرة "${file.name}"؟\n` +
       `هذا الإجراء سيقوم باستبدال وحفظ كافة السجلات والعمال والتكاليف الحالية بهذا الموقع واستبدالها بما في النسخة المحددة.`
     );
@@ -333,7 +245,7 @@ export default function SettingsTab({
 
   const handleDeleteDbBackup = async (file: BackupFile) => {
     if (!selectedSite) return;
-    const isConfirmed = window.confirm(`هل أنت متأكد من حذف نسخة البيانات الاحتياطية السحابية المباشرة الفورية؟`);
+    const isConfirmed = confirmWithRandomCode(`هل أنت متأكد من حذف نسخة البيانات الاحتياطية السحابية المباشرة الفورية؟`);
     if (!isConfirmed) return;
 
     setErrorMsg(null);
@@ -352,137 +264,6 @@ export default function SettingsTab({
     } catch (err: any) {
       console.error(err);
       setErrorMsg('حدث خطأ أثناء إجراء الحذف المباشر: ' + err.message);
-    }
-  };
-
-  const handleBackupNow = async () => {
-    if (!accessToken) {
-      setErrorMsg('يرجى توصيل حساب Google الخاص بك أولاً لتفعيل التخزين السحابي.');
-      return;
-    }
-    if (!selectedSite) {
-      setErrorMsg('يرجى اختيار موقع عمل نشط قبل حفظ النسخة الاحتياطية.');
-      return;
-    }
-
-    setIsBackupSaving(true);
-    setErrorMsg(null);
-    setSuccessMsg(null);
-
-    try {
-      const payload = getBackupPayload();
-      const backupData = {
-        version: "2.5",
-        timestamp: new Date().toISOString(),
-        siteId: selectedSite.id,
-        siteName: selectedSite.nameAr,
-        payload
-      };
-
-      const siteNameClean = selectedSite.nameAr.replace(/\s+/g, '_');
-      const fileName = `bunyan_backup_${siteNameClean}_${new Date().toISOString().split('T')[0]}.json`;
-
-      const boundary = 'bunyan_backup_boundary';
-      const delimiter = `\r\n--${boundary}\r\n`;
-      const closeDelimiter = `\r\n--${boundary}--`;
-
-      const metadata = {
-        name: fileName,
-        mimeType: 'application/json',
-      };
-
-      const multipartRequestBody =
-        delimiter +
-        'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-        JSON.stringify(metadata) +
-        delimiter +
-        'Content-Type: application/json\r\n\r\n' +
-        JSON.stringify(backupData) +
-        closeDelimiter;
-
-      const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': `multipart/related; boundary=${boundary}`,
-        },
-        body: multipartRequestBody,
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`خطأ بجوجل درايف أثناء الرفع: ${errText}`);
-      }
-
-      setSuccessMsg(`تم رفع النسخة الاحتياطية "${fileName}" بنجاح إلى حسابك في Google Drive!`);
-      fetchBackupsList();
-    } catch (err: any) {
-      console.error(err);
-      setErrorMsg('فشل إعداد وإرسال حزمة النسخ السحابية: ' + err.message);
-    } finally {
-      setIsBackupSaving(false);
-    }
-  };
-
-  const handleRestoreCloud = async (file: BackupFile) => {
-    if (!accessToken) return;
-    
-    const isConfirmed = window.confirm(
-      `تنبيه هام جداً:\n\nهل أنت متأكد بنسبة 100% من استعادة النسخة الاحتياطية "${file.name}"؟\n` +
-      `هذا الإجراء سيقوم باستبدال وحذف وسحب كافة البيانات وسجلات العمال والمعدات والعهود والمقايسات الحالية للموقع الحالي واستبدالها بما في النسخة السحابية.`
-    );
-    if (!isConfirmed) return;
-
-    setIsBackupRestoring(file.id);
-    setErrorMsg(null);
-    setSuccessMsg(null);
-
-    try {
-      const response = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('فشل تنزيل ملف السحابة للنسخة المحددة من Google Drive.');
-      }
-
-      const backupData = await response.json();
-      onRestoreBackup(backupData);
-      setSuccessMsg('تمت استعادة كافة البيانات والملفات والتقارير من السحابة بنجاح!');
-    } catch (err: any) {
-      console.error(err);
-      setErrorMsg('فشل استيراد وتحليل بيانات النسخة الاحتياطية السحابية: ' + err.message);
-    } finally {
-      setIsBackupRestoring(null);
-    }
-  };
-
-  const handleDeleteCloudFile = async (file: BackupFile) => {
-    if (!accessToken) return;
-    const isConfirmed = window.confirm(`هل أنت متأكد من حذف ملف النسخة الاحتياطية سحابياً "${file.name}" من جوجل درايف؟`);
-    if (!isConfirmed) return;
-
-    setErrorMsg(null);
-    setSuccessMsg(null);
-    try {
-      const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
-      });
-
-      if (!res.ok) {
-        throw new Error('فشل إرسال طلب حذف الملف السحابي.');
-      }
-
-      setSuccessMsg('تم حذف ملف النسخة الاحتياطية من جوجل درايف بنجاح.');
-      fetchBackupsList();
-    } catch (err: any) {
-      console.error(err);
-      setErrorMsg('حدث خطأ أثناء إجراء الحذف: ' + err.message);
     }
   };
 
@@ -524,7 +305,7 @@ export default function SettingsTab({
     const file = targetInput.files?.[0];
     if (!file) return;
 
-    const isConfirmed = window.confirm('تحذير:\n\nهل أنت متأكد من رغبتك في استيراد هذه النسخة الاحتياطية المحلية؟ سيتم إعادة كتابة كافة بيانات المشروع النشط بالبيانات المستوردة.');
+    const isConfirmed = confirmWithRandomCode('تحذير:\n\nهل أنت متأكد من رغبتك في استيراد هذه النسخة الاحتياطية المحلية؟ سيتم إعادة كتابة كافة بيانات المشروع النشط بالبيانات المستوردة.');
     if (!isConfirmed) {
       targetInput.value = '';
       return;
@@ -653,7 +434,7 @@ export default function SettingsTab({
               </div>
             </div>
 
-            {/* Step 2: Google Drive Backup */}
+            {/* Step 2: Firestore Backup */}
             <div className="bg-white p-6 rounded-3xl border border-slate-150 shadow-sm flex flex-col justify-between space-y-4">
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
@@ -661,69 +442,35 @@ export default function SettingsTab({
                     <Cloud className="w-5 h-5" />
                   </span>
                   <div>
-                    <h3 className="text-sm font-black text-slate-900">ربط جوجل درايف (المزامنة الخاصة)</h3>
-                    <p className="text-[10px] text-slate-550 font-bold">اربط حساب Gmail الخاص بمهندس الموقع لحفظ البيانات في ملف مستقل ومؤمن بجوجل درايف.</p>
+                    <h3 className="text-sm font-black text-slate-900">النسخ الاحتياطي السحابي (Firestore)</h3>
+                    <p className="text-[10px] text-slate-550 font-bold">حفظ تلقائي أو يدوي للبيانات على قاعدة بيانات Firestore.</p>
                   </div>
                 </div>
 
-                {googleUser ? (
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-150 flex items-center gap-3">
-                    {googleUser.photoURL ? (
-                      <img referrerPolicy="no-referrer" src={googleUser.photoURL} alt={googleUser.displayName} className="w-10 h-10 rounded-full border border-indigo-200" />
-                    ) : (
-                      <span className="w-10 h-10 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-black text-xs">G</span>
-                    )}
-                    <div>
-                      <span className="text-xs font-black text-slate-800 block">{googleUser.displayName || 'مستخدم جوجل'}</span>
-                      <span className="text-[10px] text-slate-400 font-mono font-bold block">{googleUser.email}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-xs text-slate-500 font-bold leading-relaxed space-y-1">
-                    <p>• يحفظ نسخة احتياطية إضافية داخل مساحتك الخاصة على Google Cloud.</p>
-                    <p>• تحتاج للمصادقة مرة واحدة فقط.</p>
-                  </div>
-                )}
+                <div className="text-xs text-slate-500 font-bold leading-relaxed space-y-1">
+                  <p>• يحفظ نسخة احتياطية في سحابة بنيان.</p>
+                  <p>• متاح تلقائياً.</p>
+                </div>
               </div>
 
               <div>
-                {!accessToken ? (
-                  <button
-                    onClick={currentUserRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية لربط الحسابات') : handleConnectGoogle}
-                    disabled={isConnecting || currentUserRole === 'viewer'}
-                    className={`w-full py-3.5 ${currentUserRole === 'viewer' ? 'bg-slate-300 text-slate-100 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 text-white'} rounded-2xl text-xs font-black transition active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2`}
-                  >
-                    {isConnecting ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        يرجى الانتظار، جاري الربط الآمن بجوجل...
-                      </>
-                    ) : (
-                      <>
-                        <Link className="w-4 h-4" />
-                        <span>ربط حساب جوجل وتفعيل Google Drive</span>
-                      </>
-                    )}
-                  </button>
-                ) : (
-                  <button
-                    onClick={currentUserRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية لرفع النسخ الاحتياطية') : handleBackupNow}
-                    disabled={isBackupSaving || currentUserRole === 'viewer'}
-                    className={`w-full py-3.5 ${currentUserRole === 'viewer' ? 'bg-slate-300 text-slate-100 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white'} rounded-2xl text-xs font-black transition active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 shadow`}
-                  >
-                    {isBackupSaving ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        يرجى الانتظار، جاري الرفع لجوجل درايف...
-                      </>
-                    ) : (
-                      <>
-                        <CloudUpload className="w-4 h-4" />
-                        <span>رفع نسخة احتياطية جديدة لـ Google Drive</span>
-                      </>
-                    )}
-                  </button>
-                )}
+                <button
+                  onClick={currentUserRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية لرفع النسخ الاحتياطية') : handleDbBackupNow}
+                  disabled={isDbBackupSaving || currentUserRole === 'viewer'}
+                  className={`w-full py-3.5 ${currentUserRole === 'viewer' ? 'bg-slate-300 text-slate-100 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white'} rounded-2xl text-xs font-black transition active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 shadow`}
+                >
+                  {isDbBackupSaving ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      يرجى الانتظار، جاري الرفع...
+                    </>
+                  ) : (
+                    <>
+                      <CloudUpload className="w-4 h-4" />
+                      <span>رفع نسخة سحابية جديدة الآن</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>
@@ -801,81 +548,6 @@ export default function SettingsTab({
               )}
             </div>
           </div>
-
-          {/* Google Drive files list */}
-          {accessToken && (
-            <div className="bg-white rounded-3xl border border-slate-150 shadow-sm overflow-hidden animate-in slide-in-from-bottom-3 duration-300" id="gdrive-backups-list">
-              <div className="p-6 border-b border-slate-150 bg-slate-50 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Cloud className="w-5 h-5 text-indigo-600" />
-                  <h3 className="text-sm font-black text-slate-900">سجل ولفائف النسخ الاحتياطية على السحابة الخاصة (Google Drive)</h3>
-                </div>
-                <button 
-                  onClick={() => fetchBackupsList()}
-                  className="p-1 px-3 bg-white hover:bg-slate-50 text-slate-600 text-[10px] font-black rounded-lg border border-slate-200 transition flex items-center gap-1"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>مزامنة وتوريد</span>
-                </button>
-              </div>
-
-              <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto">
-                {isLoadingBackups ? (
-                  <div className="p-8 text-center text-slate-400 font-bold text-xs flex justify-center items-center gap-2">
-                    <RefreshCw className="w-4 h-4 animate-spin text-indigo-650" />
-                    جاري جلب القائمة والترتيب من جوجل درايف...
-                  </div>
-                ) : backups.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400 font-bold text-xs">
-                    لا توجد لقطات نسخ احتياطية مسجلة بجوجل درايف حتى الآن.
-                  </div>
-                ) : (
-                  backups.map((file) => (
-                    <div key={file.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition">
-                      <div className="flex items-center gap-2">
-                        <span className="p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
-                          <Cloud className="w-4 h-4" />
-                        </span>
-                        <div className="text-right">
-                          <span className="text-xs font-black text-slate-800 block truncate max-w-sm">{file.name}</span>
-                          <span className="text-[10px] text-slate-400 font-mono mt-0.5 block">{new Date(file.createdTime).toLocaleString('ar-EG')}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                        <button
-                          onClick={currentUserRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية للاستعادة') : () => handleRestoreCloud(file)}
-                          disabled={isBackupRestoring !== null || currentUserRole === 'viewer'}
-                          className={`px-3.5 py-2 ${currentUserRole === 'viewer' ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 text-indigo-850'} rounded-xl text-[11px] font-black transition active:scale-95 disabled:opacity-50 flex items-center gap-1.5`}
-                        >
-                          {isBackupRestoring === file.id ? (
-                            <>
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                              جاري التحويل والاستعادة...
-                            </>
-                          ) : (
-                            <>
-                              <CloudDownload className="w-3.5 h-3.5" />
-                              <span>استعادة وتعميم</span>
-                            </>
-                          )}
-                        </button>
-
-                        <button
-                          onClick={currentUserRole === 'viewer' ? () => alert('عذراً، لا تملك صلاحية للحذف') : () => handleDeleteCloudFile(file)}
-                          disabled={currentUserRole === 'viewer'}
-                          className={`p-2 ${currentUserRole === 'viewer' ? 'bg-slate-200 text-slate-400 cursor-not-allowed border-none' : 'bg-slate-50 hover:bg-rose-50 border border-slate-200 hover:border-rose-100 text-slate-400 hover:text-rose-600'} rounded-xl transition cursor-pointer`}
-                          title="حذف الملف نهائياً من جوجل درايف"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -894,6 +566,7 @@ export default function SettingsTab({
                   <div className="flex items-center gap-2">
                     <FileDown className="w-5 h-5 text-indigo-600 animate-bounce" />
                     <h4 className="text-xs font-black text-indigo-900">حفظ وتصدير ملف JSON محلياً</h4>
+                    <button onClick={triggerTestBackupReminder} className="text-[9px] bg-red-100 text-red-600 p-1 rounded">تجريبي</button>
                   </div>
                   <p className="text-[10.5px] text-slate-500 leading-relaxed font-bold">
                     قم بتنزيل كافة حسابات الموقع الفنية والتسويات الحالية، وأسماء العمال والآليات ودفتر الحركة بملف واحد مشفر لتبادل النسخ أو الأرشفة الورقية والخارجية.

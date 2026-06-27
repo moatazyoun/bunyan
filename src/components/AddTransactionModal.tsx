@@ -84,19 +84,14 @@ export default function AddTransactionModal({
   const [error, setError] = useState('');
 
   useEffect(() => {
-    // Load existing suppliers
+    // Load existing suppliers from the Firestore database state
     if (contractorsReport && contractorsReport.length > 0) {
       setKnownSuppliers(contractorsReport);
     } else {
-      const savedSuppliers = localStorage.getItem('bunyan_contractors_report');
-      if (savedSuppliers) {
-        setKnownSuppliers(JSON.parse(savedSuppliers));
-      } else {
-        setKnownSuppliers([
-          { id: 'c1', name: 'صلاح العجاري' },
-          { id: 'c2', name: 'حكيم' }
-        ]);
-      }
+      setKnownSuppliers([
+        { id: 'sup-c1', name: 'صلاح العجاري', referenceNo: 'REF-837209' },
+        { id: 'sup-c2', name: 'حكيم', referenceNo: 'REF-298371' }
+      ]);
     }
   }, [contractorsReport]);
 
@@ -152,7 +147,6 @@ export default function AddTransactionModal({
           deliveryMethods: []
         };
         const updatedList = [...knownSuppliers, newSupplier];
-        localStorage.setItem('bunyan_contractors_report', JSON.stringify(updatedList));
         setKnownSuppliers(updatedList);
         if (setContractorsReport) {
           setContractorsReport(updatedList);
@@ -166,8 +160,6 @@ export default function AddTransactionModal({
         const updatedList = [...subcontractors, newSubcontractor];
         setSubcontractors(updatedList);
       }
-      
-      window.dispatchEvent(new Event('storage'));
     } else {
       if (!finalRecipient.trim()) {
         setError('يرجى تحديد المستفيد أو جهة الصرف.');

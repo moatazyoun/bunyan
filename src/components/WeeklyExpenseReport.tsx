@@ -37,6 +37,12 @@ interface WeeklyExpenseReportProps {
   onDeleteTransaction?: (id: string) => void;
   addAuditLog: (action: string, module: string, details: string) => void;
   userRole?: string;
+  benodTree?: any;
+  setBenodTree?: any;
+  closingDayIndex?: number;
+  setClosingDayIndex?: (idx: number) => void;
+  signatures?: any;
+  setSignatures?: any;
 }
 
 // 16 approved coding categories and specific items extracted directly from the uploaded spreadsheet
@@ -201,25 +207,19 @@ export default function WeeklyExpenseReport({
   onDeleteTransaction,
   addAuditLog,
   workers,
-  userRole
+  userRole,
+  benodTree: propBenodTree,
+  setBenodTree: propSetSetBenodTree,
+  closingDayIndex: propClosingDayIndex,
+  setClosingDayIndex: propSetClosingDayIndex,
+  signatures: propSignatures,
+  setSignatures: propSetSignatures
 }: WeeklyExpenseReportProps & { workers: SiteWorker[] }) {
   // 1. Dynamic Benod Tree State
-  const [benodTree, setBenodTree] = useState<{ [categoryNameAr: string]: { coreCategory: ProjectCategory; items: string[] } }>(() => {
-    const saved = localStorage.getItem('bunyan_benod_tree');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error("Failed to parse saved benod tree", e);
-      }
-    }
-    return BENOD_TREE;
-  });
-
-  // Save changes to local storage
-  useEffect(() => {
-    localStorage.setItem('bunyan_benod_tree', JSON.stringify(benodTree));
-  }, [benodTree]);
+  const [localBenodTree, setLocalBenodTree] = useState<{ [categoryNameAr: string]: { coreCategory: ProjectCategory; items: string[] } }>(BENOD_TREE);
+  
+  const benodTree = propBenodTree !== undefined && propBenodTree !== null ? propBenodTree : localBenodTree;
+  const setBenodTree = propSetSetBenodTree !== undefined ? propSetSetBenodTree : setLocalBenodTree;
 
   // Synchronize Site Workers with the Coding Tree (Items) for labor categories
   useEffect(() => {
@@ -416,32 +416,36 @@ export default function WeeklyExpenseReport({
 
   // Report configurations
   // Closing day state: 2 corresponds to Tuesday
-  const [closingDayIndex, setClosingDayIndex] = useState<number>(() => {
-    const saved = localStorage.getItem('bunyan_closing_day_index');
-    return saved !== null ? Number(saved) : 2; // Tuesday is default
-  });
-
-  useEffect(() => {
-    localStorage.setItem('bunyan_closing_day_index', closingDayIndex.toString());
-  }, [closingDayIndex]);
+  const [localClosingDayIndex, setLocalClosingDayIndex] = useState<number>(2);
+  const closingDayIndex = propClosingDayIndex !== undefined && propClosingDayIndex !== null ? propClosingDayIndex : localClosingDayIndex;
+  const setClosingDayIndex = propSetClosingDayIndex !== undefined ? propSetClosingDayIndex : setLocalClosingDayIndex;
 
   // Signature configs
-  const [sig1Title, setSig1Title] = useState(() => localStorage.getItem('bunyan_sig1_title') || 'المحاسب المالي');
-  const [sig2Title, setSig2Title] = useState(() => localStorage.getItem('bunyan_sig2_title') || 'مهندس أول المشروع والمراجعة');
-  const [sig3Title, setSig3Title] = useState(() => localStorage.getItem('bunyan_sig3_title') || 'مدير عام قطاع التنفيذ للمشاريع');
-  
-  const [sig1Name, setSig1Name] = useState(() => localStorage.getItem('bunyan_sig1_name') || '');
-  const [sig2Name, setSig2Name] = useState(() => localStorage.getItem('bunyan_sig2_name') || '');
-  const [sig3Name, setSig3Name] = useState(() => localStorage.getItem('bunyan_sig3_name') || '');
+  const [localSignatures, setLocalSignatures] = useState<any>({
+    sig1Title: 'المحاسب المالي',
+    sig2Title: 'مهندس أول المشروع والمراجعة',
+    sig3Title: 'مدير عام قطاع التنفيذ للمشاريع',
+    sig1Name: '',
+    sig2Name: '',
+    sig3Name: '',
+  });
+  const signatures = propSignatures !== undefined && propSignatures !== null ? propSignatures : localSignatures;
+  const setSignatures = propSetSignatures !== undefined ? propSetSignatures : setLocalSignatures;
 
-  useEffect(() => {
-    localStorage.setItem('bunyan_sig1_title', sig1Title);
-    localStorage.setItem('bunyan_sig2_title', sig2Title);
-    localStorage.setItem('bunyan_sig3_title', sig3Title);
-    localStorage.setItem('bunyan_sig1_name', sig1Name);
-    localStorage.setItem('bunyan_sig2_name', sig2Name);
-    localStorage.setItem('bunyan_sig3_name', sig3Name);
-  }, [sig1Title, sig2Title, sig3Title, sig1Name, sig2Name, sig3Name]);
+  // Map individual fields to signatures object for clean code compatibility
+  const sig1Title = signatures.sig1Title || 'المحاسب المالي';
+  const sig2Title = signatures.sig2Title || 'مهندس أول المشروع والمراجعة';
+  const sig3Title = signatures.sig3Title || 'مدير عام قطاع التنفيذ للمشاريع';
+  const sig1Name = signatures.sig1Name || '';
+  const sig2Name = signatures.sig2Name || '';
+  const sig3Name = signatures.sig3Name || '';
+
+  const setSig1Title = (val: string) => setSignatures((prev: any) => ({ ...prev, sig1Title: val }));
+  const setSig2Title = (val: string) => setSignatures((prev: any) => ({ ...prev, sig2Title: val }));
+  const setSig3Title = (val: string) => setSignatures((prev: any) => ({ ...prev, sig3Title: val }));
+  const setSig1Name = (val: string) => setSignatures((prev: any) => ({ ...prev, sig1Name: val }));
+  const setSig2Name = (val: string) => setSignatures((prev: any) => ({ ...prev, sig2Name: val }));
+  const setSig3Name = (val: string) => setSignatures((prev: any) => ({ ...prev, sig3Name: val }));
 
   const getWeekStartDate = (date: Date, closingDay: number): Date => {
     const startDayIndex = (closingDay + 1) % 7;
@@ -484,8 +488,10 @@ export default function WeeklyExpenseReport({
     isOpen: boolean;
     title: string;
     message: string;
+    expectedCode?: string;
     onConfirm: () => void;
   } | null>(null);
+  const [deleteCodeInput, setDeleteCodeInput] = useState('');
 
   // Align startDate whenever closingDayIndex changes
   useEffect(() => {
@@ -684,6 +690,7 @@ export default function WeeklyExpenseReport({
       isOpen: true,
       title: 'حذف البند بالكامل من الدفاتر الحسابية',
       message: `تحذير هام جداً: هل أنت متأكد من رغبتك في حذف البند "${item.description}" بكافة تسجيلاته وحركاته المالية الموزعة على أيام الأركان بالأسبوع للتصفية (مجموعها ${item.total} ج.م)؟ سيتم محو هذا تماماً من الحسابات ودون تراجع!`,
+      expectedCode: Math.floor(1000 + Math.random() * 9000).toString(),
       onConfirm: () => {
         item.ids.forEach((id: string) => {
           if (onDeleteTransaction) {
@@ -1505,7 +1512,7 @@ export default function WeeklyExpenseReport({
           </div>
 
           {/* NEW: APPROVED CODING & MANUAL EXPENSE REGISTRATION FORM */}
-          <div className="bg-[#0b0e14] border border-[#1a2333] rounded-[2rem] p-6 text-right text-slate-100 space-y-6 shadow-2xl relative overflow-hidden isolate">
+          <div className="bg-[#064e3b] border border-[#1a2333] rounded-[2rem] p-6 text-right text-slate-100 space-y-6 shadow-2xl relative overflow-hidden isolate">
             
             {/* Background glowing orbs */}
             <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-[100px] pointer-events-none mix-blend-screen"></div>
@@ -2535,14 +2542,39 @@ export default function WeeklyExpenseReport({
             <p className="text-slate-700 text-xs font-semibold leading-relaxed">
               {confirmState.message}
             </p>
+            {confirmState.expectedCode && (
+              <div className="bg-rose-50 border border-rose-100 p-4 rounded-xl space-y-3 mt-4">
+                <label className="block text-[10px] font-black text-rose-500 uppercase tracking-widest text-center">
+                  أدخل كود التحقق لتأكيد الحذف: <span className="bg-rose-100 px-2 py-0.5 rounded text-rose-700 text-sm ml-1 select-all font-mono tracking-widest">{confirmState.expectedCode}</span>
+                </label>
+                <input 
+                  type="text"
+                  value={deleteCodeInput}
+                  onChange={(e) => setDeleteCodeInput(e.target.value)}
+                  placeholder="أدخل الكود هنا..."
+                  className="w-full bg-white border border-rose-200 rounded-lg px-4 py-2 text-center font-mono text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 transition-all"
+                  autoFocus
+                />
+              </div>
+            )}
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => {
+                  if (confirmState.expectedCode && deleteCodeInput !== confirmState.expectedCode) {
+                    alert('كود التحقق غير صحيح');
+                    return;
+                  }
                   confirmState.onConfirm();
                   setConfirmState(null);
+                  setDeleteCodeInput('');
                 }}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-750 text-white text-xs font-black rounded-xl transition shadow active:scale-95 cursor-pointer"
+                disabled={!!(confirmState.expectedCode && deleteCodeInput !== confirmState.expectedCode)}
+                className={`px-4 py-2 text-white text-xs font-black rounded-xl transition shadow active:scale-95 cursor-pointer ${
+                  confirmState.expectedCode && deleteCodeInput !== confirmState.expectedCode
+                    ? 'bg-slate-300 cursor-not-allowed shadow-none'
+                    : 'bg-indigo-600 hover:bg-indigo-750'
+                }`}
               >
                 تأكيد العملية
               </button>

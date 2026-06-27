@@ -41,6 +41,7 @@ import ErpSubDashboards from './components/ErpSubDashboards';
 import CrmDashboard from './components/CrmDashboard';
 import CrmCustomerList from './components/CrmCustomerList';
 import AddCustomerModal from './components/AddCustomerModal';
+import GlobalActivityLog from './components/GlobalActivityLog';
 
 import { 
   Transaction, 
@@ -74,9 +75,13 @@ import {
   UserModulePermissions,
   RiskItem,
   DcrRecord,
-  CustomerRecord
+  CustomerRecord,
+  MRIRRecord,
+  MRNRecord,
+  AuditCountRecord
 } from './types';
 import { INITIAL_FUEL_CUSTODY_BUDGET } from './data/fuelInitialData';
+import { setConfirmListener } from './utils/confirmHelper';
 
 // Replaced direct Firestore imports with API calls for better reliability in diverse environments
 
@@ -129,7 +134,7 @@ import {
 import { db } from './lib/firebase';
 import { appendSessionLog } from './lib/sessionTracker';
 
-function sanitizeLoadedData<T extends { id: string }>(items: any[], prefix: string): T[] {
+function sanitizeLoadedData<T extends { id: string; referenceNo?: string }>(items: any[], prefix: string): T[] {
   if (!items || !Array.isArray(items)) return [];
   const seen = new Set<string>();
   return items.map((item, idx) => {
@@ -139,8 +144,15 @@ function sanitizeLoadedData<T extends { id: string }>(items: any[], prefix: stri
       finalId = `${prefix}-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000000)}`;
     }
     seen.add(finalId);
-    return { ...item, id: finalId };
-  }).filter(Boolean);
+    
+    // Automatically generate referenceNo if not present in the loaded database record
+    let finalRef = item.referenceNo || item.refNo || item.referenceNumber || item.ref;
+    if (!finalRef) {
+      finalRef = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
+    }
+    
+    return { ...item, id: finalId, referenceNo: finalRef };
+  }).filter(Boolean) as T[];
 }
 
 
@@ -191,13 +203,22 @@ export default function App() {
   const [dbConnected, setDbConnected] = useState<boolean | null>(null);
   const [dbChecking, setDbChecking] = useState<boolean>(false);
   const [dbLatency, setDbLatency] = useState<number>(0);
-  const [forceOfflineBypass, setForceOfflineBypass] = useState<boolean>(false);
 
-  const toggleOfflineBypass = () => {
-    const nextVal = !forceOfflineBypass;
-    setForceOfflineBypass(nextVal);
-    localStorage.setItem('bunyan_force_offline_bypass', String(nextVal));
-  };
+  const [globalConfirm, setGlobalConfirm] = useState<{
+    message: string;
+    randomCode: string;
+    resolve: (val: boolean) => void;
+  } | null>(null);
+
+  const [globalConfirmInput, setGlobalConfirmInput] = useState('');
+
+  useEffect(() => {
+    setConfirmListener((req) => {
+      setGlobalConfirm(req);
+      setGlobalConfirmInput('');
+    });
+    return () => setConfirmListener(() => {});
+  }, []);
 
   // DB Connection status continuous check
   const checkDbStatus = async () => {
@@ -420,6 +441,9 @@ export default function App() {
   const [wbsTasks, setWbsTasks] = useState<WbsTaskRecord[]>([]);
 
   const [warehouseItems, setWarehouseItems] = useState<WarehouseItemRecord[]>([]);
+  const [mrirLogs, setMrirLogs] = useState<MRIRRecord[]>([]);
+  const [mrnLogs, setMrnLogs] = useState<MRNRecord[]>([]);
+  const [warehouseAuditLogs, setWarehouseAuditLogs] = useState<AuditCountRecord[]>([]);
 
   const [auditLogs, setAuditLogs] = useState<AuditTrailRecord[]>([]);
 
@@ -448,6 +472,18 @@ export default function App() {
   const [equipmentList, setEquipmentList] = useState<EquipmentSummary[]>([]);
   const [risks, setRisks] = useState<RiskItem[]>([]);
   const [dcrRecords, setDcrRecords] = useState<DcrRecord[]>([]);
+
+  // Weekly report persistent configuration (Firestore master source of truth)
+  const [weeklyReportBenodTree, setWeeklyReportBenodTree] = useState<any>(null);
+  const [weeklyReportClosingDayIndex, setWeeklyReportClosingDayIndex] = useState<number>(2);
+  const [weeklyReportSignatures, setWeeklyReportSignatures] = useState<any>({
+    sig1Title: 'المحاسب المالي',
+    sig2Title: 'مهندس أول المشروع والمراجعة',
+    sig3Title: 'مدير عام قطاع التنفيذ للمشاريع',
+    sig1Name: '',
+    sig2Name: '',
+    sig3Name: '',
+  });
 
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
@@ -479,6 +515,9 @@ export default function App() {
         hseIncidents,
         wbsTasks,
         warehouseItems,
+        mrirLogs,
+        mrnLogs,
+        warehouseAuditLogs,
         auditLogs,
         workers,
         attendanceLogs,
@@ -498,7 +537,10 @@ export default function App() {
         fuelStations,
         equipmentSummary: equipmentList,
         risks,
-        dcrRecords
+        dcrRecords,
+        weeklyReportBenodTree,
+        weeklyReportClosingDayIndex,
+        weeklyReportSignatures
       };
 
       const timer = setTimeout(async () => {
@@ -523,7 +565,7 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [
-    transactions, custodies, contractors, equipment, maintenanceOrders, labTests, hseIncidents, wbsTasks, warehouseItems, auditLogs, workers, attendanceLogs, salaryPayments, extracts, projects, boqItems, submissions, subcontractors, contracts, supplyRecords, supplyItems, cubicCertificates, contractorsReport, fuelLogs, custodyBudget, fuelStations, equipmentList, selectedSite, user, isDbLoaded, risks, dcrRecords
+    transactions, custodies, contractors, equipment, maintenanceOrders, labTests, hseIncidents, wbsTasks, warehouseItems, mrirLogs, mrnLogs, warehouseAuditLogs, auditLogs, workers, attendanceLogs, salaryPayments, extracts, projects, boqItems, submissions, subcontractors, contracts, supplyRecords, supplyItems, cubicCertificates, contractorsReport, fuelLogs, custodyBudget, fuelStations, equipmentList, selectedSite, user, isDbLoaded, risks, dcrRecords, weeklyReportBenodTree, weeklyReportClosingDayIndex, weeklyReportSignatures
   ]);
 
   const checkAndTriggerDailyAutoBackup = async (siteId: string, siteName: string, sitePayload: any) => {
@@ -557,6 +599,24 @@ export default function App() {
     }
   };
 
+  const [showBackupReminder, setShowBackupReminder] = useState(false);
+
+  useEffect(() => {
+    const checkBackupReminder = () => {
+      const now = new Date();
+      // Test or real check
+      if (now.getHours() === 12 && now.getMinutes() === 0) {
+        setShowBackupReminder(true);
+      }
+    };
+    const timer = setInterval(checkBackupReminder, 60000); 
+    return () => clearInterval(timer);
+  }, []);
+
+  const triggerTestBackupReminder = () => {
+    setShowBackupReminder(true);
+  };
+  
   // Pull site database from Firestore upon site selection
   useEffect(() => {
     if (user && selectedSite) {
@@ -575,6 +635,9 @@ export default function App() {
         setHseIncidents([]);
         setWbsTasks([]);
         setWarehouseItems([]);
+        setMrirLogs([]);
+        setMrnLogs([]);
+        setWarehouseAuditLogs([]);
         setAuditLogs([]);
         setWorkers([]);
         setAttendanceLogs([]);
@@ -597,17 +660,14 @@ export default function App() {
           let hasDoc = false;
           let data: any = null;
 
-          try {
-            // Using reliable server API to fetch site data
-            const res = await fetch(`/api/site/${selectedSite.id}/data`);
-            if (res.ok) {
-              data = await res.json();
-              if (data && Object.keys(data).length > 0) {
-                hasDoc = true;
-              }
-            }
-          } catch (fireErr) {
-            console.warn("API fetch failed, check connection...", fireErr);
+          // Using reliable server API to fetch site data
+          const res = await fetch(`/api/site/${selectedSite.id}/data`);
+          if (!res.ok) {
+            throw new Error(`Server returned status ${res.status}`);
+          }
+          data = await res.json();
+          if (data && Object.keys(data).length > 0) {
+            hasDoc = true;
           }
           
           if (hasDoc && data) {
@@ -620,13 +680,16 @@ export default function App() {
             setHseIncidents(data.hseIncidents ? sanitizeLoadedData<HseIncidentRecord>(data.hseIncidents, 'hse') : []);
             setWbsTasks(data.wbsTasks ? sanitizeLoadedData<WbsTaskRecord>(data.wbsTasks, 'task') : []);
             setWarehouseItems(data.warehouseItems ? sanitizeLoadedData<WarehouseItemRecord>(data.warehouseItems, 'wh') : []);
+            setMrirLogs(data.mrirLogs ? sanitizeLoadedData<MRIRRecord>(data.mrirLogs, 'mrir') : []);
+            setMrnLogs(data.mrnLogs ? sanitizeLoadedData<MRNRecord>(data.mrnLogs, 'mrn') : []);
+            setWarehouseAuditLogs(data.warehouseAuditLogs ? sanitizeLoadedData<AuditCountRecord>(data.warehouseAuditLogs, 'waudit') : []);
             setAuditLogs(data.auditLogs ? sanitizeLoadedData<AuditTrailRecord>(data.auditLogs, 'audit') : []);
             setWorkers(data.workers ? sanitizeLoadedData<SiteWorker>(data.workers, 'w') : []);
             setAttendanceLogs(data.attendanceLogs ? sanitizeLoadedData<WorkerAttendance>(data.attendanceLogs, 'att') : []);
             setSalaryPayments(data.salaryPayments ? sanitizeLoadedData<WorkerSalaryPayment>(data.salaryPayments, 'pay') : []);
-            setFuelLogs(data.fuelLogs || []);
+            setFuelLogs(data.fuelLogs ? sanitizeLoadedData<FuelLogRecord>(data.fuelLogs, 'fuel') : []);
             setCustodyBudget(data.custodyBudget || 0);
-            setFuelStations(data.fuelStations || []);
+            setFuelStations(data.fuelStations ? sanitizeLoadedData<FuelStation>(data.fuelStations, 'station') : []);
 
             setExtracts(data.extracts ? sanitizeLoadedData<CustomExtract>(data.extracts, 'ext') : []);
             setProjects(data.projects ? sanitizeLoadedData<Project>(data.projects, 'p') : []);
@@ -637,14 +700,26 @@ export default function App() {
             setEquipmentList(data.equipmentSummary ? sanitizeLoadedData<EquipmentSummary>(data.equipmentSummary, 'eqsum') : []);
             
             // Supplies data
-            setSupplyRecords(data.supplyRecords || []);
-            setSupplyItems(data.supplyItems || []);
-            setCubicCertificates(data.cubicCertificates || []);
-            setContractorsReport(data.contractorsReport || []);
+            setSupplyRecords(data.supplyRecords ? sanitizeLoadedData<SupplyRecord>(data.supplyRecords, 'suprec') : []);
+            setSupplyItems(data.supplyItems ? sanitizeLoadedData<SupplyItem>(data.supplyItems, 'supitem') : []);
+            setCubicCertificates(data.cubicCertificates ? sanitizeLoadedData<CubicCertificate>(data.cubicCertificates, 'cubic') : []);
+            setContractorsReport(data.contractorsReport ? sanitizeLoadedData<any>(data.contractorsReport, 'contractor') : []);
 
             // Risks & Documents data
             setRisks(data.risks ? sanitizeLoadedData<RiskItem>(data.risks, 'risk') : []);
             setDcrRecords(data.dcrRecords ? sanitizeLoadedData<DcrRecord>(data.dcrRecords, 'dcr') : []);
+
+            // Set weekly report states from Firestore
+            setWeeklyReportBenodTree(data.weeklyReportBenodTree || null);
+            setWeeklyReportClosingDayIndex(data.weeklyReportClosingDayIndex !== undefined ? data.weeklyReportClosingDayIndex : 2);
+            setWeeklyReportSignatures(data.weeklyReportSignatures || {
+              sig1Title: 'المحاسب المالي',
+              sig2Title: 'مهندس أول المشروع والمراجعة',
+              sig3Title: 'مدير عام قطاع التنفيذ للمشاريع',
+              sig1Name: '',
+              sig2Name: '',
+              sig3Name: '',
+            });
           } else {
             // New / unconfigured site: reset states (already done but safe to re-assert)
             setTransactions([]);
@@ -656,6 +731,9 @@ export default function App() {
             setHseIncidents([]);
             setWbsTasks([]);
             setWarehouseItems([]);
+            setMrirLogs([]);
+            setMrnLogs([]);
+            setWarehouseAuditLogs([]);
             setAuditLogs([]);
             setWorkers([]);
             setAttendanceLogs([]);
@@ -678,6 +756,18 @@ export default function App() {
 
             setRisks([]);
             setDcrRecords([]);
+
+            // Reset weekly report configuration states to defaults
+            setWeeklyReportBenodTree(null);
+            setWeeklyReportClosingDayIndex(2);
+            setWeeklyReportSignatures({
+              sig1Title: 'المحاسب المالي',
+              sig2Title: 'مهندس أول المشروع والمراجعة',
+              sig3Title: 'مدير عام قطاع التنفيذ للمشاريع',
+              sig1Name: '',
+              sig2Name: '',
+              sig3Name: '',
+            });
           }
 
           // Enforce minimum of 4 seconds for the loading transition to feel high-fidelity
@@ -695,9 +785,10 @@ export default function App() {
           }, remaining);
 
         } catch (err) {
-          console.warn("Complete catalog loading error:", err);
-          loadedSiteIdRef.current = selectedSite.id;
-          setIsDbLoaded(true); // Always allow entry so engineers are never blocked
+          console.error("Complete catalog loading error:", err);
+          alert("فشل الاتصال بقاعدة البيانات. لا يمكن تحميل بيانات الموقع. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.");
+          setSelectedSite(null);
+          setIsDbLoaded(false);
         }
       };
 
@@ -716,38 +807,95 @@ export default function App() {
       .reduce((sum, t) => sum + t.amount, 0);
 
     // 2. Calculate 'الأعمال المنفذة / المستحقات' dynamically from their respective dashboards,
-    // with a fallback to ledger 'executed_work' or initial budget if empty.
-    let totalExecutedValue = transactions
-      .filter(t => t.category === cat.id && t.type === 'executed_work')
-      .reduce((sum, t) => sum + t.amount, 0);
+    // with a fallback to ledger 'executed_work' if empty.
+    let totalExecutedValue = 0;
 
-    if (totalExecutedValue === 0) {
-      if (cat.id === 'supplies') {
-        totalExecutedValue = supplyRecords.reduce((sum, r) => sum + (r.totalCost || 0), 0);
-      } else if (cat.id === 'equipment') {
-        const getEquipmentCostHelper = (item: any) => {
-          const hours = item.logs?.reduce((acc: number, log: any) => acc + (log.hoursWorked || 0), 0) || 0;
-          const dur = item.carryoverHours ? (hours + item.carryoverHours) : hours;
-          return Math.round(dur * (item.rate || 0));
-        };
-        totalExecutedValue = equipmentList.reduce((sum, e) => sum + getEquipmentCostHelper(e), 0);
-      } else if (cat.id === 'contractors') {
-        totalExecutedValue = subcontractors.reduce((sum, s) => sum + (s.totalValue || 0), 0);
-      } else if (cat.id === 'fuel') {
-        totalExecutedValue = fuelLogs.reduce((sum, l) => sum + (l.cost || 0), 0);
-      }
+    if (cat.id === 'supplies') {
+      const suppliesTotal = supplyRecords.reduce((sum, r) => sum + (r.totalCost || 0), 0);
+      totalExecutedValue = suppliesTotal > 0 ? suppliesTotal : transactions
+        .filter(t => t.category === cat.id && t.type === 'executed_work')
+        .reduce((sum, t) => sum + t.amount, 0);
+    } else if (cat.id === 'equipment') {
+      const getEquipmentCostHelper = (item: any) => {
+        const hours = item.logs?.reduce((acc: number, log: any) => acc + (log.hoursWorked || 0), 0) || 0;
+        const dur = item.carryoverHours ? (hours + item.carryoverHours) : hours;
+        return Math.round(dur * (item.rate || 0));
+      };
+      const equipmentTotal = equipmentList.reduce((sum, e) => sum + getEquipmentCostHelper(e), 0);
+      totalExecutedValue = equipmentTotal > 0 ? equipmentTotal : transactions
+        .filter(t => t.category === cat.id && t.type === 'executed_work')
+        .reduce((sum, t) => sum + t.amount, 0);
+    } else if (cat.id === 'contractors') {
+      const subcontractorsTotal = subcontractors.reduce((sum, s) => {
+        const items = s.workItems && s.workItems.length > 0 ? s.workItems : [{
+          id: 'legacy-item',
+          trade: s.trade || 'عمل رئيسي',
+          workVolume: s.workVolume || 0,
+          unitPrice: s.unitPrice || 0,
+          totalValue: (s.workVolume || 0) * (s.unitPrice || 0) || s.totalValue || 0,
+          discounts: []
+        }];
+        let grossValue = 0;
+        let totalDiscounts = 0;
+        items.forEach(item => {
+          grossValue += item.totalValue;
+          if (item.discounts) {
+            item.discounts.forEach(d => {
+              totalDiscounts += d.amount || 0;
+            });
+          }
+        });
+        return sum + (grossValue - totalDiscounts);
+      }, 0);
+      totalExecutedValue = subcontractorsTotal > 0 ? subcontractorsTotal : transactions
+        .filter(t => t.category === cat.id && t.type === 'executed_work')
+        .reduce((sum, t) => sum + t.amount, 0);
+    } else if (cat.id === 'fuel') {
+      const fuelTotal = fuelLogs.reduce((sum, l) => sum + (l.cost || 0), 0);
+      totalExecutedValue = fuelTotal > 0 ? fuelTotal : transactions
+        .filter(t => t.category === cat.id && t.type === 'executed_work')
+        .reduce((sum, t) => sum + t.amount, 0);
+    } else if (cat.id === 'custody') {
+      const custodySpent = transactions
+        .filter(t => t.nature === 'inside_custody' && t.type === 'spent')
+        .reduce((sum, t) => sum + t.amount, 0);
+      totalExecutedValue = custodySpent > 0 ? custodySpent : transactions
+        .filter(t => t.category === cat.id && t.type === 'executed_work')
+        .reduce((sum, t) => sum + t.amount, 0);
+    } else {
+      totalExecutedValue = transactions
+        .filter(t => t.category === cat.id && t.type === 'executed_work')
+        .reduce((sum, t) => sum + t.amount, 0);
     }
 
-    // Baseline fallbacks if sheets are completely empty (helps with visual representation in fresh sites)
-    if (totalExecutedValue === 0) {
-      if (cat.id === 'supplies') totalExecutedValue = 50000;
-      else if (cat.id === 'equipment') totalExecutedValue = 4000;
-      else if (cat.id === 'contractors') totalExecutedValue = 7000;
-      else if (cat.id === 'fuel') totalExecutedValue = totalSpent || 1000;
+    // 3. Calculate 'الميزانية المعتمدة' (initialBudget) dynamically from Contracts, BOQ, or custodyBudget
+    let initialBudget = 0;
+    if (cat.id === 'contractors') {
+      const subcontractorContractsValue = contracts
+        .filter(c => c.category === 'subcontractor')
+        .reduce((sum, c) => sum + (c.value || 0), 0);
+      initialBudget = subcontractorContractsValue > 0 
+        ? subcontractorContractsValue 
+        : subcontractors.reduce((sum, s) => sum + (s.totalValue || 0), 0);
+    } else if (cat.id === 'supplies') {
+      const supplierContractsValue = contracts
+        .filter(c => c.category === 'supplier')
+        .reduce((sum, c) => sum + (c.value || 0), 0);
+      initialBudget = supplierContractsValue > 0 
+        ? supplierContractsValue 
+        : supplyRecords.reduce((sum, r) => sum + (r.totalCost || 0), 0);
+    } else if (cat.id === 'custody') {
+      initialBudget = custodyBudget || 0;
+    } else {
+      const categoryContractsValue = contracts
+        .filter(c => c.category === cat.id)
+        .reduce((sum, c) => sum + (c.value || 0), 0);
+      initialBudget = categoryContractsValue > 0 ? categoryContractsValue : (cat.initialBudget || 0);
     }
 
     return {
       ...cat,
+      initialBudget: initialBudget || cat.initialBudget || 0,
       totalSpent,
       totalExecutedValue
     };
@@ -1030,16 +1178,18 @@ export default function App() {
 
   // MAIN TRANSACTION HANDLERS
   const handleAddTransaction = (newTx: Omit<Transaction, 'id'>) => {
-    if (dbConnected === false && !forceOfflineBypass) {
+    if (dbConnected === false) {
       alert('⚠️ تنبيه حماية التسجيل الآمن مفعل: لا تتوفر تغطية لقاعدة البيانات السحابية حالياً. تم تعليق إضافة المعاملات مؤقتاً لضمان عدم حدوث تباين في الحسابات بين أجهزة المهندسين.');
       return;
     }
+    const finalRef = (newTx as any).referenceNo?.trim() || `REF-${Math.floor(100000 + Math.random() * 900000)}`;
     const txWithId: Transaction = {
       ...newTx,
-      id: `tx-${Date.now()}-${Math.floor(Math.random() * 1000000)}`
+      id: `tx-${Date.now()}-${Math.floor(Math.random() * 1000000)}`,
+      referenceNo: finalRef
     };
     setTransactions(prev => [txWithId, ...prev]);
-    addAuditLog('إضافة حركة مالية', 'دفتر الحركات المالي', `تم إضافة حركة مالية جديدة رقم ${txWithId.id} بقيمة ${txWithId.amount} ج.م.`);
+    addAuditLog('إضافة حركة مالية', 'دفتر الحركات المالي', `تم إضافة حركة مالية جديدة رقم ${txWithId.id} بمرجع ${txWithId.referenceNo} وقيمة ${txWithId.amount} ج.م.`);
     setShowAddModal(false);
   };
 
@@ -1049,34 +1199,41 @@ export default function App() {
   };
 
   const handleDeleteTransaction = (id: string) => {
-    if (dbConnected === false && !forceOfflineBypass) {
+    if (dbConnected === false) {
       alert('⚠️ تنبيه حماية التسجيل الآمن مفعل: لا تتوفر تغطية لقاعدة البيانات السحابية حالياً. تم تعليق حذف المعاملات لحين عودة الاتصال ومزامنة البيانات.');
       return;
     }
+    const target = transactions.find(t => t.id === id);
+    const info = target ? ` (القيمة: ${target.amount} ج.م، المرجع: ${target.referenceNo})` : '';
     setTransactions(prev => prev.filter(t => t.id !== id));
+    addAuditLog('حذف حركة مالية', 'دفتر الحركات المالي', `تم حذف حركة مالية بنجاح من الدفتر رقم ${id}${info}.`);
   };
 
   const handleUpdateTransaction = (updatedTx: Transaction) => {
-    if (dbConnected === false && !forceOfflineBypass) {
+    if (dbConnected === false) {
       alert('⚠️ تنبيه حماية التسجيل الآمن مفعل: لا تتوفر تغطية لقاعدة البيانات السحابية حالياً. تم تعليق تعديل الحركات لضمان تماسك السجلات بين الطواقم الإنشائية المختلفة.');
       return;
     }
-    setTransactions(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
-    addAuditLog('تعديل حركة مالية', 'دفتر الحركات المالي', `تم تعديل الحركة المالية رقم ${updatedTx.id} بقيمة ${updatedTx.amount} ج.م.`);
+    const finalRef = updatedTx.referenceNo?.trim() || `REF-${Math.floor(100000 + Math.random() * 900000)}`;
+    const finalTx = { ...updatedTx, referenceNo: finalRef };
+    setTransactions(prev => prev.map(t => t.id === finalTx.id ? finalTx : t));
+    addAuditLog('تعديل حركة مالية', 'دفتر الحركات المالي', `تم تعديل الحركة المالية رقم ${finalTx.id} بالمرجع ${finalTx.referenceNo} وقيمة ${finalTx.amount} ج.م.`);
   };
 
   const handleAddCustody = (name: string, amount: number, notes?: string) => {
-    if (dbConnected === false && !forceOfflineBypass) {
+    if (dbConnected === false) {
       alert('⚠️ تنبيه حماية التسجيل الآمن مفعل: لا يمكن فتح عهد مالي جديدة للعهدة الموقع بدون مزامنة سحابية نشطة مع الإدارة المالية المركزية.');
       return;
     }
+    const finalRef = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
     const newCustody: CustodyRecord = {
       id: `cust-${Date.now()}-${Math.floor(Math.random() * 1000000)}`,
       engineerName: name,
       totalGiven: amount,
       totalSettled: 0,
       remaining: amount,
-      notes: notes || 'عهدة جديدة قيد التصفية'
+      notes: notes || 'عهدة جديدة قيد التصفية',
+      referenceNo: finalRef
     };
     
     setCustodies(prev => [...prev, newCustody]);
@@ -1089,10 +1246,11 @@ export default function App() {
       nature: 'outside_custody', // Giving money to the engineer is from office treasury
       description: `صرف وتسليم عهدة نقدية للمهندس ${name}`,
       recipient: name,
-      paymentMethod: 'تحويل بنكى'
+      paymentMethod: 'تحويل بنكى',
+      referenceNo: finalRef
     });
 
-    addAuditLog('تفريغ عهدة موقعية', 'العهدة المالية الموقع', `تم قيد تسليم عهدة بقيمة ${amount} ج.م للمهندس ${name}.`);
+    addAuditLog('تفريغ عهدة موقعية', 'العهدة المالية الموقع', `تم قيد تسليم عهدة بالمرجع ${finalRef} وبقيمة ${amount} ج.م للمهندس ${name}.`);
   };
 
   const handleSettleCustody = (id: string, amount: number, notes: string) => {
@@ -1127,6 +1285,7 @@ export default function App() {
   };
 
   const handleAddSubcontractor = (name: string, trade: string, totalValue: number) => {
+    const finalRef = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
     const newSub: ContractorCertificate = {
       id: `sub-${Date.now()}`,
       contractorName: name,
@@ -1134,10 +1293,11 @@ export default function App() {
       totalValue,
       executedWorkValue: 0,
       totalPaid: 0,
-      remainingBalance: 0
+      remainingBalance: 0,
+      referenceNo: finalRef
     };
     setContractors(prev => [...prev, newSub]);
-    addAuditLog('إرسال مقاول باطن', 'بيانات مقاولي الباطن', `تسجيل مقاول جديد: ${name} للتخصص ${trade}.`);
+    addAuditLog('إرسال مقاول باطن', 'بيانات مقاولي الباطن', `تسجيل مقاول جديد بالمرجع ${finalRef}: ${name} للتخصص ${trade}.`);
   };
 
   const handleAddWorkCertificate = (id: string, amount: number, description: string) => {
@@ -1232,9 +1392,11 @@ export default function App() {
   };
 
   const handleAddMaintenanceOrder = (newOrder: Omit<MaintenanceOrder, 'id'>) => {
+    const finalRef = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
     const orderWithId: MaintenanceOrder = {
       ...newOrder,
-      id: `maint-${Date.now()}`
+      id: `maint-${Date.now()}`,
+      referenceNo: finalRef
     };
     setMaintenanceOrders(prev => [orderWithId, ...prev]);
 
@@ -1253,28 +1415,33 @@ export default function App() {
       nature: 'inside_custody',
       description: `تحرير أمر صيانة ميكانيكية لمركبة ${newOrder.equipmentCode}: ${newOrder.description}`,
       recipient: 'قسم ورشة الصيانة والزيوت الموقعية',
-      paymentMethod: 'اخرى'
+      paymentMethod: 'اخرى',
+      referenceNo: finalRef
     });
 
-    addAuditLog('إرسال أمر صيانة', 'إدارة المعدات والتشغيل', `قيد أمر صيانة وإصلاح كلف ${newOrder.cost} ج.م لـ ${newOrder.equipmentCode}.`);
+    addAuditLog('إرسال أمر صيانة', 'إدارة المعدات والتشغيل', `قيد أمر صيانة وإصلاح بالمرجع ${finalRef} كلف ${newOrder.cost} ج.م لـ ${newOrder.equipmentCode}.`);
   };
 
   const handleAddLabTest = (newTest: Omit<LabTestRecord, 'id'>) => {
+    const finalRef = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
     const testWithId: LabTestRecord = {
       ...newTest,
-      id: `test-${Date.now()}`
+      id: `test-${Date.now()}`,
+      referenceNo: finalRef
     };
     setLabTests(prev => [testWithId, ...prev]);
-    addAuditLog('تسجيل نتيجة مختبر', 'مراقبة الجودة QA/QC', `إصدار رخصة دمك تتبع ${newTest.testNameAr} برقم طلب فحص ${newTest.rfiCode} (${newTest.resultStatus === 'passed' ? 'مطابق' : 'راسب'}).`);
+    addAuditLog('تسجيل نتيجة مختبر', 'مراقبة الجودة QA/QC', `إصدار رخصة دمك بالمرجع ${finalRef} تتبع ${newTest.testNameAr} برقم طلب فحص ${newTest.rfiCode} (${newTest.resultStatus === 'passed' ? 'مطابق' : 'راسب'}).`);
   };
 
   const handleAddHseIncident = (newIncident: Omit<HseIncidentRecord, 'id'>) => {
+    const finalRef = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
     const incidentWithId: HseIncidentRecord = {
       ...newIncident,
-      id: `hse-${Date.now()}`
+      id: `hse-${Date.now()}`,
+      referenceNo: finalRef
     };
     setHseIncidents(prev => [incidentWithId, ...prev]);
-    addAuditLog('تبليغ أمان HSE', 'السلامة والصحة المهنية HSE', ` رصد حالة ${newIncident.typeNameAr} بمستوى خطورة حرج ${newIncident.severity}.`);
+    addAuditLog('تبليغ أمان HSE', 'السلامة والصحة المهنية HSE', `رصد حالة ${newIncident.typeNameAr} بالمرجع ${finalRef} بمستوى خطورة حرج ${newIncident.severity}.`);
   };
 
   const handleUpdateWbsProgress = (taskId: string, progress: number) => {
@@ -1382,6 +1549,9 @@ export default function App() {
       hseIncidents,
       wbsTasks,
       warehouseItems,
+      mrirLogs,
+      mrnLogs,
+      warehouseAuditLogs,
       auditLogs,
       workers,
       attendanceLogs,
@@ -1402,11 +1572,14 @@ export default function App() {
   };
 
   const handleRestoreBackup = (backupDoc: any) => {
+    console.log("Restoring backup:", backupDoc);
     if (!backupDoc || typeof backupDoc !== 'object') {
       alert('ملف البيانات غير صالح الاستيراد.');
       return;
     }
     const data = backupDoc.payload || backupDoc;
+    console.log("Backup payload data:", data);
+    
     if (data.transactions) setTransactions(sanitizeLoadedData<Transaction>(data.transactions, 'tx'));
     if (data.custodies) setCustodies(sanitizeLoadedData<CustodyRecord>(data.custodies, 'cust'));
     if (data.contractors) setContractors(sanitizeLoadedData<ContractorCertificate>(data.contractors, 'sub'));
@@ -1416,6 +1589,9 @@ export default function App() {
     if (data.hseIncidents) setHseIncidents(sanitizeLoadedData<HseIncidentRecord>(data.hseIncidents, 'hse'));
     if (data.wbsTasks) setWbsTasks(sanitizeLoadedData<WbsTaskRecord>(data.wbsTasks, 'task'));
     if (data.warehouseItems) setWarehouseItems(sanitizeLoadedData<WarehouseItemRecord>(data.warehouseItems, 'wh'));
+    if (data.mrirLogs) setMrirLogs(sanitizeLoadedData<MRIRRecord>(data.mrirLogs, 'mrir'));
+    if (data.mrnLogs) setMrnLogs(sanitizeLoadedData<MRNRecord>(data.mrnLogs, 'mrn'));
+    if (data.warehouseAuditLogs) setWarehouseAuditLogs(sanitizeLoadedData<AuditCountRecord>(data.warehouseAuditLogs, 'waudit'));
     if (data.auditLogs) setAuditLogs(sanitizeLoadedData<AuditTrailRecord>(data.auditLogs, 'audit'));
     if (data.workers) setWorkers(sanitizeLoadedData<SiteWorker>(data.workers, 'w'));
     if (data.attendanceLogs) setAttendanceLogs(data.attendanceLogs || []);
@@ -1433,6 +1609,8 @@ export default function App() {
     if (data.contractorsReport) setContractorsReport(data.contractorsReport);
     if (data.fuelLogs) setFuelLogs(data.fuelLogs);
     if (data.custodyBudget !== undefined) setCustodyBudget(data.custodyBudget);
+    
+    alert('تمت استعادة البيانات بنجاح!');
   };
 
   // Tab Router
@@ -1454,6 +1632,16 @@ export default function App() {
             salaryPayments={salaryPayments}
             submissions={submissions}
             extracts={extracts}
+            hseIncidents={hseIncidents}
+            wbsTasks={wbsTasks}
+            risks={risks}
+            dcrRecords={dcrRecords}
+            labTests={labTests}
+            warehouseItems={warehouseItems}
+            subcontractors={subcontractors}
+            projects={projects}
+            boqItems={boqItems}
+            contracts={contracts}
           />
         );
 
@@ -1563,6 +1751,12 @@ export default function App() {
           <WarehouseDashboard
             warehouseItems={warehouseItems}
             setWarehouseItems={setWarehouseItems}
+            mrirLogs={mrirLogs}
+            setMrirLogs={setMrirLogs}
+            mrnLogs={mrnLogs}
+            setMrnLogs={setMrnLogs}
+            warehouseAuditLogs={warehouseAuditLogs}
+            setWarehouseAuditLogs={setWarehouseAuditLogs}
             projects={projects}
             userRole={user?.role}
             addAuditLog={addAuditLog}
@@ -1589,6 +1783,8 @@ export default function App() {
             dcrRecords={dcrRecords}
             setDcrRecords={setDcrRecords}
             projects={projects}
+            boqItems={boqItems}
+            workers={workers}
             userRole={user?.role}
             addAuditLog={addAuditLog}
           />
@@ -1625,8 +1821,15 @@ export default function App() {
             initialTab="maintenance"
           />
         );
-      case 'reports':
-        return <ErpModulePlaceholder title="التقارير والتحليلات" description="وحدة التقارير المالية والتشغيلية ولوحات التحكم قيد التطوير." />;
+
+      case 'activity-log':
+        return (
+          <GlobalActivityLog 
+            auditLogs={auditLogs}
+            onClearLogs={user?.role === 'admin' ? () => setAuditLogs([]) : undefined}
+            currentUserRole={user?.role}
+          />
+        );
 
       case 'projects':
         return (
@@ -1636,6 +1839,7 @@ export default function App() {
             boqItems={boqItems}
             currentUserRole={user?.role}
             onRestoreBackup={handleRestoreBackup}
+            addAuditLog={addAuditLog}
           />
         );
 
@@ -1693,6 +1897,12 @@ export default function App() {
             addAuditLog={addAuditLog}
             workers={workers}
             userRole={userRole}
+            benodTree={weeklyReportBenodTree}
+            setBenodTree={setWeeklyReportBenodTree}
+            closingDayIndex={weeklyReportClosingDayIndex}
+            setClosingDayIndex={setWeeklyReportClosingDayIndex}
+            signatures={weeklyReportSignatures}
+            setSignatures={setWeeklyReportSignatures}
           />
         );
 
@@ -1705,6 +1915,7 @@ export default function App() {
             userRole={user?.role}
             userNameAr={user?.nameAr}
             addAuditLog={addAuditLog}
+            workers={workers}
           />
         );
 
@@ -1757,6 +1968,7 @@ export default function App() {
             currentUser={user}
             currentUserRole={user?.role}
             dbConnected={dbConnected}
+            triggerTestBackupReminder={triggerTestBackupReminder}
           />
         );
 
@@ -1810,10 +2022,8 @@ export default function App() {
             setIsDbLoaded(false);
           }}
           onLogout={handleLogout}
-          dbConnected={forceOfflineBypass ? true : dbConnected}
+          dbConnected={dbConnected}
           dbLatency={dbLatency}
-          forceOfflineBypass={forceOfflineBypass}
-          onToggleOfflineBypass={toggleOfflineBypass}
         />
       </motion.div>
     );
@@ -1994,7 +2204,7 @@ export default function App() {
         <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 pb-6 mb-6 border-b border-slate-200">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-slate-700 text-xs md:text-sm font-semibold">
-              <Building size={14} className="text-indigo-600 shrink-0" />
+              <Building size={14} className="text-purple-650 shrink-0" />
               <span className="font-black text-slate-800 truncate">{selectedSite.nameAr}</span>
             </div>
             <h1 className="text-base md:text-xl font-bold text-slate-900 tracking-tight mt-1 text-right font-sans">
@@ -2032,7 +2242,7 @@ export default function App() {
             <div className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1.5 text-[11px] font-bold transition-all duration-300 font-sans ${
               dbConnected === null 
                 ? 'bg-amber-50/80 border-amber-200/80 text-amber-700' 
-                : (dbConnected || forceOfflineBypass)
+                : dbConnected
                 ? 'bg-emerald-50/80 border-emerald-200/80 text-emerald-700' 
                 : 'bg-rose-50 border-rose-200 text-rose-700 animate-pulse'
             }`}>
@@ -2043,22 +2253,17 @@ export default function App() {
                   <RefreshCw size={10} className="animate-spin text-amber-500" />
                   <span>جاري الفحص...</span>
                 </span>
-              ) : (dbConnected || forceOfflineBypass) ? (
+              ) : dbConnected ? (
                 <span className="flex items-center gap-1 text-emerald-600 font-mono">
                   <Wifi size={12} className="text-emerald-500" />
-                  <span>{forceOfflineBypass ? 'نشط محلياً ⚠️' : 'متصل'}</span>
-                  {!forceOfflineBypass && <span className="text-[9px] text-emerald-500 font-medium">({dbLatency}ms)</span>}
+                  <span>متصل</span>
+                  <span className="text-[9px] text-emerald-500 font-medium">({dbLatency}ms)</span>
                 </span>
               ) : (
-                <button 
-                  onClick={toggleOfflineBypass}
-                  type="button"
-                  className="flex items-center gap-1 text-rose-600 cursor-pointer border-none bg-transparent font-bold p-0 transition hover:text-rose-700 text-[11px]"
-                  title="اضغط للعمل في وضع العمل المحلي دون إنترنت"
-                >
+                <span className="flex items-center gap-1 text-rose-600 font-bold text-[11px]">
                   <WifiOff size={12} className="text-rose-500 shrink-0 animate-pulse" />
-                  <span>أوفلاين (تفعيل ⚠️)</span>
-                </button>
+                  <span>غير متصل</span>
+                </span>
               )}
             </div>
 
@@ -2079,7 +2284,7 @@ export default function App() {
         {/* Dynamic Workspace Panel */}
         <main className="space-y-6">
           {/* Continuous Offline Write Prevention Warning Banner */}
-          {dbConnected === false && !forceOfflineBypass && (
+          {dbConnected === false && (
             <div className="p-4 bg-rose-50 border-2 border-rose-200 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-right shadow-sm no-print" id="offline-prevent-write-banner">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-rose-100/80 border border-rose-200 rounded-xl text-rose-600 shrink-0 animate-pulse">
@@ -2088,44 +2293,14 @@ export default function App() {
                 <div>
                   <h4 className="font-extrabold text-rose-950 text-xs">تنبيه حماية التسجيل والنسخ الآمن مفعل ⚙️</h4>
                   <p className="text-[11px] text-rose-800 mt-1 leading-relaxed">
-                    تم رصد قطع في اتصال الشبكة بقاعدة البيانات السحابية (Firestore). لتجنب تباين السجلات، تم تجميد الحفظ والمسح مؤقتاً لحين استرداد نبض الاتصال الآمن مع الإدارة المالية المركزية.
+                    تم رصد قطع في اتصال الشبكة بقاعدة البيانات السحابية (Firestore). لتجنب تباين السجلات وتداخل حسابات المستخدمين الآخرين، تم تعليق وتجميد الحفظ والمسح مؤقتاً لحين استرداد نبض الاتصال الآمن مع الإدارة المالية المركزية.
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
-                <button
-                  onClick={toggleOfflineBypass}
-                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
-                >
-                  تجاوز مؤقت للعمل أوفلاين ⚠️
-                </button>
-                <div className="text-[10px] text-rose-900 bg-rose-100 px-3 py-1.5 rounded-lg font-bold">
-                  يفحص تلقائياً كل 5 ثوانٍ
+                <div className="text-[10px] text-rose-900 bg-rose-100 px-3 py-1.5 rounded-lg font-bold animate-pulse">
+                  جاري محاولة الاتصال تلقائياً كل 5 ثوانٍ...
                 </div>
-              </div>
-            </div>
-          )}
-
-          {dbConnected === false && forceOfflineBypass && (
-            <div className="p-4 bg-amber-50 border-2 border-amber-200 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-right shadow-sm no-print" id="offline-bypass-banner">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-amber-100/80 border border-amber-200 rounded-xl text-amber-600 shrink-0">
-                  <AlertTriangle size={18} className="animate-bounce" />
-                </div>
-                <div>
-                  <h4 className="font-extrabold text-amber-950 text-xs">وضع العمل المحلي الطارئ مفعل (أوفلاين) 🌐</h4>
-                  <p className="text-[11px] text-amber-800 mt-1 leading-relaxed">
-                    يتم حالياً حفظ التعديلات وإضافة الحركات محلياً في ذاكرة متصفحك بشكل آمن. عند عودة الاتصال بقاعدة بيانات بنيان السحابية، ستتم المزامنة تلقائياً.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
-                <button
-                  onClick={toggleOfflineBypass}
-                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
-                >
-                  استعادة وضع الحماية السحابية 🔒
-                </button>
               </div>
             </div>
           )}
@@ -2186,6 +2361,112 @@ export default function App() {
                   className="w-full py-4 bg-slate-950 text-white hover:bg-slate-800 rounded-2xl text-xs font-black shadow-lg hover:shadow-slate-500/10 active:scale-98 transition duration-200 cursor-pointer"
                 >
                   أقرّ بقراءة جميع الإشعارات
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Backup Reminder Modal */}
+      <AnimatePresence>
+        {showBackupReminder && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md" dir="rtl">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col p-6 space-y-4"
+            >
+              <h3 className="text-lg font-black text-slate-900">تذكير بالنسخ الاحتياطي اليومي</h3>
+              <p className="text-sm text-slate-600">حان وقت النسخ الاحتياطي اليومي لبياناتك. يرجى تحميل نسخة احتياطية محلية لضمان سلامة بياناتك.</p>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    handleDownloadLocalFile();
+                    setShowBackupReminder(false);
+                  }}
+                  className="w-full py-3 bg-emerald-600 text-white rounded-2xl text-xs font-black"
+                >
+                  تحميل النسخة الاحتياطية الآن
+                </button>
+                <button
+                  onClick={() => setShowBackupReminder(false)}
+                  className="w-full py-3 bg-slate-100 text-slate-700 rounded-2xl text-xs font-black"
+                >
+                  ليس الآن
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Global Confirm Modal */}
+      <AnimatePresence>
+        {globalConfirm && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]" dir="rtl">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="bg-white rounded-3xl border-t-4 border-rose-600 p-6 w-full max-w-md shadow-2xl relative overflow-hidden"
+            >
+              <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+                <h3 className="text-base font-black text-rose-700">تأكيد الإجراء النهائي للحذف</h3>
+                <button 
+                  onClick={() => globalConfirm.resolve(false)}
+                  className="p-1.5 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <p className="mb-5 text-slate-600 text-xs font-bold leading-relaxed text-right">
+                {globalConfirm.message}
+              </p>
+              
+              <div className="bg-rose-50/70 border border-rose-100 p-4 rounded-2xl space-y-3 mb-5">
+                <label className="block text-[10px] font-black text-rose-500 uppercase tracking-widest text-center">
+                  أدخل كود التحقق لتأكيد الإجراء: <span className="bg-rose-100/80 px-2 py-0.5 rounded text-rose-700 text-sm ml-1 select-all font-mono tracking-widest">{globalConfirm.randomCode}</span>
+                </label>
+                <input 
+                  type="text"
+                  value={globalConfirmInput}
+                  onChange={(e) => setGlobalConfirmInput(e.target.value)}
+                  placeholder="أدخل الكود هنا..."
+                  className="w-full bg-white border border-rose-200 rounded-xl px-4 py-3 text-center font-mono text-base focus:outline-none focus:ring-2 focus:ring-rose-500 transition-all text-slate-800"
+                  autoFocus
+                />
+              </div>
+              
+              <div className="flex gap-2.5">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    if (globalConfirmInput === globalConfirm.randomCode) {
+                      globalConfirm.resolve(true);
+                    } else {
+                      alert('كود التأكيد غير صحيح. يرجى المحاولة مرة أخرى.');
+                    }
+                  }}
+                  disabled={globalConfirmInput !== globalConfirm.randomCode}
+                  className={`py-3.5 px-6 font-black rounded-xl transition duration-200 text-xs shadow-lg flex-1 active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${
+                    globalConfirmInput === globalConfirm.randomCode
+                      ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-100'
+                      : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                  }`}
+                >
+                  تأكيد وبدء الإجراء
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    globalConfirm.resolve(false);
+                  }}
+                  className="py-3.5 px-6 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl transition duration-200 border border-slate-200 cursor-pointer flex-1 text-center"
+                >
+                  إلغاء وتراجع
                 </button>
               </div>
             </motion.div>

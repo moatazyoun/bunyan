@@ -26,7 +26,7 @@ body, input, select, textarea, button, p, span, div, h1, h2, h3, h4, h5, h6, tab
 }
 
 body {
-  background-color: #f8fafc;
+  background-color: #fcfbfd;
   direction: rtl; /* Build with elegant RTL support natively as the construction sheet is in Arabic */
 }
 
