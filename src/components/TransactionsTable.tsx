@@ -29,8 +29,10 @@ import {
   Tractor,
   Fuel,
   Briefcase,
-  HelpCircle
+  HelpCircle,
+  FileSpreadsheet
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { Transaction, ProjectCategory, TransactionType, TransactionNature, PaymentMethod, FuelStation } from '../types';
 
 interface TransactionsTableProps {
@@ -41,6 +43,7 @@ interface TransactionsTableProps {
   userRole?: string;
   selectedSiteName?: string;
   fuelStations?: FuelStation[];
+  addAuditLog?: (action: string, module: string, details: string, customRefNo?: string) => void;
 }
 
 export default function TransactionsTable({ 
@@ -50,7 +53,8 @@ export default function TransactionsTable({
   onUpdateTransaction, 
   userRole,
   selectedSiteName = 'الموقع النشط',
-  fuelStations = []
+  fuelStations = [],
+  addAuditLog
 }: TransactionsTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -282,6 +286,68 @@ export default function TransactionsTable({
     .filter(tx => tx.type === 'spent' && tx.nature === 'outside_custody')
     .reduce((acc, tx) => acc + tx.amount, 0);
 
+  const exportToExcel = () => {
+    // Translate and map transactions for high-quality Excel export
+    const dataToExport = filteredTransactions.map((tx, index) => ({
+      'م': index + 1,
+      'الرقم المرجعي (ID)': tx.id,
+      'التاريخ': tx.date,
+      'البيان والوصف': tx.description,
+      'المستفيد / الجهة': tx.recipient,
+      'البند / القسم': getCategoryNameAr(tx.category),
+      'طبيعة المعاملة': tx.nature === 'inside_custody' ? 'عهدة الموقع الميدانية' : 'المكتب الرئيسي',
+      'نوع القيد': tx.type === 'income' ? 'وارد / تمويل (+)' : 'منصرف مالي (-)',
+      'طريقة الدفع': tx.paymentMethod || 'نقدى',
+      'الرقم الدفتري الورقي': tx.referenceNo || 'غير مسجل',
+      'المبلغ (جنيه مصري)': tx.amount,
+      'الملاحظات التفصيلية': tx.notes || tx.description
+    }));
+
+    // Create worksheet
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+
+    // Set text direction to RTL for native Arabic presentation in Excel
+    worksheet['!dir'] = 'rtl';
+
+    // Set elegant column widths
+    const max_widths = [
+      { wch: 6 },   // م
+      { wch: 28 },  // الرقم المرجعي
+      { wch: 14 },  // التاريخ
+      { wch: 38 },  // البيان والوصف
+      { wch: 28 },  // المستفيد / الجهة
+      { wch: 22 },  // البند / القسم
+      { wch: 24 },  // طبيعة المعاملة
+      { wch: 20 },  // نوع القيد
+      { wch: 16 },  // طريقة الدفع
+      { wch: 20 },  // الرقم الدفتري الورقي
+      { wch: 20 },  // المبلغ
+      { wch: 45 }   // الملاحظات التفصيلية
+    ];
+    worksheet['!cols'] = max_widths;
+
+    // Create workbook and append sheet
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'دفتر الحركات المالية');
+
+    // Generate compliant filename BYN-Transactions-[SiteName]-[Date].xlsx
+    const dateStr = new Date().toISOString().split('T')[0];
+    const siteNameClean = (selectedSiteName || 'الموقع_النشط').replace(/\s+/g, '_');
+    const filename = `BYN-Transactions-${siteNameClean}-${dateStr}.xlsx`;
+
+    // Download file
+    XLSX.writeFile(workbook, filename);
+
+    // Trigger Audit Log
+    if (addAuditLog) {
+      addAuditLog(
+        `تصدير ملف إكسل مالي`,
+        'شيت الحركة',
+        `تم نجاح تصدير كشف حركة مالي بعدد ${filteredTransactions.length} حركة للموقع لملف Excel خارجي للتأريخ والأرشفة.`
+      );
+    }
+  };
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden" id="transactions-table-container">
       
@@ -365,6 +431,14 @@ export default function TransactionsTable({
             >
               <Printer size={16} className="text-slate-500 group-hover:text-indigo-600" />
               طباعة وتصدير الكشف (A3/A4)
+            </button>
+            <button
+              onClick={exportToExcel}
+              className="inline-flex items-center gap-2 px-4.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs border border-emerald-500 active:scale-95 transition no-print cursor-pointer shadow-xs"
+              id="export-excel-btn"
+            >
+              <FileSpreadsheet size={16} />
+              تصدير Excel للأرشفة
             </button>
             {userRole !== 'viewer' && (
               <button

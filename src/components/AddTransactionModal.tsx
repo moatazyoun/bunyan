@@ -188,94 +188,94 @@ export default function AddTransactionModal({
   const isStep3Done = isStep2Done && (type !== 'spent' || paymentMethod);
 
   return (
-    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto" dir="rtl">
+    <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto" dir="rtl">
       <div 
-        className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-5xl shadow-2xl flex flex-col md:flex-row max-h-[95vh] overflow-hidden text-right"
+        className="bg-white border border-slate-200 rounded-[2.5rem] w-full max-w-5xl shadow-2xl flex flex-col md:flex-row max-h-[95vh] overflow-hidden text-right"
         id="add-transaction-modal-inner"
       >
         
         {/* Sidebar Visual - Matches the requested card style */}
-        <div className="w-full md:w-1/3 bg-indigo-600 p-8 text-white flex flex-col justify-between flex-shrink-0">
+        <div className="w-full md:w-64 bg-slate-50 p-8 flex flex-col justify-between border-l border-slate-100 flex-shrink-0">
           <div>
-            <CreditCard size={48} className="text-indigo-200 mb-6" />
-            <h4 className="text-xl font-black mb-2">تسجيل حركة مالية</h4>
-            <p className="text-sm text-indigo-100 leading-relaxed">
+            <CreditCard size={40} className="text-purple-400 mb-6" />
+            <h4 className="text-xl font-black mb-2 text-slate-900">تسجيل حركة مالية</h4>
+            <p className="text-xs text-slate-500 leading-relaxed font-medium">
               نظام الضبط المالي والقيود المباشرة لموازنة حسابات التوريد والعهد بدقة كاملة.
             </p>
           </div>
 
           {/* Connected Stepper with precise active boundaries */}
-          <div className="space-y-4 text-xs font-black text-indigo-200 my-6">
-            <div className={`flex items-center gap-2 border-r-2 pr-2 transition-colors duration-150 ${isStep1Done ? 'border-emerald-400 text-emerald-200' : 'border-white text-white'}`}>
+          <div className="space-y-4 text-xs font-black text-slate-400 my-6">
+            <div className={`flex items-center gap-2 border-r-2 pr-2 transition-colors duration-150 ${isStep1Done ? 'border-purple-600 text-purple-600' : 'border-slate-200 text-slate-400'}`}>
               1. طبيعة وتاريخ الحركة
             </div>
-            <div className={`flex items-center gap-2 border-r-2 pr-2 transition-colors duration-150 ${isStep2Done ? 'border-emerald-400 text-emerald-200' : isStep1Done ? 'border-white text-white' : 'border-indigo-400 text-indigo-300'}`}>
+            <div className={`flex items-center gap-2 border-r-2 pr-2 transition-colors duration-150 ${isStep2Done ? 'border-purple-600 text-purple-600' : isStep1Done ? 'border-slate-300 text-slate-500' : 'border-slate-200 text-slate-400'}`}>
               2. جهة المستفيد والمبلغ
             </div>
-            <div className={`flex items-center gap-2 border-r-2 pr-2 transition-colors duration-150 ${isStep3Done ? 'border-emerald-400 text-emerald-200' : isStep2Done ? 'border-white text-white' : 'border-indigo-400 text-indigo-300'}`}>
+            <div className={`flex items-center gap-2 border-r-2 pr-2 transition-colors duration-150 ${isStep3Done ? 'border-purple-600 text-purple-600' : isStep2Done ? 'border-slate-300 text-slate-500' : 'border-slate-200 text-slate-400'}`}>
               3. طريقة السداد والتكويد
             </div>
           </div>
 
-          <div className="text-[10px] text-indigo-300">
-            نظام الضبط المالي
+          <div className="text-[10px] text-slate-400 font-bold">
+            نظام الضبط المالي الذكي
           </div>
         </div>
 
         {/* Main Content Form Panel */}
-        <div className="flex-1 flex flex-col min-h-0 bg-slate-900">
+        <div className="flex-1 flex flex-col min-h-0 bg-white">
           
           {/* Header */}
-          <div className="p-6 border-b border-slate-700 flex justify-between items-center bg-slate-900 flex-shrink-0">
-            <h3 className="text-lg font-black text-white">تسجيل قيد أو حركة مالية جديدة</h3>
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white flex-shrink-0">
+            <h3 className="text-lg font-black text-slate-900">تسجيل قيد أو حركة مالية جديدة</h3>
             <button 
               type="button"
               onClick={onClose} 
-              className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition"
+              className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 hover:text-slate-800 transition"
             >
               <X size={20} />
             </button>
           </div>
 
           {/* Form Scrollable Content */}
-          <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-slate-900">
+          <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-slate-50/20">
             <form id="transaction-form" onSubmit={handleSubmit} className="space-y-8">
               
               {error && (
-                <div className="bg-rose-950/40 border border-rose-800 p-4 rounded-2xl flex items-center gap-2.5 text-rose-200 text-xs font-semibold animate-fadeIn">
-                  <AlertCircle size={18} className="shrink-0 text-rose-400" />
+                <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl flex items-center gap-2.5 text-rose-800 text-xs font-semibold animate-fadeIn">
+                  <AlertCircle size={18} className="shrink-0 text-rose-600" />
                   <span>{error}</span>
                 </div>
               )}
 
               {/* Section 1: طبيعة الحركة والبند */}
               <div className="space-y-4">
-                <h4 className="text-xs font-black text-indigo-400 uppercase tracking-widest border-r-4 border-indigo-500 pr-3">
+                <h4 className="text-xs font-black text-purple-600 uppercase tracking-widest border-r-4 border-purple-500 pr-3">
                   تاريخ وطبيعة الحركة المالية
                 </h4>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Transaction Date */}
                   <div className="space-y-1">
-                    <label className="block text-[10px] font-black text-slate-400 mb-1.5 mr-1 uppercase tracking-widest">تاريخ الحركة *</label>
+                    <label className="block text-[10px] font-black text-slate-500 mb-1.5 mr-1 uppercase tracking-widest">تاريخ الحركة *</label>
                     <input
                       type="date"
                       required
                       value={date}
                       onChange={(e) => setDate(e.target.value)}
-                      className="w-full text-xs p-3.5 bg-slate-800 border border-slate-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold text-white outline-none"
+                      className="w-full text-xs p-3.5 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 font-bold text-slate-900 outline-none"
                     />
                   </div>
 
                   {/* Category Selection */}
                   <div className="space-y-1 relative" id="category-select-container">
-                    <label className="block text-[10px] font-black text-slate-400 mb-1.5 mr-1 uppercase tracking-widest">البند / التصنيف الفرعي *</label>
+                    <label className="block text-[10px] font-black text-slate-500 mb-1.5 mr-1 uppercase tracking-widest">البند / التصنيف الفرعي *</label>
                     
                     {/* Trigger Button */}
                     <button
                       type="button"
                       onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                      className="w-full flex items-center justify-between bg-slate-800 border border-slate-700 rounded-2xl p-3.5 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-right cursor-pointer"
+                      className="w-full flex items-center justify-between bg-white border border-slate-200 rounded-2xl p-3.5 text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-purple-500 transition-all text-right cursor-pointer"
                     >
                       <div className="flex items-center gap-2">
                         {(() => {
@@ -296,7 +296,7 @@ export default function AddTransactionModal({
 
                     {/* Popover List */}
                     {isDropdownOpen && (
-                      <div className="absolute z-50 mt-1 w-full bg-slate-800 border border-slate-700 rounded-2xl shadow-xl overflow-hidden animate-fadeIn py-1">
+                      <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden animate-fadeIn py-1">
                         {CATEGORY_ITEMS.map((item) => {
                           const IconComp = item.icon;
                           const isSelected = selectedCategoryKey === item.key;
@@ -315,17 +315,17 @@ export default function AddTransactionModal({
                               }}
                               className={`w-full flex items-center gap-3 p-3.5 text-right font-black text-xs transition duration-150 cursor-pointer ${
                                 isSelected 
-                                  ? 'bg-indigo-600 text-white' 
-                                  : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                                  ? 'bg-purple-600 text-white' 
+                                  : 'text-slate-700 hover:bg-slate-50'
                               }`}
                             >
                               <span className={`p-1.5 rounded-lg flex items-center justify-center ${
-                                isSelected ? 'bg-indigo-700 text-white' : item.bgColorClass
+                                isSelected ? 'bg-purple-700 text-white' : item.bgColorClass
                               }`}>
                                 <IconComp size={15} className={isSelected ? 'text-white' : item.colorClass} />
                               </span>
                               <span className="flex-1 text-right">{item.label}</span>
-                              {isSelected && <span className="text-[10px] bg-indigo-700 text-white px-2 py-0.5 rounded-md font-bold">نشط</span>}
+                              {isSelected && <span className="text-[10px] bg-purple-700 text-white px-2 py-0.5 rounded-md font-bold">نشط</span>}
                             </button>
                           );
                         })}
@@ -337,14 +337,14 @@ export default function AddTransactionModal({
                 {/* Custom Category Input if selected */}
                 {selectedCategoryKey === 'custom_external' && (
                   <div className="space-y-1 animate-fadeIn">
-                    <label className="block text-[10px] font-black text-indigo-400 mb-1.5 mr-1 uppercase tracking-widest">اسم البند الخارجي المخصص *</label>
+                    <label className="block text-[10px] font-black text-purple-600 mb-1.5 mr-1 uppercase tracking-widest">اسم البند الخارجي المخصص *</label>
                     <input
                       type="text"
                       required
                       placeholder="مثال: رسوم تراخيص، إكراميات استثنائية، صيانة طارئة..."
                       value={customCategoryName}
                       onChange={(e) => setCustomCategoryName(e.target.value)}
-                      className="w-full text-xs p-3.5 bg-slate-800 border border-slate-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold text-white outline-none"
+                      className="w-full text-xs p-3.5 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 font-bold text-slate-900 outline-none"
                     />
                   </div>
                 )}
@@ -352,14 +352,14 @@ export default function AddTransactionModal({
                 <div className="grid grid-cols-1 gap-4">
                   {/* Transaction Nature */}
                   <div className="space-y-1">
-                    <label className="block text-[10px] font-black text-slate-400 mb-1.5 mr-1 uppercase tracking-widest">طبيعة المعاملة والمصدر الرئيسي *</label>
+                    <label className="block text-[10px] font-black text-slate-500 mb-1.5 mr-1 uppercase tracking-widest">طبيعة المعاملة والمصدر الرئيسي *</label>
                     <select
                       value={nature}
                       onChange={(e) => setNature(e.target.value as TransactionNature)}
-                      className="w-full text-xs p-3 bg-slate-800 border border-slate-700 rounded-2xl font-black text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                      className="w-full text-xs p-3 bg-white border border-slate-200 rounded-2xl font-black text-slate-900 focus:ring-2 focus:ring-purple-500 outline-none"
                     >
-                      <option value="inside_custody" className="bg-slate-900">عهدة الموقع</option>
-                      <option value="outside_custody" className="bg-slate-900">المكتب الرئيسي للشركة</option>
+                      <option value="inside_custody" className="bg-white text-slate-900">عهدة الموقع</option>
+                      <option value="outside_custody" className="bg-white text-slate-900">المكتب الرئيسي للشركة</option>
                     </select>
                   </div>
                 </div>
@@ -367,15 +367,15 @@ export default function AddTransactionModal({
 
               {/* Section 2: المستفيد والماليات */}
               <div className="space-y-4">
-                <h4 className="text-xs font-black text-emerald-400 uppercase tracking-widest border-r-4 border-emerald-500 pr-3">
+                <h4 className="text-xs font-black text-purple-600 uppercase tracking-widest border-r-4 border-purple-500 pr-3">
                   المستفيد والماليات
                 </h4>
 
-                <div className="bg-slate-800/40 p-6 rounded-2xl border border-slate-700 space-y-4">
+                <div className="bg-slate-50/60 p-6 rounded-2xl border border-slate-100 space-y-4">
                   
                   {/* Amount of record */}
                   <div className="space-y-1">
-                    <label className="block text-[10px] font-black text-slate-400 mb-1.5 mr-1 uppercase tracking-widest">المبلغ وبالتفاصيل الميدانية لإجمالي القيد (ج.م) *</label>
+                    <label className="block text-[10px] font-black text-slate-500 mb-1.5 mr-1 uppercase tracking-widest">المبلغ وبالتفاصيل الميدانية لإجمالي القيد (ج.م) *</label>
                     <div className="relative">
                       <input
                         type="number"
@@ -384,7 +384,7 @@ export default function AddTransactionModal({
                         placeholder="0.00"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
-                        className="w-full text-sm p-3.5 bg-slate-800 border border-slate-700 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-black text-white outline-none text-left font-mono pr-20"
+                        className="w-full text-sm p-3.5 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 font-black text-slate-900 outline-none text-left font-mono pr-20"
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400 pointer-events-none">
                         جنيه مصري
@@ -394,10 +394,10 @@ export default function AddTransactionModal({
 
                   {/* Beneficiary recipient selection */}
                   <div className="space-y-1">
-                    <label className="block text-[10px] font-black text-slate-400 mb-1.5 mr-1 uppercase tracking-widest">المستفيد / جهة الصرف المتأثرة *</label>
+                    <label className="block text-[10px] font-black text-slate-500 mb-1.5 mr-1 uppercase tracking-widest">المستفيد / جهة الصرف المتأثرة *</label>
                     
                     {category === 'equipment' ? (
-                      <div className="flex gap-2 bg-slate-800 border border-slate-700 rounded-2xl">
+                      <div className="flex gap-2 bg-white border border-slate-200 rounded-2xl">
                         <select
                           required
                           value={equipmentId}
@@ -406,11 +406,11 @@ export default function AddTransactionModal({
                             const eq = equipmentList.find(item => item.id === e.target.value);
                             if (eq) setRecipient(eq.name);
                           }}
-                          className="w-full text-xs p-3 bg-slate-800 border border-slate-700 rounded-2xl font-black text-white outline-none"
+                          className="w-full text-xs p-3 bg-white border border-slate-200 rounded-2xl font-black text-slate-900 outline-none focus:ring-2 focus:ring-purple-500"
                         >
-                          <option value="" disabled className="bg-slate-900">-- اختر المعدة من القائمة --</option>
+                          <option value="" disabled className="bg-white text-slate-900">-- اختر المعدة من القائمة --</option>
                           {equipmentList.map((eq) => (
-                            <option key={eq.id} value={eq.id} className="bg-slate-900">{eq.name} ({eq.driver})</option>
+                            <option key={eq.id} value={eq.id} className="bg-white text-slate-900">{eq.name} ({eq.driver})</option>
                           ))}
                         </select>
                       </div>
@@ -426,11 +426,11 @@ export default function AddTransactionModal({
                                 const st = fuelStations.find(station => station.id === e.target.value);
                                 if (st) setRecipient(st.name);
                               }}
-                              className="flex-1 w-full bg-slate-800 border border-slate-700 rounded-2xl p-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                              className="flex-1 w-full bg-white border border-slate-200 rounded-2xl p-3 text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-purple-500"
                             >
-                              <option value="" disabled className="bg-slate-900">-- اختر محطة الوقود للشحن / الإيداع --</option>
+                              <option value="" disabled className="bg-white text-slate-900">-- اختر محطة الوقود للشحن / الإيداع --</option>
                               {fuelStations.map((station) => (
-                                <option key={station.id} value={station.id} className="bg-slate-900">{station.name}</option>
+                                <option key={station.id} value={station.id} className="bg-white text-slate-900">{station.name}</option>
                               ))}
                             </select>
                             <button
@@ -440,7 +440,7 @@ export default function AddTransactionModal({
                                 setFuelStationId('');
                                 setRecipient('');
                               }}
-                              className="flex items-center justify-center gap-1.5 bg-slate-800 border border-slate-700 hover:border-emerald-500 text-slate-300 hover:text-emerald-400 px-5 rounded-2xl text-xs font-black transition whitespace-nowrap cursor-pointer"
+                              className="flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-purple-500 text-slate-600 hover:text-purple-700 px-5 rounded-2xl text-xs font-black transition whitespace-nowrap cursor-pointer"
                             >
                               <Plus size={15} /> جهة أخرى
                             </button>
@@ -453,7 +453,7 @@ export default function AddTransactionModal({
                               placeholder="اكتب مستفيد غير مدرج بالمحطات..."
                               value={newRecipientName}
                               onChange={(e) => setNewRecipientName(e.target.value)}
-                              className="flex-1 w-full p-3.5 bg-slate-800 border border-emerald-500 rounded-2xl text-xs font-bold text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                              className="flex-1 w-full p-3.5 bg-white border border-purple-500 rounded-2xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-purple-500"
                               autoFocus
                             />
                             <button
@@ -462,7 +462,7 @@ export default function AddTransactionModal({
                                 setIsNewRecipient(false);
                                 setNewRecipientName('');
                               }}
-                              className="bg-slate-700 hover:bg-slate-600 text-slate-200 px-5 rounded-2xl text-xs font-black transition cursor-pointer"
+                              className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 rounded-2xl text-xs font-black transition cursor-pointer"
                             >
                               المحطات المسجلة
                             </button>
@@ -477,17 +477,17 @@ export default function AddTransactionModal({
                               required
                               value={recipient}
                               onChange={(e) => setRecipient(e.target.value)}
-                              className="flex-1 w-full bg-slate-800 border border-slate-700 rounded-2xl p-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                              className="flex-1 w-full bg-white border border-slate-200 rounded-2xl p-3 text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-purple-500"
                             >
-                              <option value="" disabled className="bg-slate-900">-- اختر المسؤول عن العهدة من العاملين بالقرية/الموقع --</option>
+                              <option value="" disabled className="bg-white text-slate-900">-- اختر المسؤول عن العهدة من العاملين بالقرية/الموقع --</option>
                               {workers.map((w) => (
-                                <option key={w.id} value={w.name} className="bg-slate-900">{w.name} ({w.jobTitle})</option>
+                                <option key={w.id} value={w.name} className="bg-white text-slate-900">{w.name} ({w.jobTitle})</option>
                               ))}
                             </select>
                             <button
                               type="button"
                               onClick={() => setIsNewRecipient(true)}
-                              className="flex items-center justify-center gap-1.5 bg-slate-800 border border-slate-700 hover:border-emerald-500 text-slate-300 hover:text-emerald-400 px-5 rounded-2xl text-xs font-black transition whitespace-nowrap cursor-pointer"
+                              className="flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-purple-500 text-slate-600 hover:text-purple-700 px-5 rounded-2xl text-xs font-black transition whitespace-nowrap cursor-pointer"
                             >
                               <Plus size={15} /> جهة أخرى
                             </button>
@@ -500,7 +500,7 @@ export default function AddTransactionModal({
                               placeholder="اكتب اسم المستلم الجديد للعهدة..."
                               value={newRecipientName}
                               onChange={(e) => setNewRecipientName(e.target.value)}
-                              className="flex-1 w-full p-3.5 bg-slate-800 border border-emerald-500 rounded-2xl text-xs font-bold text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                              className="flex-1 w-full p-3.5 bg-white border border-purple-500 rounded-2xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-purple-500"
                               autoFocus
                             />
                             <button
@@ -509,7 +509,7 @@ export default function AddTransactionModal({
                                 setIsNewRecipient(false);
                                 setNewRecipientName('');
                               }}
-                              className="bg-slate-700 hover:bg-slate-600 text-slate-200 px-5 rounded-2xl text-xs font-black transition cursor-pointer"
+                              className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 rounded-2xl text-xs font-black transition cursor-pointer"
                             >
                               المسؤولين المسجلين
                             </button>
@@ -522,22 +522,22 @@ export default function AddTransactionModal({
                           required
                           value={recipient}
                           onChange={(e) => setRecipient(e.target.value)}
-                          className="flex-1 w-full bg-slate-800 border border-slate-700 rounded-2xl p-3 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                          className="flex-1 w-full bg-white border border-slate-200 rounded-2xl p-3 text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-purple-500"
                         >
-                          <option value="" disabled className="bg-slate-900">-- اختر من القائمة المرتبطة --</option>
+                          <option value="" disabled className="bg-white text-slate-900">-- اختر من القائمة المرتبطة --</option>
                           {(category === 'contractors' 
                             ? subcontractors 
                             : category === 'supplies' 
                               ? knownSuppliers 
                               : [...subcontractors, ...knownSuppliers, ...workers.map(w => ({ id: w.id, name: w.name }))]
                           ).map((c) => (
-                            <option key={c.id || c.name} value={c.name} className="bg-slate-900">{c.name}</option>
+                            <option key={c.id || c.name} value={c.name} className="bg-white text-slate-900">{c.name}</option>
                           ))}
                         </select>
                         <button
                           type="button"
                           onClick={() => setIsNewRecipient(true)}
-                          className="flex items-center justify-center gap-1.5 bg-slate-800 border border-slate-700 hover:border-emerald-500 text-slate-300 hover:text-emerald-400 px-5 rounded-2xl text-xs font-black transition whitespace-nowrap cursor-pointer shadow-xs"
+                          className="flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-purple-500 text-slate-600 hover:text-purple-700 px-5 rounded-2xl text-xs font-black transition whitespace-nowrap cursor-pointer shadow-sm"
                         >
                           <Plus size={15} /> جهة جديدة
                         </button>
@@ -550,7 +550,7 @@ export default function AddTransactionModal({
                           placeholder="اكتب اسم المستفيد الجديد..."
                           value={newRecipientName}
                           onChange={(e) => setNewRecipientName(e.target.value)}
-                          className="flex-1 w-full p-3.5 bg-slate-800 border border-emerald-500 rounded-2xl text-xs font-bold text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                          className="flex-1 w-full p-3.5 bg-white border border-purple-500 rounded-2xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-purple-500"
                           autoFocus
                         />
                         <button
@@ -559,7 +559,7 @@ export default function AddTransactionModal({
                             setIsNewRecipient(false);
                             setNewRecipientName('');
                           }}
-                          className="bg-slate-700 hover:bg-slate-600 text-slate-200 px-5 rounded-2xl text-xs font-black transition cursor-pointer"
+                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 rounded-2xl text-xs font-black transition cursor-pointer"
                         >
                           إلغاء
                         </button>
@@ -575,49 +575,49 @@ export default function AddTransactionModal({
  
               {/* Section 3: طريقة الدفع والتأكيد */}
               <div className="space-y-4">
-                <h4 className="text-xs font-black text-indigo-400 uppercase tracking-widest border-r-4 border-indigo-500 pr-3">
+                <h4 className="text-xs font-black text-purple-600 uppercase tracking-widest border-r-4 border-purple-500 pr-3">
                   طريقة السداد والتكويد
                 </h4>
  
-                <div className="bg-slate-800/40 p-6 rounded-2xl border border-slate-700 space-y-4">
+                <div className="bg-slate-5/60 p-6 rounded-2xl border border-slate-100 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Payment Method */}
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-black text-slate-400 mb-1.5 mr-1 uppercase tracking-widest">طريقة الدفع *</label>
+                      <label className="block text-[10px] font-black text-slate-500 mb-1.5 mr-1 uppercase tracking-widest">طريقة الدفع *</label>
                       <select
                         value={paymentMethod}
                         onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                        className="w-full text-xs p-3 bg-slate-800 border border-slate-700 rounded-2xl font-black text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                        className="w-full text-xs p-3 bg-white border border-slate-200 rounded-2xl font-black text-slate-900 focus:ring-2 focus:ring-purple-500 outline-none"
                       >
-                        <option value="نقدى" className="bg-slate-900">نقدى</option>
-                        <option value="شيك" className="bg-slate-900">شيك</option>
-                        <option value="تحويل بنكى" className="bg-slate-900">تحويل بنكى</option>
-                        <option value="انستا" className="bg-slate-900">انستا</option>
-                        <option value="فودافون كاش" className="bg-slate-900">فودافون كاش</option>
-                        <option value="اخرى" className="bg-slate-900">اخرى</option>
+                        <option value="نقدى" className="bg-white text-slate-900">نقدى</option>
+                        <option value="شيك" className="bg-white text-slate-900">شيك</option>
+                        <option value="تحويل بنكى" className="bg-white text-slate-900">تحويل بنكى</option>
+                        <option value="انستا" className="bg-white text-slate-900">انستا</option>
+                        <option value="فودافون كاش" className="bg-white text-slate-900">فودافون كاش</option>
+                        <option value="اخرى" className="bg-white text-slate-900">اخرى</option>
                       </select>
                     </div>
  
                     {/* Reference No */}
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-black text-slate-400 mb-1.5 mr-1 uppercase tracking-widest">رقم السند / الشيك / الحوالة</label>
+                      <label className="block text-[10px] font-black text-slate-500 mb-1.5 mr-1 uppercase tracking-widest">رقم السند / الشيك / الحوالة</label>
                       <input
                         type="text"
                         placeholder="رقم المرجع (اختياري)"
                         value={referenceNo}
                         onChange={(e) => setReferenceNo(e.target.value)}
-                        className="w-full text-xs p-3 bg-slate-800 border border-slate-700 rounded-2xl font-black text-white focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-left"
+                        className="w-full text-xs p-3 bg-white border border-slate-200 rounded-2xl font-black text-slate-900 focus:ring-2 focus:ring-purple-500 outline-none font-mono text-left"
                       />
                     </div>
                   </div>
  
                   {/* Auto-Description / Coding */}
                   <div className="space-y-1 pt-2">
-                    <label className="block text-[10px] font-black text-slate-400 mb-1.5 mr-1 uppercase tracking-widest">التكويد الذكي ووصف المعاملة</label>
+                    <label className="block text-[10px] font-black text-slate-500 mb-1.5 mr-1 uppercase tracking-widest">التكويد الذكي ووصف المعاملة</label>
                     <input
                       readOnly
                       value={autoDescription}
-                      className="w-full p-3.5 bg-slate-950 border border-slate-800 rounded-2xl text-xs font-bold text-slate-400 focus:outline-none cursor-not-allowed text-center"
+                      className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-500 focus:outline-none cursor-not-allowed text-center"
                     />
                   </div>
                 </div>
@@ -627,25 +627,25 @@ export default function AddTransactionModal({
           </div>
  
           {/* Footer Action Bar */}
-          <div className="p-6 border-t border-slate-700 flex items-center justify-end gap-4 bg-slate-900 flex-shrink-0 flex-row-reverse">
+          <div className="p-6 border-t border-slate-100 flex items-center justify-end gap-4 bg-white flex-shrink-0 flex-row-reverse">
             <button
               type="submit"
               form="transaction-form"
-              className="px-8 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-black transition cursor-pointer shadow-lg active:scale-95"
+              className="px-8 py-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-xs font-black transition cursor-pointer shadow-md hover:shadow-lg active:scale-95"
             >
-              حفظ
+              حفظ واعتماد المعاملة
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl text-xs font-black border border-slate-700 transition cursor-pointer"
+              className="px-6 py-3.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-2xl text-xs font-black border border-slate-200 transition cursor-pointer"
             >
-              إلغاء التراجع
+              إلغاء
             </button>
           </div>
  
         </div>
- 
+
       </div>
     </div>
   );

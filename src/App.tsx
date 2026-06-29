@@ -27,7 +27,6 @@ import FuelDashboard from './components/FuelDashboard';
 import SiteWorkersDashboard from './components/SiteWorkersDashboard';
 import WarehouseDashboard from './components/WarehouseDashboard';
 import ExtractsTab from './components/ExtractsTab';
-import ErpModulePlaceholder from './components/ErpModulePlaceholder';
 import HSEDashboard from './components/HSEDashboard';
 import ProjectsTab from './components/ProjectsTab';
 import BOQTab from './components/BOQTab';
@@ -37,11 +36,11 @@ import SiteInspectionRequests from './components/SiteInspectionRequests';
 import LoginScreen from './components/LoginScreen';
 import SiteSelectionScreen from './components/SiteSelectionScreen';
 import UsersAdminPanel from './components/UsersAdminPanel';
-import ErpSubDashboards from './components/ErpSubDashboards';
 import CrmDashboard from './components/CrmDashboard';
 import CrmCustomerList from './components/CrmCustomerList';
 import AddCustomerModal from './components/AddCustomerModal';
 import GlobalActivityLog from './components/GlobalActivityLog';
+
 
 import { 
   Transaction, 
@@ -133,6 +132,9 @@ import {
 } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { appendSessionLog } from './lib/sessionTracker';
+import { applyColorTheme, COLOR_THEMES } from './utils/themeHelper';
+import InteractiveBackground from './components/InteractiveBackground';
+import LoadingScreen from './components/LoadingScreen';
 
 function sanitizeLoadedData<T extends { id: string; referenceNo?: string }>(items: any[], prefix: string): T[] {
   if (!items || !Array.isArray(items)) return [];
@@ -171,13 +173,38 @@ const getModuleAr = (key: string) => {
 
 export default function App() {
   const [activeTab, setActiveTab ] = useState<string>('dashboard');
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
-  const [showAddModal, setShowAddModal] = useState<boolean>(false);
-  const [showAddCustomerModal, setShowAddCustomerModal] = useState<boolean>(false);
-  const [customers, setCustomers] = useState<CustomerRecord[]>([]);
-  const [selectedCustomer, setSelectedCustomer] = useState<CustomerRecord | null>(null);
+  
+  // Dynamic design system themes and background modes (scoped per user)
+  const getInitialUserTheme = () => {
+    const savedUser = localStorage.getItem('bunyan_current_user');
+    if (savedUser) {
+      try {
+        const u = JSON.parse(savedUser);
+        if (u && u.username) {
+          return localStorage.getItem(`bunyan_theme_id_${u.username}`) || u.themeId || 'classic';
+        }
+      } catch (e) {}
+    }
+    return localStorage.getItem('bunyan_theme_id_guest') || 'classic';
+  };
 
-  // Security & Multi-site core databases
+  const getInitialUserBg = () => {
+    const savedUser = localStorage.getItem('bunyan_current_user');
+    if (savedUser) {
+      try {
+        const u = JSON.parse(savedUser);
+        if (u && u.username) {
+          return localStorage.getItem(`bunyan_bg_type_${u.username}`) || u.bgType || 'waves';
+        }
+      } catch (e) {}
+    }
+    return localStorage.getItem('bunyan_bg_type_guest') || 'waves';
+  };
+
+  const [themeId, setThemeId] = useState<string>(getInitialUserTheme);
+  const [bgType, setBgType] = useState<'none' | 'waves' | 'particles' | 'matrix' | 'bubbles' | 'vortex'>(getInitialUserBg);
+
+  // Sync state when user logs in, out, or changes
   const [user, setUser] = useState<UserItem | null>(() => {
     const saved = localStorage.getItem('bunyan_current_user');
     if (!saved) return null;
@@ -193,6 +220,12 @@ export default function App() {
     }
   });
 
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
+  const [showAddModal, setShowAddModal] = useState<boolean>(false);
+  const [showAddCustomerModal, setShowAddCustomerModal] = useState<boolean>(false);
+  const [customers, setCustomers] = useState<CustomerRecord[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerRecord | null>(null);
+
   const [selectedSite, setSelectedSite] = useState<{id: string; nameAr: string; location: string; description: string} | null>(() => {
     const saved = localStorage.getItem('bunyan_current_site');
     return saved ? JSON.parse(saved) : null;
@@ -203,6 +236,72 @@ export default function App() {
   const [dbConnected, setDbConnected] = useState<boolean | null>(null);
   const [dbChecking, setDbChecking] = useState<boolean>(false);
   const [dbLatency, setDbLatency] = useState<number>(0);
+
+  useEffect(() => {
+    if (user) {
+      const userTheme = localStorage.getItem(`bunyan_theme_id_${user.username}`) || user.themeId || 'classic';
+      const userBg = (localStorage.getItem(`bunyan_bg_type_${user.username}`) as any) || user.bgType || 'waves';
+      setThemeId(userTheme);
+      setBgType(userBg);
+    } else {
+      const guestTheme = localStorage.getItem('bunyan_theme_id_guest') || 'classic';
+      const guestBg = (localStorage.getItem('bunyan_bg_type_guest') as any) || 'waves';
+      setThemeId(guestTheme);
+      setBgType(guestBg);
+    }
+  }, [user]);
+
+  // Persist changes to local storage and sync with Firestore if logged in
+  useEffect(() => {
+    applyColorTheme(themeId);
+    if (user) {
+      localStorage.setItem(`bunyan_theme_id_${user.username}`, themeId);
+      if (dbConnected) {
+        const userDocRef = doc(db, 'users', user.username);
+        updateDoc(userDocRef, { themeId }).catch(err => console.error("Error saving user theme in Firestore:", err));
+      }
+    } else {
+      localStorage.setItem('bunyan_theme_id_guest', themeId);
+    }
+  }, [themeId, user, dbConnected]);
+
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem(`bunyan_bg_type_${user.username}`, bgType);
+      if (dbConnected) {
+        const userDocRef = doc(db, 'users', user.username);
+        updateDoc(userDocRef, { bgType }).catch(err => console.error("Error saving user bgType in Firestore:", err));
+      }
+    } else {
+      localStorage.setItem('bunyan_bg_type_guest', bgType);
+    }
+  }, [bgType, user, dbConnected]);
+
+  // Fetch the latest saved theme/bg settings from Firestore on mount/login
+  useEffect(() => {
+    if (user && dbConnected) {
+      const fetchUserData = async () => {
+        try {
+          const userDocRef = doc(db, 'users', user.username);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            if (data.themeId && data.themeId !== themeId) {
+              setThemeId(data.themeId);
+              localStorage.setItem(`bunyan_theme_id_${user.username}`, data.themeId);
+            }
+            if (data.bgType && data.bgType !== bgType) {
+              setBgType(data.bgType);
+              localStorage.setItem(`bunyan_bg_type_${user.username}`, data.bgType);
+            }
+          }
+        } catch (err) {
+          console.error("Error fetching user preferences from Firestore:", err);
+        }
+      };
+      fetchUserData();
+    }
+  }, [user, dbConnected]);
 
   const [globalConfirm, setGlobalConfirm] = useState<{
     message: string;
@@ -770,9 +869,9 @@ export default function App() {
             });
           }
 
-          // Enforce minimum of 4 seconds for the loading transition to feel high-fidelity
+          // Enforce minimum of 5 seconds for the loading transition to feel high-fidelity
           const elapsed = Date.now() - startTime;
-          const remaining = Math.max(0, 4000 - elapsed);
+          const remaining = Math.max(0, 5000 - elapsed);
           
           setTimeout(() => {
             loadedSiteIdRef.current = selectedSite.id;
@@ -1036,6 +1135,26 @@ export default function App() {
       console.warn("Could not start real-time notifications subscription", e);
     }
   }, [user, selectedSite]);
+
+  // Real-time customers listener
+  useEffect(() => {
+    try {
+      const q = query(collection(db, 'customers'));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const list: CustomerRecord[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push(docSnap.data() as CustomerRecord);
+        });
+        setCustomers(list);
+      }, (error) => {
+        console.warn("Customers live feed subscription warning:", error);
+      });
+
+      return () => unsubscribe();
+    } catch (e) {
+      console.warn("Could not start real-time customers subscription", e);
+    }
+  }, []);
 
   const handleDismissNotification = async (notificationId: string) => {
     // 1. Instantly update UI by saving to local storage so they don't see it while Firebase syncs
@@ -1571,6 +1690,36 @@ export default function App() {
     };
   };
 
+  const handleDownloadLocalFile = () => {
+    if (!selectedSite) {
+      alert('فضلاً، يجب تسجيل موقع عمل نشط للتصدير.');
+      return;
+    }
+    try {
+      const payload = getBackupPayload();
+      const backupData = {
+        version: "2.5",
+        timestamp: new Date().toISOString(),
+        siteId: selectedSite.id,
+        siteName: selectedSite.nameAr,
+        payload
+      };
+
+      const siteNameClean = selectedSite.nameAr.replace(/\s+/g, '_');
+      const defaultFileName = `bunyan_backup_${siteNameClean}_${new Date().toISOString().split('T')[0]}.json`;
+
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", defaultFileName);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    } catch (err: any) {
+      alert('فشل إعداد التصدير المحلي للملف: ' + err.message);
+    }
+  };
+
   const handleRestoreBackup = (backupDoc: any) => {
     console.log("Restoring backup:", backupDoc);
     if (!backupDoc || typeof backupDoc !== 'object') {
@@ -1655,6 +1804,7 @@ export default function App() {
             userRole={user?.role}
             selectedSiteName={selectedSite?.nameAr}
             fuelStations={fuelStations}
+            addAuditLog={addAuditLog}
           />
         );
 
@@ -1776,7 +1926,7 @@ export default function App() {
           />
         );
       case 'hse':
-        return <HSEDashboard user={user} projects={projects} addAuditLog={addAuditLog} auditLogs={auditLogs} />;
+        return <HSEDashboard user={user} projects={projects} addAuditLog={addAuditLog} auditLogs={auditLogs} selectedSite={selectedSite} />;
       case 'documents':
         return (
           <DocumentControlDashboard 
@@ -1969,6 +2119,10 @@ export default function App() {
             currentUserRole={user?.role}
             dbConnected={dbConnected}
             triggerTestBackupReminder={triggerTestBackupReminder}
+            currentThemeId={themeId}
+            onThemeChange={setThemeId}
+            currentBgType={bgType}
+            onBgTypeChange={setBgType}
           />
         );
 
@@ -1990,6 +2144,7 @@ export default function App() {
             onUpdateTransaction={handleUpdateTransaction}
             userRole={user?.role}
             selectedSiteName={selectedSite?.nameAr}
+            addAuditLog={addAuditLog}
           />
         );
     }
@@ -2031,143 +2186,10 @@ export default function App() {
 
   if (!isDbLoaded) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 md:p-8 relative overflow-hidden font-sans text-right" dir="rtl" id="bunyan-db-loader">
-        
-        {/* Interactive moving gradient background elements */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          {/* Soft floating circle 1 */}
-          <motion.div
-            animate={{
-              x: [0, 60, -30, 0],
-              y: [0, -40, 50, 0],
-              scale: [1, 1.15, 0.9, 1],
-            }}
-            transition={{
-              duration: 15,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-            className="absolute -top-12 -left-12 w-72 h-72 bg-gradient-to-tr from-indigo-200/40 to-sky-200/40 rounded-full blur-3xl"
-          />
-
-          {/* Soft floating circle 2 */}
-          <motion.div
-            animate={{
-              x: [0, -50, 40, 0],
-              y: [0, 60, -30, 0],
-              scale: [1, 0.9, 1.1, 1],
-            }}
-            transition={{
-              duration: 18,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-            className="absolute top-1/3 right-10 w-96 h-96 bg-gradient-to-br from-amber-100/50 to-pink-100/50 rounded-full blur-3xl"
-          />
-
-          {/* Soft floating circle 3 */}
-          <motion.div
-            animate={{
-              x: [0, 30, -40, 0],
-              y: [0, 50, -40, 0],
-              scale: [1, 1.1, 0.95, 1],
-            }}
-            transition={{
-              duration: 12,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-            className="absolute -bottom-20 left-1/4 w-80 h-80 bg-gradient-to-tr from-emerald-100/40 to-teal-100/40 rounded-full blur-3xl"
-          />
-
-          {/* Delicate structural grid */}
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a08_1px,transparent_1px),linear-gradient(to_bottom,#0f172a08_1px,transparent_1px)] bg-[size:24px_24px] opacity-60" />
-        </div>
-
-        <motion.div 
-          initial={{ opacity: 0, y: 25 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: "easeOut" }}
-          className="w-full max-w-md bg-white/85 backdrop-blur-xl border border-slate-200/80 rounded-3xl p-8 shadow-2xl relative overflow-hidden text-center space-y-6"
-        >
-          {/* Subtle decorative inner corner colors */}
-          <div className="absolute -top-10 -left-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-          <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
-
-          <div className="relative inline-block">
-            <motion.div
-              animate={{ 
-                scale: [1, 1.12, 1],
-                opacity: [0.3, 0.5, 0.3]
-              }}
-              transition={{
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeInOut"
-              }}
-              className="absolute -inset-6 bg-indigo-500/10 blur-2xl rounded-full"
-            />
-            <motion.div
-              initial={{ rotate: -10, opacity: 0 }}
-              animate={{ rotate: 0, opacity: 1 }}
-              transition={{ duration: 0.8, delay: 0.2, type: "spring" }}
-              className="mx-auto w-18 h-18 bg-white border border-slate-100 rounded-2xl flex items-center justify-center p-2 shadow-md relative z-10"
-            >
-              <BunyanLogo 
-                className="w-14 h-14" 
-                iconClassName="fill-slate-850" 
-                barsClassName="fill-indigo-600" 
-                dotClassName="fill-amber-500" 
-              />
-            </motion.div>
-          </div>
-
-          <div className="space-y-4">
-            <motion.h2 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="text-xl font-extrabold text-slate-900 font-sans tracking-tight"
-            >
-              جاري مزامنة وتأمين السجلات الرقمية
-            </motion.h2>
-            
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              className="space-y-4"
-            >
-              <div className="bg-slate-50 border border-slate-150 py-2.5 px-4 rounded-xl text-center">
-                <span className="text-slate-550 text-xs font-bold font-sans">موقع التشغيل النشط:</span>
-                <span className="text-indigo-600 font-extrabold text-xs font-sans mr-1.5">{selectedSite.nameAr}</span>
-              </div>
-              
-              <div className="relative w-48 h-1.5 bg-slate-100 rounded-full mx-auto overflow-hidden">
-                <motion.div 
-                  initial={{ x: "-100%" }}
-                  animate={{ x: "100%" }}
-                  transition={{ 
-                    duration: 1.5, 
-                    repeat: Infinity, 
-                    ease: "easeInOut" 
-                  }}
-                  className="absolute inset-0 w-1/2 bg-gradient-to-r from-transparent via-indigo-600 to-transparent"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1 items-center pt-1">
-                <p className="text-[10px] text-indigo-600/70 font-bold font-mono tracking-wider uppercase">
-                  Securing Database Connection
-                </p>
-                <p className="text-[11px] text-slate-400 font-semibold leading-relaxed">
-                  تأكد أن كافة بيانات ومعلومات هذا المشروع مؤمنة بالكامل
-                </p>
-              </div>
-            </motion.div>
-          </div>
-        </motion.div>
-      </div>
+      <LoadingScreen 
+        siteName={selectedSite.nameAr}
+        primaryColor={COLOR_THEMES.find(t => t.id === themeId)?.primaryColor || '#4f46e5'}
+      />
     );
   }
 
@@ -2176,9 +2198,14 @@ export default function App() {
       initial={{ opacity: 0 }} 
       animate={{ opacity: 1 }} 
       transition={{ duration: 0.8 }}
-      className="min-h-screen bg-slate-50 flex" 
+      className="min-h-screen bg-slate-50/75 flex relative z-10" 
       id="bunyan-app-root"
     >
+      {/* Dynamic Animated Interactive Background */}
+      <InteractiveBackground 
+        type={bgType} 
+        primaryColor={COLOR_THEMES.find(t => t.id === themeId)?.primaryColor || '#4f46e5'} 
+      />
       
       {/* Sidebar navigation */}
       <Sidebar 

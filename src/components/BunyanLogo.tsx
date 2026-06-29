@@ -1,211 +1,42 @@
-import React, { useState } from 'react';
-import { motion, useMotionValue, useSpring, useTransform } from 'motion/react';
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React from 'react';
 
 interface BunyanLogoProps {
   className?: string;
+  size?: number; 
   iconClassName?: string;
   barsClassName?: string;
   dotClassName?: string;
-  size?: number; 
-  color?: string;
 }
 
 export default function BunyanLogo({ 
   className = "w-10 h-10", 
-  iconClassName = "fill-slate-800 dark:fill-slate-100",
-  barsClassName = "fill-indigo-600 dark:fill-indigo-400",
-  dotClassName = "fill-indigo-600 dark:fill-indigo-400",
   size,
-  color
+  iconClassName = "",
+  barsClassName = "",
+  dotClassName = ""
 }: BunyanLogoProps) {
-  const [isIntroFinished, setIsIntroFinished] = useState(false);
-  const [clickForce, setClickForce] = useState(false);
   const dynamicSize = size ? { width: size, height: size } : {};
 
-  const glowColor = color || "#6366f1";
-
-  // Interactive 3D tilt variables for absolute premium tactile feel
-  const x = useMotionValue(0.5);
-  const y = useMotionValue(0.5);
-
-  // Smooth springs for rotation & scaling
-  const rotateX = useSpring(useTransform(y, [0, 1], [15, -15]), { stiffness: 120, damping: 15 });
-  const rotateY = useSpring(useTransform(x, [0, 1], [-15, 15]), { stiffness: 120, damping: 15 });
-  const scale = useSpring(1, { stiffness: 200, damping: 15 });
-  const glowOpacity = useSpring(0.15, { stiffness: 120, damping: 15 });
-
-  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const width = rect.width || 1;
-    const height = rect.height || 1;
-    const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
-
-    x.set(mouseX / width);
-    y.set(mouseY / height);
-  };
-
-  const handleMouseEnter = () => {
-    scale.set(1.08);
-    glowOpacity.set(0.85);
-  };
-
-  const handleMouseLeave = () => {
-    scale.set(1);
-    glowOpacity.set(0.15);
-    x.set(0.5);
-    y.set(0.5);
-  };
-
-  const handleClick = () => {
-    setClickForce(true);
-    setTimeout(() => setClickForce(false), 800);
-  };
-
-  const containerVariants = {
-    initial: {},
-    animate: {
-      transition: {
-        staggerChildren: 0.1
-      }
-    }
-  };
-
-  const pathVariants = {
-    initial: { pathLength: 0, opacity: 0 },
-    animate: { 
-      pathLength: 1, 
-      opacity: 1, 
-      transition: { duration: 1.2, ease: "easeInOut" } 
-    }
-  };
-
-  const barVariants = {
-    initial: { scaleY: 0, opacity: 0, originY: 1 },
-    animate: { 
-      scaleY: 1, 
-      opacity: 1, 
-      transition: { duration: 0.8, ease: "backOut" } 
-    }
-  };
-
-  const dotVariants = {
-    initial: { scale: 0, opacity: 0 },
-    animate: { 
-      scale: 1, 
-      opacity: 1, 
-      transition: { duration: 0.5, type: "spring", stiffness: 200 } 
-    }
-  };
-
   return (
-    <motion.div
-      className={`relative cursor-pointer select-none inline-flex items-center justify-center ${className}`}
-      style={{
-        perspective: 1200,
-        rotateX,
-        rotateY,
-        scale,
-        transformStyle: "preserve-3d" as const,
-        ...dynamicSize
-      }}
-      onMouseMove={handleMouseMove}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      onClick={handleClick}
-      whileTap={{ scale: 0.94 }}
+    <div 
+      className={`inline-flex items-center justify-center select-none ${className}`}
+      style={dynamicSize}
     >
       <svg 
-        className="w-full h-full overflow-visible pointer-events-none"
+        className={`w-full h-full overflow-visible ${iconClassName}`}
         viewBox="350 130 380 490" 
         xmlns="http://www.w3.org/2000/svg"
-        variants={containerVariants}
-        initial="initial"
-        animate="animate"
+        shapeRendering="geometricPrecision"
       >
-        <defs>
-          {/* Futuristic glowing aura for interactions */}
-          <radialGradient id="aura-gradient" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={glowColor} stopOpacity="0.5" />
-            <stop offset="60%" stopColor={glowColor} stopOpacity="0.18" />
-            <stop offset="100%" stopColor={glowColor} stopOpacity="0" />
-          </radialGradient>
-        </defs>
-
-        {/* Dynamic Backlight Halo Glow inside the viewBox - Centered at coordinates (540, 370) */}
-        <motion.circle
-          cx="540"
-          cy="370"
-          r="190"
-          fill="url(#aura-gradient)"
-          style={{ 
-            opacity: glowOpacity,
-            transformOrigin: "540px 370px",
-          }}
-          animate={isIntroFinished ? {
-            scale: clickForce ? [1, 1.4, 1] : [0.95, 1.12, 0.95],
-          } : { scale: 0.8 }}
-          transition={{
-            scale: { 
-              repeat: clickForce ? 0 : Infinity, 
-              duration: clickForce ? 0.8 : 3.5, 
-              ease: "easeInOut" 
-            }
-          }}
-        />
-
-        {/* Continuous ambient floating container for all graphic layers */}
-        <motion.g
-          animate={clickForce ? {
-            scale: [1, 1.05, 0.98, 1],
-            rotate: [0, -2, 2, 0]
-          } : {
-            y: [0, -8, 0],
-            rotate: [-0.5, 0.5, -0.5]
-          }}
-          transition={clickForce ? {
-            duration: 0.6,
-            ease: "easeOut"
-          } : {
-            y: {
-              repeat: Infinity,
-              repeatType: "mirror" as const,
-              duration: 4,
-              ease: "easeInOut"
-            },
-            rotate: {
-              repeat: Infinity,
-              repeatType: "mirror" as const,
-              duration: 6,
-              ease: "easeInOut"
-            }
-          }}
-        >
-          {/* Main Building Body / Structure Outline */}
-          <motion.path 
-            className={`transition-colors duration-300 ${!color ? iconClassName : ""}`}
-            fill={color || undefined}
-            variants={pathVariants}
-            onAnimationComplete={() => setIsIntroFinished(true)}
-            style={{ transformOrigin: "540px 370px" }}
-            animate={isIntroFinished ? {
-              filter: clickForce ? [
-                `drop-shadow(0 0 10px ${glowColor}7f)`,
-                `drop-shadow(0 0 25px ${glowColor})`,
-                `drop-shadow(0 0 10px ${glowColor}3f)`
-              ] : [
-                `drop-shadow(0 0 2px ${glowColor}1a)`,
-                `drop-shadow(0 0 12px ${glowColor}44)`,
-                `drop-shadow(0 0 2px ${glowColor}1a)`
-              ]
-            } : undefined}
-            transition={isIntroFinished ? {
-              filter: {
-                repeat: clickForce ? 0 : Infinity,
-                duration: clickForce ? 0.6 : 4,
-                ease: "easeInOut"
-              }
-            } : undefined}
+        <g>
+          {/* Main Building Body - Soft Slate 900 for premium, eye-friendly corporate look */}
+          <path 
+            fill="#0f172a"
             d="
             M370.711121,174.999908 
             C370.710510,165.834488 370.689819,157.169006 370.729126,148.503784 
@@ -302,40 +133,15 @@ export default function BunyanLogo({
             C358.878510,214.049744 360.340881,212.204910 364.688416,212.696198 
             C369.309570,213.218430 370.853180,210.897583 370.780914,206.488678 
             C370.611511,196.161484 370.717072,185.829788 370.711121,174.999908 
-            Z"
+            Z" 
           />
-
-          {/* Bar 1 - Tallest construction column */}
-          <motion.path 
-            className={`transition-colors duration-300 ${!color ? barsClassName : ""}`}
-            fill={color || undefined}
-            variants={barVariants}
-            style={{ originY: 1 }}
-            animate={isIntroFinished ? {
-              scaleY: clickForce ? [1, 1.3, 0.9, 1] : [1, 0.88, 1.08, 0.92, 1],
-              y: clickForce ? [0, -15, 5, 0] : [0, -3, 3, 0]
-            } : undefined}
-            whileHover={{
-              scaleY: 1.25,
-              transition: { type: "spring", stiffness: 300, damping: 10 }
-            }}
-            transition={isIntroFinished ? {
-              scaleY: {
-                repeat: clickForce ? 0 : Infinity,
-                repeatType: clickForce ? undefined : "mirror" as const,
-                duration: clickForce ? 0.6 : 3.8,
-                ease: "easeInOut",
-                delay: 0.1
-              },
-              y: {
-                repeat: clickForce ? 0 : Infinity,
-                repeatType: clickForce ? undefined : "mirror" as const,
-                duration: clickForce ? 0.6 : 3.8,
-                ease: "easeInOut",
-                delay: 0.1
-              }
-            } : undefined}
-            d="M637.255127,322.000000 
+          
+          {/* Bar 1 - Soft premium blue for clean visual highlight */}
+          <path 
+            className={barsClassName}
+            fill="var(--color-purple-600, #3b59e9)"
+            d="
+            M637.255127,322.000000 
             C637.274963,331.656647 637.235474,340.814087 637.351074,349.969513 
             C637.386902,352.808075 636.521606,355.027252 634.631287,357.176270 
             C626.500427,366.419708 618.423157,375.714142 610.521362,385.153259 
@@ -347,40 +153,15 @@ export default function BunyanLogo({
             C608.166443,245.041870 619.475708,239.765076 630.844849,234.622864 
             C636.366089,232.125641 637.218628,232.618042 637.228333,238.588547 
             C637.273132,266.225647 637.252686,293.862823 637.255127,322.000000 
-            Z"
+            Z" 
           />
 
-          {/* Bar 2 - Middle construction column */}
-          <motion.path 
-            className={`transition-colors duration-300 ${!color ? barsClassName : ""}`}
-            fill={color || undefined}
-            variants={barVariants}
-            style={{ originY: 1 }}
-            animate={isIntroFinished ? {
-              scaleY: clickForce ? [1, 1.35, 0.85, 1] : [1, 1.12, 0.88, 1.05, 1],
-              y: clickForce ? [0, -20, 8, 0] : [0, -4, 4, 0]
-            } : undefined}
-            whileHover={{
-              scaleY: 1.25,
-              transition: { type: "spring", stiffness: 300, damping: 10 }
-            }}
-            transition={isIntroFinished ? {
-              scaleY: {
-                repeat: clickForce ? 0 : Infinity,
-                repeatType: clickForce ? undefined : "mirror" as const,
-                duration: clickForce ? 0.6 : 4.4,
-                ease: "easeInOut",
-                delay: 0.3
-              },
-              y: {
-                repeat: clickForce ? 0 : Infinity,
-                repeatType: clickForce ? undefined : "mirror" as const,
-                duration: clickForce ? 0.6 : 4.4,
-                ease: "easeInOut",
-                delay: 0.3
-              }
-            } : undefined}
-            d="M541.825806,331.001312 
+          {/* Bar 2 - Soft premium blue for clean visual highlight */}
+          <path 
+            className={barsClassName}
+            fill="var(--color-purple-600, #3b59e9)"
+            d="
+            M541.825806,331.001312 
             C541.829224,329.168976 541.834290,327.836090 541.831848,326.503235 
             C541.807068,313.247437 541.820007,313.278290 553.802673,308.135284 
             C562.523682,304.392120 571.202026,300.549652 579.904114,296.762268 
@@ -394,40 +175,15 @@ export default function BunyanLogo({
             C558.442322,424.896637 551.539001,420.866119 544.588867,416.918427 
             C541.736450,415.298248 541.793335,412.692108 541.795837,409.973450 
             C541.820129,383.815887 541.818420,357.658356 541.825806,331.001312 
-            Z"
+            Z" 
           />
 
-          {/* Bar 3 - Left construction column */}
-          <motion.path 
-            className={`transition-colors duration-300 ${!color ? barsClassName : ""}`}
-            fill={color || undefined}
-            variants={barVariants}
-            style={{ originY: 1 }}
-            animate={isIntroFinished ? {
-              scaleY: clickForce ? [1, 1.4, 0.8, 1] : [1, 0.85, 1.15, 0.92, 1],
-              y: clickForce ? [0, -22, 10, 0] : [0, -5, 5, 0]
-            } : undefined}
-            whileHover={{
-              scaleY: 1.25,
-              transition: { type: "spring", stiffness: 300, damping: 10 }
-            }}
-            transition={isIntroFinished ? {
-              scaleY: {
-                repeat: clickForce ? 0 : Infinity,
-                repeatType: clickForce ? undefined : "mirror" as const,
-                duration: clickForce ? 0.6 : 4.0,
-                ease: "easeInOut",
-                delay: 0.5
-              },
-              y: {
-                repeat: clickForce ? 0 : Infinity,
-                repeatType: clickForce ? undefined : "mirror" as const,
-                duration: clickForce ? 0.6 : 4.0,
-                ease: "easeInOut",
-                delay: 0.5
-              }
-            } : undefined}
-            d="M535.401855,345.110992 
+          {/* Bar 3 - Soft premium blue for clean visual highlight */}
+          <path 
+            className={barsClassName}
+            fill="var(--color-purple-600, #3b59e9)"
+            d="
+            M535.401855,345.110992 
             C535.442993,366.339417 535.442993,387.234985 535.442993,408.130585 
             C529.165527,401.951019 523.458496,396.282593 513.749695,398.895142 
             C504.219391,401.459717 502.504669,409.734711 500.701782,417.741272 
@@ -436,125 +192,25 @@ export default function BunyanLogo({
             C497.799805,360.392151 499.188690,358.344269 502.820618,356.838867 
             C512.037781,353.018433 521.066101,348.744568 530.218323,344.763397 
             C531.816223,344.068298 533.669250,342.118591 535.401855,345.110992 
-            Z"
+            Z" 
           />
 
-          {/* Radiating high-tech beacon wave rings emanating from behind the dot focal-point */}
-          <motion.circle
-            cx="535"
-            cy="575"
-            r="24"
-            fill="none"
-            stroke={glowColor}
-            strokeWidth="3"
-            style={{ transformOrigin: "535px 575px" }}
-            animate={{
-              scale: clickForce ? [0.8, 3.8] : [1, 2.4],
-              opacity: clickForce ? [0.9, 0] : [0.7, 0],
-            }}
-            transition={{
-              duration: clickForce ? 0.7 : 2.0,
-              repeat: clickForce ? 0 : Infinity,
-              ease: "easeOut",
-            }}
-          />
-          <motion.circle
-            cx="535"
-            cy="575"
-            r="24"
-            fill="none"
-            stroke={glowColor}
-            strokeWidth="1.5"
-            style={{ transformOrigin: "535px 575px" }}
-            animate={{
-              scale: clickForce ? [0.8, 5.0] : [1, 3.4],
-              opacity: clickForce ? [0.8, 0] : [0.55, 0],
-            }}
-            transition={{
-              duration: clickForce ? 0.7 : 2.0,
-              repeat: clickForce ? 0 : Infinity,
-              ease: "easeOut",
-              delay: clickForce ? 0 : 1.0,
-            }}
-          />
-
-          {/* Dot - Represents the solid anchor of Bunyan */}
-          <motion.path 
-            className={`transition-colors duration-300 ${!color ? dotClassName : ""}`}
-            fill={color || undefined}
-            variants={dotVariants}
-            style={{ originX: "535px", originY: "575px" }}
-            animate={isIntroFinished ? {
-              scale: clickForce ? [1, 1.45, 0.9, 1] : [1, 1.18, 1],
-              filter: [
-                `drop-shadow(0 0 2px ${glowColor}66)`,
-                `drop-shadow(0 0 12px ${glowColor})`,
-                `drop-shadow(0 0 2px ${glowColor}66)`
-              ]
-            } : undefined}
-            whileHover={{
-              scale: 1.35,
-              y: -10,
-              transition: { type: "spring", stiffness: 450, damping: 12 }
-            }}
-            transition={isIntroFinished ? {
-              scale: { 
-                repeat: clickForce ? 0 : Infinity, 
-                duration: clickForce ? 0.6 : 2.5, 
-                ease: "easeInOut" 
-              },
-              filter: { 
-                repeat: clickForce ? 0 : Infinity, 
-                duration: clickForce ? 0.6 : 2.5, 
-                ease: "easeInOut" 
-              }
-            } : undefined}
-            d="M524.009094,595.213318 
+          {/* Anchor Dot - Styled in premium brand blue */}
+          <path 
+            className={dotClassName}
+            fill="var(--color-purple-600, #3b59e9)"
+            d="
+            M524.009094,595.213318 
             C515.110474,588.673157 511.275238,580.327942 513.861084,569.786865 
             C516.055054,560.843140 521.833069,555.026489 530.854675,552.648376 
             C541.130676,549.939514 551.411011,553.979553 557.262207,563.007935 
             C562.750244,571.476074 562.013123,582.622864 555.451355,590.388428 
             C548.658020,598.428040 537.551636,601.190186 527.878174,597.208923 
             C526.654358,596.705322 525.507996,596.013306 524.009094,595.213318 
-            Z"
+            Z" 
           />
-
-          {/* Ambient floating technological stars/particles around the construction */}
-          <motion.circle
-            cx="680"
-            cy="260"
-            r="4.5"
-            fill={glowColor}
-            animate={{
-              y: [0, -18, 0],
-              opacity: [0.2, 0.9, 0.2],
-              scale: [0.8, 1.3, 0.8],
-            }}
-            transition={{
-              duration: 4.8,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-          />
-          <motion.circle
-            cx="395"
-            cy="285"
-            r="3"
-            fill={glowColor}
-            animate={{
-              y: [0, -22, 0],
-              opacity: [0.15, 0.8, 0.15],
-              scale: [0.7, 1.2, 0.7],
-            }}
-            transition={{
-              duration: 5.5,
-              repeat: Infinity,
-              ease: "easeInOut",
-              delay: 1.2,
-            }}
-          />
-        </motion.g>
+        </g>
       </svg>
-    </motion.div>
+    </div>
   );
 }

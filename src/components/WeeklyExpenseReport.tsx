@@ -1962,7 +1962,7 @@ export default function WeeklyExpenseReport({
                         <td className="border border-slate-400 p-1.5 font-bold text-slate-800">{item.description}</td>
                         <td className="border border-slate-400 p-1.5 text-center font-mono text-slate-400">-</td>
                         {reportDays.map((rd, i) => (
-                          <td key={i} className="border border-slate-400 p-1.5 text-center font-mono">
+                          <td key={`sal-td-${index}-${i}`} className="border border-slate-400 p-1.5 text-center font-mono">
                             {item.values[rd.date] ? item.values[rd.date].toLocaleString('ar-EG') : ''}
                           </td>
                         ))}
@@ -2013,7 +2013,7 @@ export default function WeeklyExpenseReport({
                         <td className="border border-slate-400 p-1.5 font-bold text-slate-800">{item.description}</td>
                         <td className="border border-slate-400 p-1.5 text-center font-mono text-slate-400">-</td>
                         {reportDays.map((rd, i) => (
-                          <td key={i} className="border border-slate-400 p-1.5 text-center font-mono">
+                          <td key={`maint-td-${index}-${i}`} className="border border-slate-400 p-1.5 text-center font-mono">
                             {item.values[rd.date] ? item.values[rd.date].toLocaleString('ar-EG') : ''}
                           </td>
                         ))}
@@ -2064,7 +2064,7 @@ export default function WeeklyExpenseReport({
                         <td className="border border-slate-400 p-1.5 font-bold text-slate-800">{item.description}</td>
                         <td className="border border-slate-400 p-1.5 text-center font-mono text-slate-400">-</td>
                         {reportDays.map((rd, i) => (
-                          <td key={i} className="border border-slate-400 p-1.5 text-center font-mono">
+                          <td key={`trans-td-${index}-${i}`} className="border border-slate-400 p-1.5 text-center font-mono">
                             {item.values[rd.date] ? item.values[rd.date].toLocaleString('ar-EG') : ''}
                           </td>
                         ))}
@@ -2115,7 +2115,7 @@ export default function WeeklyExpenseReport({
                         <td className="border border-slate-400 p-1.5 font-bold text-slate-800">{item.description}</td>
                         <td className="border border-slate-400 p-1.5 text-center font-mono text-slate-400">-</td>
                         {reportDays.map((rd, i) => (
-                          <td key={i} className="border border-slate-400 p-1.5 text-center font-mono">
+                          <td key={`off-td-${index}-${i}`} className="border border-slate-400 p-1.5 text-center font-mono">
                             {item.values[rd.date] ? item.values[rd.date].toLocaleString('ar-EG') : ''}
                           </td>
                         ))}
@@ -2166,7 +2166,7 @@ export default function WeeklyExpenseReport({
                         <td className="border border-slate-400 p-1.5 font-bold text-slate-800">{item.description}</td>
                         <td className="border border-slate-400 p-1.5 text-center font-mono text-slate-400">-</td>
                         {reportDays.map((rd, i) => (
-                          <td key={i} className="border border-slate-400 p-1.5 text-center font-mono">
+                          <td key={`grant-td-${index}-${i}`} className="border border-slate-400 p-1.5 text-center font-mono">
                             {item.values[rd.date] ? item.values[rd.date].toLocaleString('ar-EG') : ''}
                           </td>
                         ))}
@@ -2217,7 +2217,7 @@ export default function WeeklyExpenseReport({
                         <td className="border border-slate-400 p-1.5 font-bold text-slate-800">{item.description}</td>
                         <td className="border border-slate-400 p-1.5 text-center font-mono text-slate-400">-</td>
                         {reportDays.map((rd, i) => (
-                          <td key={i} className="border border-slate-400 p-1.5 text-center font-mono">
+                          <td key={`oth-td-${index}-${i}`} className="border border-slate-400 p-1.5 text-center font-mono">
                             {item.values[rd.date] ? item.values[rd.date].toLocaleString('ar-EG') : ''}
                           </td>
                         ))}
@@ -2272,7 +2272,7 @@ export default function WeeklyExpenseReport({
                     <td colSpan={2} className="border border-slate-400 p-2 text-right">إجمالي المنصرف</td>
                     <td className="border border-slate-400 p-1.5 font-mono text-center">-</td>
                     {dailySpentTotals.map((dst, i) => (
-                      <td key={i} className="border border-slate-400 p-2 text-center font-mono bg-orange-100/50">
+                      <td key={`total-spent-td-${i}`} className="border border-slate-400 p-2 text-center font-mono bg-orange-100/50">
                         {dst.total > 0 ? dst.total.toLocaleString('ar-EG') : '٠'}
                       </td>
                     ))}
@@ -2309,7 +2309,7 @@ export default function WeeklyExpenseReport({
                     {reportDays.map((rd, i) => {
                       const txIncome = dailyIncomeTotals.find(d => d.date === rd.date)?.total || 0;
                       return (
-                        <td key={i} className="border border-emerald-200 p-2 text-center font-mono bg-emerald-50/50 font-bold text-emerald-900 border-x border-emerald-100">
+                        <td key={`custody-td-${i}`} className="border border-emerald-200 p-2 text-center font-mono bg-emerald-50/50 font-bold text-emerald-900 border-x border-emerald-100">
                           {txIncome > 0 ? txIncome.toLocaleString('ar-EG') : <span className="text-emerald-300">-</span>}
                         </td>
                       );
@@ -2486,7 +2486,7 @@ export default function WeeklyExpenseReport({
               <h5 className="text-xs font-bold text-slate-800 mb-2 border-r-2 border-amber-500 pr-2">القيم المالية اليومية الموزعة (ج.م):</h5>
               <div className="grid grid-cols-2 md:grid-cols-7 gap-2.5">
                 {reportDays.map((rd, i) => (
-                  <div key={i} className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-center">
+                  <div key={`edit-modal-rd-${i}`} className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-center">
                     <span className="block text-[10px] text-slate-500 font-bold">{rd.dayNameAr}</span>
                     <span className="block text-[9px] text-slate-400 mt-0.5 font-mono">{rd.dateFormatted}</span>
                     <input

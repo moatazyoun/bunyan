@@ -1,21 +1,32 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ActivityLog } from '../types';
+import GenericInputModal from './GenericInputModal';
 
 interface CrmActivityLogProps {
   logs: ActivityLog[];
 }
 
 export default function CrmActivityLog({ logs }: CrmActivityLogProps) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   return (
     <div className="space-y-4 print:space-y-0" id="activity-log-table">
       <div className="flex justify-between items-center print:hidden">
         <h3 className="text-sm font-black text-slate-900">سجل النشاطات</h3>
-        <button
-          onClick={() => window.print()}
-          className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold"
-        >
-          طباعة السجل
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold"
+          >
+            إضافة سجل نشاط
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold"
+          >
+            طباعة السجل
+          </button>
+        </div>
       </div>
 
       <div className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
@@ -44,6 +55,19 @@ export default function CrmActivityLog({ logs }: CrmActivityLogProps) {
           </tbody>
         </table>
       </div>
+
+      <GenericInputModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="إضافة سجل نشاط جديد"
+      >
+        <div className="space-y-4">
+          <input className="w-full p-3 rounded-xl bg-slate-800 text-white text-xs" placeholder="الإجراء" />
+          <input className="w-full p-3 rounded-xl bg-slate-800 text-white text-xs" placeholder="الوحدة" />
+          <textarea className="w-full p-3 rounded-xl bg-slate-800 text-white text-xs" placeholder="التفاصيل" rows={4} />
+          <button className="w-full py-3 bg-purple-600 text-white rounded-xl text-xs font-bold">حفظ</button>
+        </div>
+      </GenericInputModal>
       
       {/* Print styles */}
       <style>{`

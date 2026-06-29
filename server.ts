@@ -12,11 +12,72 @@ import * as XLSX from "xlsx";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore, initializeFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 
+const app = express();
+const PORT = 3000;
+
 const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8"));
 
 dotenv.config();
 
 const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
+
+console.log("DEBUG: API Key length:", (process.env.GEMINI_API_KEY || "").length);
+console.log("DEBUG: GOOGLE_API_KEY length:", (process.env.GOOGLE_API_KEY || "").length);
+const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+
+const ai = new GoogleGenAI({
+  apiKey: apiKey,
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+});
+
+if (!apiKey) {
+    console.error("CRITICAL: GEMINI_API_KEY is not set.");
+}
+
+// NEW ENDPOINT: Manual price fetcher
+app.get("/api/debug-keys", (req, res) => {
+    res.json({
+        gemini: (process.env.GEMINI_API_KEY || "").length,
+        google: (process.env.GOOGLE_API_KEY || "").length,
+        apiKey: apiKey.length
+    });
+});
+app.get("/api/fetch-prices-manual", async (req, res) => {
+    try {
+        if (!apiKey) {
+            return res.status(500).json({ error: "API Key not configured on server. Please add GEMINI_API_KEY in the environment variables." });
+        }
+        
+        const prompt = `Get the latest prices in EGP for the following construction materials in the Egyptian market. Format as a JSON array of objects with: materialName (string), minPrice (number), maxPrice (number), unit (string). Materials:
+        حديد التسليح, أسمنت بورتلاندي, طوب أسمنتي مصمت (25×12×6 سم), طوب أسمنتي مفرغ (40×20×20 سم), طوب أسمنتي مفرغ (40×20×12 سم), طوب وردي (25×12×6 سم), طوب أحمر (20×10×6 سم), طوب أحمر (24×11×6 سم), طوب أحمر (25×12×6 سم), رمل حرش, رمل ناعم, زلط عادة, زلط مخصوص, زلط فينو, زلط سن, سيراميك حوائط (25×50 سم), سيراميك حوائط (31×63 سم), سيراميك حوائط (20×63 سم), سيراميك أرضيات (60×60 سم), سيراميك أرضيات (50×50 سم), سيراميك أرضيات (40×40 سم), رخام جلالة لايت, رخام جلالة عادة, رخام تريستا, رخام جلالة بفص, جرانيت أحمر أسوان, جرانيت فردي غزال, جرانيت حلايب, باركيه سمك 8 مم ألماني, باركيه سمك 8 مم تركي كلاس 21, باركيه سمك 8 مم تركي كلاس 31, باركيه سمك 8 مم تركي كلاس 32, خشب سويد موسكي (فنلندي), خشب زان مبخر (روماني), خشب كونتر مضغوط 18 مم, أبلاكاج أسيوي 3 مم.
+        Do not include any extra text.`;
+        
+        const response = await ai.models.generateContent({
+            model: "gemini-3.1-flash-lite",
+            contents: prompt,
+            config: { 
+                responseMimeType: "application/json"
+            }
+        });
+        const text = response.text || "";
+        
+        const data = JSON.parse(text.replace(/```json\n?|\n?```/g, "").trim());
+        res.json({ prices: data });
+    } catch (err: any) {
+        console.error("Manual fetch failed:", err);
+        res.status(500).json({ error: "Failed to fetch prices: " + (err.message || String(err)) });
+    }
+});
+
+
+// Initial update and hourly thereafter
+// Moved to after secureDb initialization
+async function startMarketDataJob() {
+}
 
 const dbId = (firebaseConfig.firestoreDatabaseId === "(default)" || firebaseConfig.firestoreDatabaseId === "") ? undefined : firebaseConfig.firestoreDatabaseId;
 
@@ -30,6 +91,9 @@ try {
 }
 
 const db = secureDb;
+
+// Start the job now that secureDb is ready
+startMarketDataJob();
 
 export { db };
 
@@ -84,12 +148,45 @@ function parseExcelBase64(base64: string): string {
   }
 }
 
-const app = express();
-const PORT = 3000;
 
 // Set request limits for handling larger uploaded base64 mock files / report screenshots
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+// --- TEST ENDPOINT ---
+app.get("/api/test", (req, res) => {
+    res.json({ status: "ok", message: "Server is alive" });
+});
+
+// --- MANUAL TRIGGER FOR MARKET DATA UPDATE ---
+app.post("/api/refresh-prices", async (req, res) => {
+    console.log("DEBUG: /api/refresh-prices hit");
+    try {
+        const result = await fetchAndStorePrices(true);
+        if (result.success) {
+            res.json({ message: "Update triggered and successful" });
+        } else if (result.error === "RATE_LIMIT") {
+            res.status(429).json({ error: "تم تجاوز حد الاستخدام اليومي (Rate Limit). يرجى المحاولة لاحقاً." });
+        } else {
+            res.status(500).json({ error: "Failed to update prices: " + result.error });
+        }
+    } catch (err) {
+        console.error("Manual trigger failed:", err);
+        res.status(500).json({ error: "Failed to trigger update", details: err instanceof Error ? err.message : String(err) });
+    }
+});
+
+// --- MARKET DATA ENDPOINT ---
+app.get("/api/market-data", async (req, res) => {
+  try {
+    const snapshot = await getDocs(collection(secureDb, 'market_prices'));
+    const data = snapshot.docs.map(doc => doc.data());
+    res.json({ data });
+  } catch (err) {
+    console.error("Error fetching market data:", err);
+    res.status(500).json({ error: "Failed to fetch market data" });
+  }
+});
 
 // --- FIREBASE LAYER (FIRESTORE) DISABLED ---
 
@@ -526,7 +623,7 @@ app.get("/api/db-status", async (req, res) => {
 
 // Helper for Gemini content generation with retry and model fallback using streaming to eliminate Vercel 504 timeouts
 async function generateStreamWithRetryAndFallback(ai: any, contents: any, config: any, res: express.Response) {
-  const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash"];
+  const modelsToTry = ["gemini-3.1-flash-lite"];
   let lastError: any = null;
 
   for (const model of modelsToTry) {
@@ -1008,6 +1105,97 @@ app.post("/api/gemini/analyze-boq", async (req, res) => {
   }
 });
 
+// Serve AI-powered Schedule Generation from BOQ Items
+app.post("/api/gemini/generate-schedule", async (req, res) => {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(400).json({
+        error: "مفتاح API الخاص بـ Gemini غير متوفر. يرجى إضافته في إعدادات التطبيق (Settings > Secrets) باسم 'GEMINI_API_KEY' لتفعيل موديول التوليد الذكي للجدول الزمني."
+      });
+    }
+
+    const { boqItems } = req.body;
+    if (!boqItems || !Array.isArray(boqItems) || boqItems.length === 0) {
+      return res.status(400).json({ error: "لم يتم تسليم بنود مقايسة صالحة لتوليد الجدول الزمني." });
+    }
+
+    const ai = new GoogleGenAI({
+      apiKey: apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+
+    const parts: any[] = [];
+
+    const prompt = `أنت مهندس تخطيط ومتابعة محترف (Planning Engineer) وخبير في إدارة مشاريع التشييد والبنية التحتية والطرق وجداول الكميات (BOQ).
+مهمتك هي صياغة وتوليد جدول زمني رقمي كامل ومنظم (WBS Tasks / Gantt Chart Schedule) بناءً على بنود المقايسة المعتمدة المرفقة أدناه.
+
+قائمة بنود المقايسة (BOQ Items):
+${JSON.stringify(boqItems, null, 2)}
+
+التعليمات الهندسية لإنشاء الجدول الزمني:
+1. قم بإنشاء نشاط لكل بند من بنود المقايسة المرفقة. يجب أن يتطابق 'wbsCode' للنشاط تماماً مع 'code' الخاص بالبند المقابل في المقايسة لربطهما معاً.
+2. حدد تاريخ البداية (startDate) وتاريخ النهاية (endDate) لكل نشاط بشكل واقعي ومتتابع منطقياً. افترض أن تاريخ بدء المشروع هو 2026-06-01.
+3. قم بتوزيع الأنشطة على المراحل الإنشائية المناسبة (phase) والاسم العربي المناسب للمرحلة (phaseNameAr) وفقاً للخيارات التالية:
+   - 'preparatory' ➔ 'أعمال تحضيرية وتجهيز الموقع' (لأعمال الحفر الأولية، الإخلاء وتجهيز المكاتب واللافتات)
+   - 'excavation' ➔ 'أعمال الحفر والردم والتسويات' (لأعمال القطع والحفر والردم وتسوية المناسيب)
+   - 'subbase' ➔ 'أعمال طبقة الأساس والفرش' (لأعمال توريد وفرش ودك سن الأساس وطبقة التشريب)
+   - 'asphalt' ➔ 'أعمال الرصف والطبقة الأسفلتية' (للطبقات الرابطة والسطحية الأسفلتية)
+   - 'curbstone' ➔ 'أعمال البردورات والبلدورات والإنترلوك' (للبلدورات والبلدورات الخرسانية وبلاطات الإنترلوك)
+   - 'lighting' ➔ 'أعمال الإنارة وكابلات الكهرباء' (لأعمدة الإنارة، غرف التفتيش، الكابلات وتغذية الكهرباء)
+   - 'signage' ➔ 'أعمال الدهانات واللوحات الإرشادية والتحكم المروري' (لتخطيط الطرق واللوحات والشاخصات)
+4. احسب المدد الزمنية بشكل منطقي يتناسب مع كمية البند ووحدة قياسه (الكميات الكبيرة تستغرق زمناً أطول).
+5. حدد نسبة إنجاز واقعية للأنشطة بناءً على التسلسل الزمني المفترض (الأنشطة الأولى قد تكون مكتملة أو متقدمة، والأنشطة الأخيرة 0% وهكذا).
+6. عيّن المسار الحرج (criticalPath) بشكل هندسي صحيح لبعض الأنشطة الأساسية المتتابعة التي يؤدي تأخرها لتأخر المشروع.
+7. حدد حالة منطقية لكل نشاط (status): 'completed' (للأنشطة المنتهية)، 'on_track' (للأنشطة الجارية المنتظمة)، 'behind' (للأنشطة الجارية المتأخرة زمنيًا).
+
+يرجى إخراج النتيجة بتنسيق JSON مطابق تماماً للمخطط (Schema) المرفق لضمان سلامة دمج البيانات وسرعة العرض.`;
+
+    parts.push({ text: prompt });
+
+    await generateStreamWithRetryAndFallback(ai, { parts }, {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            tasks: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  wbsCode: { type: Type.STRING, description: "رمز البند المقابل للـ BOQItem" },
+                  name: { type: Type.STRING, description: "اسم النشاط / عنوان البند باللغة العربية" },
+                  phase: { type: Type.STRING, description: "كود المرحلة الإنشائية: 'preparatory' | 'excavation' | 'subbase' | 'asphalt' | 'curbstone' | 'lighting' | 'signage'" },
+                  phaseNameAr: { type: Type.STRING, description: "الاسم العربي للمرحلة المقابلة لكود المرحلة" },
+                  plannedProgress: { type: Type.NUMBER, description: "النسبة المخططة للإنجاز (رقم من 0 إلى 100)" },
+                  actualProgress: { type: Type.NUMBER, description: "النسبة الفعلية للإنجاز (رقم من 0 إلى 100)" },
+                  startDate: { type: Type.STRING, description: "تاريخ بداية النشاط بصيغة YYYY-MM-DD" },
+                  endDate: { type: Type.STRING, description: "تاريخ نهاية النشاط بصيغة YYYY-MM-DD" },
+                  criticalPath: { type: Type.BOOLEAN, description: "هل يقع النشاط على المسار الحرج؟" },
+                  status: { type: Type.STRING, description: "حالة النشاط: 'on_track' | 'behind' | 'completed' | 'ahead'" }
+                },
+                required: ["wbsCode", "name", "phase", "phaseNameAr", "plannedProgress", "actualProgress", "startDate", "endDate", "criticalPath", "status"]
+              }
+            }
+          },
+          required: ["tasks"]
+        }
+    }, res);
+
+  } catch (error: any) {
+    console.error("Schedule generation error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message || "حدث خطأ غير متوقع أثناء توليد الجدول الزمني بالذكاء الاصطناعي." });
+    } else {
+      res.end();
+    }
+  }
+});
+
 // Setup Vite Dev server or production static serving
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
@@ -1035,11 +1223,9 @@ async function startServer() {
   }
 
   // Only listen on a port if we're not in a serverless environment (detected by common vars)
-  if (!process.env.VERCEL && !process.env.NOW_REGION) {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on port ${PORT}`);
-    });
-  }
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on port ${PORT}`);
+  });
 }
 
 startServer();

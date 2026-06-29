@@ -33,9 +33,11 @@ import {
   Wrench,
   BarChart3,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Sparkles
 } from 'lucide-react';
 import BunyanLogo from './BunyanLogo';
+import { motion } from 'motion/react';
 
 import { UserItem, UserModulePermissions } from '../types';
 
@@ -60,6 +62,21 @@ export default function Sidebar({
   onLogout,
   onChangeSite
 }: SidebarProps) {
+  const [isOnline, setIsOnline] = React.useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+  React.useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   const checkPerm = (key: keyof UserModulePermissions): boolean => {
     if (user?.role === 'admin') return true;
     return user?.permissions?.[key] !== 'none';
@@ -67,6 +84,7 @@ export default function Sidebar({
 
   const menuItems = [
     { id: 'dashboard', label: 'الصفحة الرئيسية', subtitle: 'Dashboard', icon: Home, perm: true },
+    { id: 'ai-fetcher', label: 'وكيل جلب أسعار AI', subtitle: 'AI Price Fetcher', icon: Sparkles, perm: true },
     { id: 'projects', label: 'المشروعات والإسناد', subtitle: 'Projects', icon: Briefcase, perm: checkPerm('projects') },
     { id: 'boq', label: 'المقايسة التثمنية', subtitle: 'Bill of Quantities', icon: FileText, perm: checkPerm('boq') },
     { id: 'transactions', label: 'دفتر الحركات المالي', subtitle: 'Ledger', icon: Receipt, perm: checkPerm('transactions') },
@@ -104,7 +122,7 @@ export default function Sidebar({
       id: 'control',
       title: 'لوحة التحكم والتحليلات',
       subtitle: 'Dashboard & Reports',
-      itemIds: ['dashboard']
+      itemIds: ['dashboard', 'ai-fetcher']
     },
     {
       id: 'technical',
@@ -193,10 +211,13 @@ export default function Sidebar({
       )}
 
       {/* Sidebar Container */}
-      <aside className={`
-        fixed inset-y-0 right-0 z-40 w-72 bg-[#fcfbfd] border-l border-slate-200 text-slate-800 flex flex-col justify-between transition-transform duration-300 ease-in-out shadow-lg
-        ${isOpen ? 'translate-x-0' : 'translate-x-full'} md:translate-x-0 h-screen
-      `}>
+      <aside 
+        dir="rtl"
+        className={`
+          fixed inset-y-0 right-0 z-40 w-72 bg-white border-l border-slate-150 text-slate-800 flex flex-col justify-between transition-transform duration-300 ease-in-out shadow-[0_0_40px_rgba(139,92,246,0.04)]
+          ${isOpen ? 'translate-x-0' : 'translate-x-full'} md:translate-x-0 h-screen
+        `}
+      >
         {/* Upper Side: Logo & Header */}
         <div className="flex flex-col flex-1 overflow-hidden">
           <button 
@@ -205,114 +226,109 @@ export default function Sidebar({
               setActiveTab('dashboard');
               setIsOpen(false);
             }}
-            className="w-full shrink-0 text-right p-5 border-b border-slate-200 flex items-center justify-start hover:bg-purple-50 bg-white transition-all duration-300 group outline-none focus:ring-2 focus:ring-purple-500/10"
+            className="w-full shrink-0 p-5 border-b border-slate-100 flex flex-row items-center justify-start gap-4 hover:bg-purple-50/30 bg-white transition-all duration-300 group outline-none focus:ring-2 focus:ring-purple-500/10 text-right select-none"
             title="العودة إلى الرئيسية"
           >
-            <div className="relative inline-flex items-center justify-start gap-3 p-1 rounded-xl transition-colors">
-              <div className="relative flex items-center justify-center p-0 rounded-xl transition-all duration-300">
-                <BunyanLogo 
-                  className="h-10 w-auto transition-transform duration-500 group-hover:scale-105 group-hover:-rotate-2 drop-shadow-md" 
-                  iconClassName="fill-slate-700 group-hover:fill-purple-650"
-                  barsClassName="fill-purple-650 group-hover:fill-purple-500"
-                  dotClassName="fill-purple-650 group-hover:fill-purple-400"
-                />
-                {/* Modern subtle glow behind the logo */}
-                <div className="absolute inset-0 bg-purple-550/5 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+            {/* Logo container - perfectly static as requested */}
+            <div 
+              className="relative flex items-center justify-center p-2.5 rounded-2xl bg-purple-50/50 border border-purple-100 shrink-0"
+            >
+              <BunyanLogo 
+                className="h-12 w-12" 
+              />
+            </div>
+
+            {/* Text container (Title and subtitle) */}
+            <div className="flex flex-col items-start text-right">
+              <div className="flex items-center gap-2">
+                <span 
+                  className="font-black text-xl tracking-wide text-slate-900 group-hover:text-purple-700 transition-colors duration-300 font-sans"
+                >
+                  بنيان
+                </span>
+                
+                {/* Real-time pulsing connection status indicator */}
+                <span className="relative flex h-2.5 w-2.5 select-none" title={isOnline ? 'متصل بالإنترنت' : 'غير متصل بالإنترنت'}>
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isOnline ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
+                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isOnline ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                </span>
               </div>
-              <div className="text-right">
-                <h1 className="font-extrabold text-base tracking-wide text-slate-900 group-hover:text-purple-650 transition-colors font-sans">بنيان</h1>
-                <p className="text-[10px] text-slate-550 font-bold group-hover:text-slate-700 transition-colors">نظام بنيان الذكي لإدارة المشروعات والتكاليف</p>
-              </div>
+              <span 
+                className="text-[11px] font-black text-slate-500 group-hover:text-purple-600 transition-colors duration-300 mt-0.5 font-sans whitespace-nowrap"
+              >
+                مدير المواقع الذكي
+              </span>
             </div>
           </button>
 
-          {/* Navigation Links with Collapsible Categories */}
-          <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4 
-            [&::-webkit-scrollbar]:w-2 
+          {/* Navigation Links with permanently visible Categories (No Dropdowns) */}
+          <nav className="flex-1 overflow-y-auto px-4 py-4 space-y-5 
+            [&::-webkit-scrollbar]:w-1.5 
             [&::-webkit-scrollbar-track]:bg-transparent
-            [&::-webkit-scrollbar-track]:hover:bg-slate-200/30
-            [&::-webkit-scrollbar-thumb]:bg-slate-300 
+            [&::-webkit-scrollbar-track]:hover:bg-slate-200/20
+            [&::-webkit-scrollbar-thumb]:bg-slate-200 
             [&::-webkit-scrollbar-thumb]:rounded-full 
-            hover:[&::-webkit-scrollbar-thumb]:bg-slate-400
+            hover:[&::-webkit-scrollbar-thumb]:bg-slate-300
             transition-colors duration-200
           ">
             {categories.map((category) => {
               const categoryItems = getCategoryItems(category.itemIds);
               if (categoryItems.length === 0) return null; // Hide category if no visible items
 
-              const isExpanded = openCategories[category.id];
               const isSomeActive = categoryItems.some(i => i.id === activeTab);
 
               return (
-                <div key={category.id} className="space-y-1">
-                  {/* Category Header Button */}
-                  <button
-                    onClick={() => toggleCategory(category.id)}
-                    className={`
-                      w-full flex items-center justify-between px-3 py-2 rounded-lg transition-all duration-200 text-right font-sans outline-none
-                      ${isSomeActive 
-                        ? 'bg-purple-50/40 text-purple-700 border-r-2 border-purple-600' 
-                        : 'text-slate-800 hover:bg-slate-100'
-                      }
-                    `}
-                  >
+                <div key={category.id} className="space-y-2">
+                  {/* Category Section Header (Static, Non-collapsible) */}
+                  <div className="px-3 py-1 flex items-center justify-between select-none">
                     <div className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-purple-650"></span>
-                      <div>
-                        <span className="block text-xs font-bold font-sans tracking-tight text-slate-900">
+                      <span className={`w-1.5 h-1.5 rounded-full ${isSomeActive ? 'bg-purple-600 animate-pulse' : 'bg-slate-300'}`}></span>
+                      <div className="text-right">
+                        <span className="block text-[10.5px] font-black font-sans tracking-tight text-slate-900">
                           {category.title}
                         </span>
-                        <span className="block text-[8px] font-mono font-bold tracking-wider uppercase opacity-60">
+                        <span className="block text-[7.5px] font-mono font-black tracking-wider uppercase text-slate-400 mt-0.5">
                           {category.subtitle}
                         </span>
                       </div>
                     </div>
-                    <div>
-                      {isExpanded ? (
-                        <ChevronUp size={14} className="text-slate-400" />
-                      ) : (
-                        <ChevronDown size={14} className="text-slate-400" />
-                      )}
-                    </div>
-                  </button>
+                  </div>
 
-                  {/* Grouped Sub-items */}
-                  {isExpanded && (
-                    <div className="pr-2 mr-1 space-y-1 border-r border-slate-200 transition-all duration-300">
-                      {categoryItems.map((item) => {
-                        const Icon = item.icon;
-                        const isActive = activeTab === item.id;
-                        return (
-                          <button
-                            key={item.id}
-                            onClick={() => {
-                              setActiveTab(item.id);
-                              setIsOpen(false); // Close drawer on mobile click
-                            }}
-                            className={`
-                              w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-all duration-150 text-right group outline-none
-                              ${isActive 
-                                ? 'bg-purple-50/90 text-purple-750 font-bold border-r-4 border-purple-650 shadow-sm shadow-purple-500/5' 
-                                : 'text-slate-600 hover:bg-slate-100 hover:text-black'
-                              }
-                            `}
-                            id={`nav-item-${item.id}`}
-                          >
-                            <Icon 
-                              size={16} 
-                              className={`transition-transform duration-150 group-hover:scale-105 ${isActive ? 'text-purple-650' : 'text-slate-400 group-hover:text-purple-650'}`} 
-                            />
-                            <div className="flex-1">
-                              <span className="block text-xs font-semibold">{item.label}</span>
-                              <span className={`block text-[9px] font-mono leading-none mt-0.5 ${isActive ? 'text-purple-500' : 'text-slate-400 group-hover:text-slate-500'}`}>
-                                {item.subtitle}
-                              </span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {/* Grouped Sub-items - Always Visible */}
+                  <div className="pr-3 mr-1 space-y-1 border-r border-slate-100">
+                    {categoryItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => {
+                            setActiveTab(item.id);
+                            setIsOpen(false); // Close drawer on mobile click
+                          }}
+                          className={`
+                            w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-150 text-right group outline-none
+                            ${isActive 
+                              ? 'bg-purple-600 text-white font-black shadow-md shadow-purple-600/20' 
+                              : 'text-slate-600 hover:bg-purple-50/40 hover:text-purple-950'
+                            }
+                          `}
+                          id={`nav-item-${item.id}`}
+                        >
+                          <Icon 
+                            size={15} 
+                            className={`transition-transform duration-150 group-hover:scale-110 shrink-0 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-purple-600'}`} 
+                          />
+                          <div className="flex-1 text-right">
+                            <span className="block text-xs font-bold leading-tight">{item.label}</span>
+                            <span className={`block text-[9px] font-mono leading-none mt-0.5 ${isActive ? 'text-purple-200' : 'text-slate-400 group-hover:text-purple-500'}`}>
+                              {item.subtitle}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}
@@ -362,7 +378,7 @@ export default function Sidebar({
           </div>
           
           <div className="text-[10px] text-slate-500 flex justify-between items-center font-mono">
-            <span>بنيان ERP v2.5</span>
+            <span>بنيان ERP Enterprise v2.4</span>
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[9px] border border-emerald-100">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
               قيد الاتصال

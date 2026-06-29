@@ -27,7 +27,7 @@ declare global {
 }
 
 try {
-  setLogLevel('error');
+  setLogLevel('silent');
 } catch (err) {
   console.warn("Could not set Firestore log level:", err);
 }
@@ -85,17 +85,19 @@ try {
 }
 
 const firebaseConfig = {
-  apiKey: getEnvValue(metaApiKey, envConfig.apiKey, appletConfig.apiKey),
-  authDomain: getEnvValue(metaAuthDomain, envConfig.authDomain, appletConfig.authDomain),
-  projectId: getEnvValue(metaProjectId, envConfig.projectId, appletConfig.projectId),
-  storageBucket: getEnvValue(metaStorageBucket, envConfig.storageBucket, appletConfig.storageBucket),
-  messagingSenderId: getEnvValue(metaMessagingSenderId, envConfig.messagingSenderId, appletConfig.messagingSenderId),
-  appId: getEnvValue(metaAppId, envConfig.appId, appletConfig.appId),
-  measurementId: getEnvValue(metaMeasurementId, envConfig.measurementId, appletConfig.measurementId),
-  firestoreDatabaseId: getEnvValue(metaDatabaseId, envConfig.firestoreDatabaseId || envConfig.databaseId, (appletConfig as any).firestoreDatabaseId)
+  apiKey: "AIzaSyCqxNnSulVuQ3J-Js-mWau-wS0EJ8uNClE",
+  authDomain: "boreal-trail-h6ppv.firebaseapp.com",
+  projectId: "boreal-trail-h6ppv",
+  storageBucket: "boreal-trail-h6ppv.firebasestorage.app",
+  messagingSenderId: "779246676764",
+  appId: "1:779246676764:web:b2b9a2081dd240c34ca8d9",
+  measurementId: "",
+  firestoreDatabaseId: "ai-studio-remix-501502fb-f6ce-49c4-ba1d-3ca11e85bfc5"
 };
 
+console.log('Firebase config:', firebaseConfig);
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+console.log('Firebase app initialized:', app.name);
 
 const dbId = (firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)' && firebaseConfig.firestoreDatabaseId !== '') 
   ? firebaseConfig.firestoreDatabaseId 

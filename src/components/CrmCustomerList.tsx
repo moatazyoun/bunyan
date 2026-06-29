@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Users, Search } from 'lucide-react';
+import { Plus, Search, User } from 'lucide-react';
 import { CustomerRecord } from '../types';
 
 interface CrmCustomerListProps {
@@ -38,40 +38,38 @@ export default function CrmCustomerList({ customers, onSelectCustomer, onAddCust
             placeholder="بحث عن عميل..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none"
+            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-purple-500"
           />
           <Search className="absolute left-3 top-3 text-slate-400" size={18} />
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        <table className="w-full text-right text-xs">
-          <thead className="bg-black text-white font-black h-12">
-            <tr>
-              <th className="px-6 py-2">اسم العميل</th>
-              <th className="px-6 py-2">رقم الهاتف</th>
-              <th className="px-6 py-2">البريد الإلكتروني</th>
-              <th className="px-6 py-2">الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {filteredCustomers.map(customer => (
-              <tr key={customer.id} className="hover:bg-slate-50 transition">
-                <td className="px-6 py-4 font-bold text-slate-900">{customer.name}</td>
-                <td className="px-6 py-4 font-mono">{customer.phone}</td>
-                <td className="px-6 py-4">{customer.email}</td>
-                <td className="px-6 py-4">
-                  <button
-                    onClick={() => onSelectCustomer(customer)}
-                    className="text-purple-600 font-bold hover:underline"
-                  >
-                    عرض الملف
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredCustomers.map(customer => (
+          <div 
+            key={customer.id} 
+            onClick={() => onSelectCustomer(customer)}
+            className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition cursor-pointer flex flex-col gap-4"
+          >
+            <div className="flex items-center gap-4">
+              <div className="bg-purple-100 p-3 rounded-2xl text-purple-600">
+                <User size={24} />
+              </div>
+              <div>
+                <h3 className="font-black text-slate-900">{customer.name}</h3>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{customer.email}</p>
+              </div>
+            </div>
+            <div className="text-xs font-mono text-slate-600 bg-slate-50 p-3 rounded-xl">
+              {customer.phone}
+            </div>
+          </div>
+        ))}
+        {filteredCustomers.length === 0 && (
+          <div className="col-span-full p-12 text-center text-slate-500 font-bold">
+            لا توجد نتائج بحث
+          </div>
+        )}
       </div>
     </div>
   );

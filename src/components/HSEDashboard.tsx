@@ -5,7 +5,7 @@ import {
   CheckCircle, Trash2, ShieldAlert
 } from 'lucide-react';
 import { db } from '../lib/firebase';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, Timestamp, where } from 'firebase/firestore';
 import { UserItem, Project } from '../types';
 
 interface HSEDashboardProps {
@@ -13,6 +13,7 @@ interface HSEDashboardProps {
   projects: Project[];
   addAuditLog?: (action: string, module: string, details: string, customRefNo?: string) => void;
   auditLogs?: any[];
+  selectedSite: { id: string; nameAr: string; location: string; description: string } | null;
 }
 
 interface Incident {
@@ -50,7 +51,7 @@ interface ActivityLog {
   severity?: 'normal' | 'critical';
 }
 
-export default function HSEDashboard({ user, projects, addAuditLog, auditLogs }: HSEDashboardProps) {
+export default function HSEDashboard({ user, projects, addAuditLog, auditLogs, selectedSite }: HSEDashboardProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'incidents' | 'audits' | 'activity'>('overview');
   
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -68,17 +69,51 @@ export default function HSEDashboard({ user, projects, addAuditLog, auditLogs }:
   // Fetch data from Firebase
   useEffect(() => {
     setLoading(true);
+    const activeSiteId = selectedSite?.id || 'central';
 
-    const unsubIncidents = onSnapshot(query(collection(db, 'hse_incidents'), orderBy('createdAt', 'desc')), (snapshot) => {
-      setIncidents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Incident)));
+    const qIncidents = query(
+      collection(db, 'hse_incidents'),
+      where('siteId', '==', activeSiteId)
+    );
+
+    const unsubIncidents = onSnapshot(qIncidents, (snapshot) => {
+      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Incident));
+      list.sort((a, b) => {
+        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.date ? new Date(a.date).getTime() : 0);
+        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.date ? new Date(b.date).getTime() : 0);
+        return timeB - timeA;
+      });
+      setIncidents(list);
     }, (error) => { console.error('Error fetching incidents:', error); });
 
-    const unsubAudits = onSnapshot(query(collection(db, 'hse_audits'), orderBy('createdAt', 'desc')), (snapshot) => {
-      setAudits(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Audit)));
+    const qAudits = query(
+      collection(db, 'hse_audits'),
+      where('siteId', '==', activeSiteId)
+    );
+
+    const unsubAudits = onSnapshot(qAudits, (snapshot) => {
+      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Audit));
+      list.sort((a, b) => {
+        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.date ? new Date(a.date).getTime() : 0);
+        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.date ? new Date(b.date).getTime() : 0);
+        return timeB - timeA;
+      });
+      setAudits(list);
     }, (error) => { console.error('Error fetching audits:', error); });
 
-    const unsubActivities = onSnapshot(query(collection(db, 'hse_activity_logs'), orderBy('timestamp', 'desc')), (snapshot) => {
-      setActivities(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityLog)));
+    const qActivities = query(
+      collection(db, 'hse_activity_logs'),
+      where('siteId', '==', activeSiteId)
+    );
+
+    const unsubActivities = onSnapshot(qActivities, (snapshot) => {
+      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityLog));
+      list.sort((a, b) => {
+        const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : 0;
+        const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : 0;
+        return timeB - timeA;
+      });
+      setActivities(list);
       setLoading(false);
     }, (error) => { 
       console.error('Error fetching activities:', error); 
@@ -90,7 +125,7 @@ export default function HSEDashboard({ user, projects, addAuditLog, auditLogs }:
       unsubAudits();
       unsubActivities();
     };
-  }, []);
+  }, [selectedSite]);
 
   const generateRefNumber = () => {
     const random = Math.floor(1000 + Math.random() * 9000);
@@ -104,6 +139,7 @@ export default function HSEDashboard({ user, projects, addAuditLog, auditLogs }:
         refNumber: refNo,
         action,
         module,
+        siteId: selectedSite?.id || 'central',
         performedBy: user?.nameAr || 'مستخدم غير معروف',
         timestamp: serverTimestamp(),
         severity
@@ -127,19 +163,43 @@ export default function HSEDashboard({ user, projects, addAuditLog, auditLogs }:
   };
 
   useEffect(() => {
-    // Dynamic derivation of safe hours based on last critical incident date or project start
-    if (incidents.length > 0) {
-      const lastIncident = incidents.find(i => i.severity === 'critical' || i.severity === 'high');
-      if (lastIncident && lastIncident.createdAt?.toDate) {
-        const diff = Date.now() - lastIncident.createdAt.toDate().getTime();
-        setSafeHours(Math.floor(diff / (1000 * 60 * 60)));
-      } else {
-        setSafeHours(2400); // base fallback if no major incidents
+    // Dynamic derivation of safe hours based on site handover date or last incident date
+    const activeProject = projects.find(p => p.id === selectedSite?.id);
+    const handoverStr = activeProject?.handoverDate || activeProject?.assignmentDate || '';
+    
+    let baseTime = Date.now() - 30 * 24 * 60 * 60 * 1000; // default 30 days ago fallback if no handover date
+    if (handoverStr) {
+      const parsed = new Date(handoverStr);
+      if (!isNaN(parsed.getTime())) {
+        baseTime = parsed.getTime();
       }
-    } else {
-      setSafeHours(2400);
     }
-  }, [incidents]);
+
+    // If there are any incidents on this site, we reset and count from the latest incident date
+    if (incidents.length > 0) {
+      const latestIncident = incidents[0];
+      let incidentTime = 0;
+      if (latestIncident.createdAt?.toDate) {
+        incidentTime = latestIncident.createdAt.toDate().getTime();
+      } else if (latestIncident.date) {
+        const parsed = new Date(latestIncident.date);
+        if (!isNaN(parsed.getTime())) {
+          incidentTime = parsed.getTime();
+        }
+      }
+
+      if (incidentTime > 0) {
+        // Safe hours start counting from the most recent incident
+        const diff = Date.now() - incidentTime;
+        setSafeHours(Math.max(0, Math.floor(diff / (1000 * 60 * 60))));
+        return;
+      }
+    }
+
+    // If no incidents have occurred, count from the site's handover date
+    const diff = Date.now() - baseTime;
+    setSafeHours(Math.max(0, Math.floor(diff / (1000 * 60 * 60))));
+  }, [incidents, projects, selectedSite]);
 
   const activeIncidentsCount = incidents.filter(i => i.status === 'active').length;
   const passedAuditsCount = audits.filter(a => a.status === 'passed').length;
@@ -545,6 +605,7 @@ export default function HSEDashboard({ user, projects, addAuditLog, auditLogs }:
               await addDoc(collection(db, 'hse_incidents'), {
                 ...data,
                 refNumber: ref,
+                siteId: selectedSite?.id || 'central',
                 reportedBy: user?.nameAr || 'مستخدم غير معروف',
                 status: 'active',
                 createdAt: serverTimestamp()
@@ -571,6 +632,7 @@ export default function HSEDashboard({ user, projects, addAuditLog, auditLogs }:
               await addDoc(collection(db, 'hse_audits'), {
                 ...data,
                 refNumber: ref,
+                siteId: selectedSite?.id || 'central',
                 inspector: user?.nameAr || 'مستخدم غير معروف',
                 createdAt: serverTimestamp()
               });

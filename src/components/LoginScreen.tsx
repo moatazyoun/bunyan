@@ -48,6 +48,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, dbConnected, dbLaten
 
   return (
     <div className="min-h-screen bg-white flex items-center justify-center p-4 select-none relative overflow-hidden">
+      {/* Blueprint Style Version Header */}
+      <div className="absolute top-6 left-6 font-mono text-[9px] text-slate-400 tracking-wider uppercase hidden sm:block z-20">
+        SYS_INIT_VER: Enterprise v2.4 // SECURED_SSL_TLS_1.3
+      </div>
+
       {/* Immersive Animated Multi-color Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {/* Sphere 1: Sky Blue */}
@@ -83,15 +88,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, dbConnected, dbLaten
           transition={{ duration: 0.4 }}
           className="bg-white/80 rounded-3xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] p-8 md:p-10 border border-white backdrop-blur-xl"
         >
-          <div className="flex flex-col items-center mb-10">
-            <div className="mb-6 transform hover:scale-110 transition-transform duration-500">
-               <BunyanLogo size={64} color="#0f172a" />
-            </div>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-2 font-sans">بنيان</h1>
-            <p className="text-slate-500 text-sm font-medium">المنصة الشاملة لإدارة المشاريع الهندسية</p>
-            <div className="mt-4 flex gap-2">
-               <span className="px-2 py-0.5 bg-slate-900 text-white text-[10px] font-bold rounded uppercase tracking-wider">Enterprise v4.0</span>
-               <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded uppercase tracking-wider">ERP System</span>
+          <div className="flex flex-col items-center mb-8">
+            <div className="relative group flex items-center justify-center p-4">
+              {/* Pulsing ambient aura backdrop for the zoomed-in logo */}
+              <div className="absolute inset-0 bg-purple-500/10 rounded-full blur-3xl scale-125 animate-pulse" />
+              <div className="relative transform hover:scale-105 transition-transform duration-700">
+                <BunyanLogo size={180} />
+              </div>
             </div>
           </div>
 
@@ -167,7 +170,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, dbConnected, dbLaten
               </div>
             )}
             <p className="text-[11px] text-slate-400 font-medium font-sans leading-relaxed">
-              نظام التوثيق والوصول المركزي - منصة بنيان السحابية.<br/>
+              نظام التوثيق والوصول المركزي - منصة بنيان السحابية. (Enterprise v2.4)<br/>
               جميع الحقوق محفوظة © {new Date().getFullYear()}
             </p>
           </div>

@@ -114,6 +114,22 @@
       },
       "required": ["refNumber", "projectId", "score", "status"]
     },
+    "Customer": {
+      "title": "Customer",
+      "description": "Customer record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "contactPerson": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "contracts": { "type": "array", "items": { "type": "string" } },
+        "projects": { "type": "array", "items": { "type": "string" } },
+        "activityLogs": { "type": "array", "items": { "type": "object" } }
+      },
+      "required": ["id", "name", "phone", "email"]
+    },
     "HSEActivityLog": {
       "title": "HSEActivityLog",
       "description": "Audit log for HSE actions",
@@ -127,6 +143,19 @@
         "severity": { "type": "string" }
       },
       "required": ["refNumber", "action", "module"]
+    },
+    "MaterialPrice": {
+      "title": "MaterialPrice",
+      "description": "Real-time construction material price record",
+      "type": "object",
+      "properties": {
+        "materialName": { "type": "string" },
+        "minPrice": { "type": "number" },
+        "maxPrice": { "type": "number" },
+        "unit": { "type": "string" },
+        "lastUpdated": { "type": "string" }
+      },
+      "required": ["materialName", "minPrice", "maxPrice", "unit", "lastUpdated"]
     }
   },
   "firestore": {
@@ -141,6 +170,10 @@
     "/hse_activity_logs/{logId}": {
       "schema": "HSEActivityLog",
       "description": "Audit logs for HSE actions"
+    },
+    "/market_prices/{materialName}": {
+      "schema": "MaterialPrice",
+      "description": "Collection of material price records updated hourly"
     },
     "/users/{username}": {
       "schema": "User",
@@ -165,6 +198,10 @@
     "/siteBackups/{backupId}": {
       "schema": "SiteBackup",
       "description": "Backups of active sites structured data"
+    },
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Collection of customers"
     }
   }
 }

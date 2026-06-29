@@ -87,6 +87,8 @@ export interface UserItem {
   isTrial?: boolean;
   trialStartedAt?: string; // ISO string when the 1-hour trial began
   createdAt?: string; // ISO string when user was created
+  themeId?: string;
+  bgType?: 'none' | 'waves' | 'particles' | 'matrix' | 'bubbles' | 'vortex';
 }
 
 export type EquipmentStatus = 'active' | 'under_maintenance' | 'idle' | 'out_of_service';

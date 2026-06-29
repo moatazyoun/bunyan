@@ -3,7 +3,7 @@ import {
   Building, MapPin, Plus, ArrowRight, Loader2, Sparkles, FolderPlus, Compass, 
   Edit, Trash2, Wifi, WifiOff, Database, AlertTriangle, UserCheck, Shield, 
   ChevronLeft, Layers, Landmark, Briefcase, Download, Search, Calendar, 
-  CheckCircle2, Users, ChevronRight, Eye, Settings
+  CheckCircle2, Users, ChevronRight, Eye, Settings, Printer, Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import BunyanLogo from './BunyanLogo';
@@ -114,6 +114,16 @@ export default function SiteSelectionScreen({
   const [deleteCaptchaInput, setDeleteCaptchaInput] = useState('');
   const [deleteAdminPassword, setDeleteAdminPassword] = useState('');
   const [isDeletingSite, setIsDeletingSite] = useState(false);
+
+  // Redesigned Hierarchy & Linking Explorer Inline States
+  const [showAddProjectInline, setShowAddProjectInline] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectId, setNewProjectId] = useState('');
+  const [newProjectAssignmentNo, setNewProjectAssignmentNo] = useState('');
+  const [newProjectStartDate, setNewProjectStartDate] = useState('');
+  const [newProjectHandoverDate, setNewProjectHandoverDate] = useState('');
+  const [isSavingProjectInline, setIsSavingProjectInline] = useState(false);
+  const [isReassigningManager, setIsReassigningManager] = useState<string | null>(null); // siteId currently being re-assigned
 
   const generateCaptcha = () => {
     return Math.floor(1000 + Math.random() * 9000).toString();
@@ -435,6 +445,170 @@ export default function SiteSelectionScreen({
     }
   };
 
+  // Re-assign manager of a site
+  const handleReassignSiteManager = async (siteId: string, newManager: string) => {
+    const siteToReassign = sites.find(s => s.id === siteId);
+    if (!siteToReassign) return;
+
+    try {
+      const response = await fetch(`/api/sites/${siteId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nameAr: siteToReassign.nameAr,
+          location: siteToReassign.location,
+          description: siteToReassign.description || '',
+          tenantId: newManager
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'فشل تحديث تبعية موقع العمل.');
+      }
+
+      // Generate a unique reference number
+      const refNo = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
+
+      // Post audit log
+      await fetch('/api/users/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: user?.username || 'moataz',
+          actionAr: `إعادة هيكلة تبعية موقع العمل`,
+          type: 'site',
+          detailsAr: `تم نقل تبعية موقع العمل "${siteToReassign.nameAr}" (كود: ${siteId}) إلى مدير الفرع "${newManager}". (الرقم المرجعي: ${refNo})`
+        })
+      }).catch(console.error);
+
+      setSuccessMsg(`تم إعادة هيكلة تبعية موقع العمل "${siteToReassign.nameAr}" بنجاح! رقم العملية: ${refNo}`);
+      await fetchSitesAndAdmins();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'حدث خطأ أثناء نقل تبعية موقع العمل.');
+    }
+  };
+
+  // Link a project to selected site
+  const handleLinkProjectInline = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSiteIdForHierarchy) {
+      setErrorMsg('فضلاً، يرجى تحديد موقع العمل أولاً للربط.');
+      return;
+    }
+    if (!newProjectId.trim() || !newProjectName.trim()) {
+      setErrorMsg('فضلاً، يرجى ملء حقول كود واسم المشروع.');
+      return;
+    }
+
+    setIsSavingProjectInline(true);
+    try {
+      const activeSite = sites.find(s => s.id === selectedSiteIdForHierarchy);
+      if (!activeSite) throw new Error('موقع العمل المحدد غير موجود.');
+
+      const existingProjects = activeSite.projects || [];
+      const cleanProjId = newProjectId.trim().toLowerCase().replace(/\s+/g, '-');
+      if (existingProjects.some((p: any) => p.id === cleanProjId)) {
+        throw new Error('رمز المشروع مكرر ومسجل بالفعل في هذا الموقع.');
+      }
+
+      const newProjectObj = {
+        id: cleanProjId,
+        name: newProjectName.trim(),
+        assignmentNumber: newProjectAssignmentNo.trim() || `REF-${Math.floor(100000 + Math.random() * 900000)}`,
+        assignmentDate: newProjectStartDate.trim() || new Date().toISOString().split('T')[0],
+        handoverDate: newProjectHandoverDate.trim() || '',
+        status: 'نشط'
+      };
+
+      const updatedProjects = [...existingProjects, newProjectObj];
+
+      const saveRes = await fetch(`/api/site/${selectedSiteIdForHierarchy}/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: { projects: updatedProjects } })
+      });
+
+      if (!saveRes.ok) {
+        throw new Error('فشل تسجيل وحفظ المشروع في قاعدة البيانات.');
+      }
+
+      // Unique reference number for audit trail
+      const refNo = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
+
+      // Post audit log
+      await fetch('/api/users/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: user?.username || 'moataz',
+          actionAr: `ربط مشروع جديد بموقع العمل`,
+          type: 'site',
+          detailsAr: `تم تأسيس وربط مشروع جديد باسم "${newProjectName.trim()}" (كود: ${cleanProjId}) بموقع العمل "${activeSite.nameAr}". (الرقم المرجعي: ${refNo})`
+        })
+      }).catch(console.error);
+
+      setSuccessMsg(`تم تأسيس وربط المشروع بنجاح! الرقم المرجعي: ${refNo}`);
+      setShowAddProjectInline(false);
+      setNewProjectId('');
+      setNewProjectName('');
+      setNewProjectAssignmentNo('');
+      setNewProjectStartDate('');
+      setNewProjectHandoverDate('');
+      await fetchSitesAndAdmins();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'حدث خطأ في معالجة ربط المشروع.');
+    } finally {
+      setIsSavingProjectInline(false);
+    }
+  };
+
+  // Unlink/Delete a project from selected site
+  const handleUnlinkProjectInline = async (projectId: string) => {
+    if (!selectedSiteIdForHierarchy) return;
+
+    try {
+      const activeSite = sites.find(s => s.id === selectedSiteIdForHierarchy);
+      if (!activeSite) throw new Error('موقع العمل المحدد غير موجود.');
+
+      const existingProjects = activeSite.projects || [];
+      const projectToUnlink = existingProjects.find((p: any) => p.id === projectId);
+      if (!projectToUnlink) return;
+
+      const updatedProjects = existingProjects.filter((p: any) => p.id !== projectId);
+
+      const saveRes = await fetch(`/api/site/${selectedSiteIdForHierarchy}/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: { projects: updatedProjects } })
+      });
+
+      if (!saveRes.ok) {
+        throw new Error('فشل شطب وحفظ التحديث في قاعدة البيانات.');
+      }
+
+      // Unique reference number for audit trail
+      const refNo = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
+
+      // Post audit log
+      await fetch('/api/users/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: user?.username || 'moataz',
+          actionAr: `فك ربط مشروع من موقع العمل`,
+          type: 'site',
+          detailsAr: `تم شطب وفك ربط مشروع "${projectToUnlink.name}" (كود: ${projectId}) من موقع العمل "${activeSite.nameAr}". (الرقم المرجعي: ${refNo})`
+        })
+      }).catch(console.error);
+
+      setSuccessMsg(`تم فك ربط المشروع وإزالته بنجاح! الرقم المرجعي: ${refNo}`);
+      await fetchSitesAndAdmins();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'حدث خطأ في معالجة شطب المشروع.');
+    }
+  };
+
   useEffect(() => {
     fetchSitesAndAdmins();
   }, []);
@@ -587,20 +761,12 @@ export default function SiteSelectionScreen({
       {/* Main Header / Command Bar */}
       <header className="max-w-7xl w-full mx-auto flex flex-col md:flex-row items-center justify-between mb-8 gap-4 border-b border-slate-100 pb-5 z-10 text-slate-800">
         <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="bg-white border border-slate-200/60 rounded-2xl flex items-center justify-center p-2 shadow-sm">
+          <div className="bg-white border border-slate-200/60 rounded-3xl flex items-center justify-center p-4 shadow-md hover:shadow-lg transition duration-500 relative group overflow-hidden">
+            {/* Glowing backdrop layer inside the container */}
+            <div className="absolute inset-0 bg-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-3xl" />
             <BunyanLogo 
-              className="w-9 h-9" 
-              iconClassName="fill-slate-800" 
-              barsClassName="fill-indigo-600" 
-              dotClassName="fill-amber-500" 
+              className="w-16 h-16 relative z-10" 
             />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg md:text-xl font-black text-slate-900 font-sans tracking-tight">بنيان</h1>
-              <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-150 rounded-full">نسخة الحوكمة الموحدة</span>
-            </div>
-            <p className="text-[10px] text-slate-500 font-semibold tracking-wide">المنظومة الاحترافية المتكاملة لإدارة التكاليف والمواقع الإنشائية</p>
           </div>
         </div>
         
@@ -791,112 +957,173 @@ export default function SiteSelectionScreen({
         ) : viewMode === 'hierarchy' ? (
           
           /* LEVEL REDESIGN: PREMIUM 4-COLUMN HIERARCHY TREE EXPLORER */
-          <div className="w-full relative z-10 space-y-5 font-sans">
-            
+          <div className="w-full relative z-10 space-y-6 font-sans text-right" dir="rtl" id="print-section-hierarchy">
+            {/* Custom Print Styles for Independent Table Printing */}
+            <style dangerouslySetInnerHTML={{ __html: `
+              @media print {
+                body {
+                  background: white !important;
+                  color: #000 !important;
+                }
+                #bunyan-sidebar, .no-print, header, footer, .modal, button, select, input {
+                  display: none !important;
+                }
+                #print-section-hierarchy {
+                  width: 100% !important;
+                  max-width: 100% !important;
+                  margin: 0 !important;
+                  padding: 0 !important;
+                  position: absolute !important;
+                  right: 0 !important;
+                  top: 0 !important;
+                  box-shadow: none !important;
+                  border: none !important;
+                  background: transparent !important;
+                }
+                .print-card-container {
+                  grid-template-cols: 1fr !important;
+                  display: block !important;
+                }
+                .print-full-width {
+                  width: 100% !important;
+                  display: block !important;
+                  margin-bottom: 2rem !important;
+                }
+                .print-table {
+                  border-collapse: collapse !important;
+                  width: 100% !important;
+                }
+                .print-table th, .print-table td {
+                  border: 1px solid #1e293b !important;
+                  padding: 8px !important;
+                  text-align: right !important;
+                }
+                .print-header-title {
+                  font-size: 18px !important;
+                  font-weight: bold !important;
+                  text-align: center !important;
+                  margin-bottom: 20px !important;
+                  border-bottom: 2px solid #000 !important;
+                  padding-bottom: 10px !important;
+                }
+              }
+            ` }} />
+
             {/* Visual Header Info */}
-            <div className="p-4 bg-gradient-to-r from-indigo-50/65 via-white to-blue-50/50 border border-slate-200/80 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
+            <div className="p-5 bg-white border border-slate-200 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm no-print">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-600/10 shrink-0">
-                  <Compass size={18} />
+                <div className="p-3 bg-purple-600 text-white rounded-xl shadow-lg shadow-purple-600/15 shrink-0">
+                  <Compass size={22} className="text-white" />
                 </div>
                 <div className="text-right">
-                  <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5 leading-none">
-                    <Layers className="text-indigo-600" size={15} />
-                    مستكشف الهياكل الهرمية والربط والمشاريع
+                  <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2 leading-none">
+                    <Layers className="text-purple-600" size={18} />
+                    مستكشف الهياكل الهرمية والربط والتحكم بالمشاريع
                   </h3>
-                  <p className="text-[10px] text-slate-500 mt-1 font-semibold leading-none">تصفح الفروع الإدارية للطبقة الثانية والوقوف على البيانات التفصيلية والتكاليف لكل مهندس وموقع</p>
+                  <p className="text-xs text-slate-500 mt-1.5 font-semibold leading-relaxed">
+                    منصة التحكم الفيدرالية لإعادة هيكلة الفروع وتفويض الصلاحيات، وربط المشاريع الإنشائية بمواقع العمل وسجل النشاط الموثق.
+                  </p>
                 </div>
               </div>
               
-              <div className="flex items-center gap-2 font-mono text-[10px] bg-white border px-3 py-1.5 rounded-xl text-slate-500 font-extrabold shrink-0 shadow-sm">
-                <span>المسؤولين: {adminsList.length + 1}</span>
-                <span className="text-slate-200">/</span>
-                <span>المواقع النشطة: {sites.length}</span>
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-2 font-mono text-xs bg-purple-50 border border-purple-100 px-3.5 py-2 rounded-xl text-purple-700 font-bold shadow-xs">
+                  <span>المسؤولين النشطين: {adminsList.length + 1}</span>
+                  <span className="text-purple-200">/</span>
+                  <span>المواقع: {sites.length}</span>
+                </div>
+                <button
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-md transition active:scale-95 cursor-pointer"
+                  title="طباعة الهيكل كاملاً"
+                >
+                  <Printer size={14} />
+                  <span>طباعة التقارير الهيكلية</span>
+                </button>
               </div>
             </div>
 
+            {/* Print Header ONLY visible when printing */}
+            <div className="hidden print:block print-header-title">
+              <h1 className="text-center text-xl font-bold">بنيان - التقرير الفيدرالي لمواقع العمل الإنشائية وهياكل الربط الهرمية</h1>
+              <p className="text-center text-xs text-slate-500 mt-1">تاريخ طباعة التقرير: {new Date().toLocaleDateString('ar-EG')} - {new Date().toLocaleTimeString('ar-EG')}</p>
+            </div>
+
             {/* Core Interactive Hierarchy Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 bg-white/70 backdrop-blur-md border border-slate-200 rounded-3xl p-4 md:p-5 shadow-sm min-h-[580px] relative overflow-hidden">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 bg-slate-50/50 border border-slate-200 rounded-3xl p-4 md:p-5 shadow-xs min-h-[620px] relative overflow-hidden print-card-container">
               
-              {/* LEVEL 1 CARD (ROOT - PROGRAM DIRECTOR) */}
-              <div className="flex flex-col bg-slate-50/50 p-4 rounded-2xl border border-slate-150 text-right space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+              {/* LEVEL 1: SUPER-ADMIN / GENERAL DIRECTOR */}
+              <div className="flex flex-col bg-white p-4 rounded-2xl border border-slate-200 text-right space-y-4 shadow-sm print-full-width">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 no-print">
                   <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] font-black flex items-center justify-center font-mono">١</span>
-                    <span className="text-xs font-black text-slate-900">مدير عام البرنامج</span>
+                    <span className="w-5 h-5 rounded-full bg-purple-600 text-white text-[10px] font-black flex items-center justify-center font-mono">١</span>
+                    <span className="text-xs font-extrabold text-slate-900">مدير عام البرنامج</span>
                   </div>
-                  <span className="text-[9px] bg-indigo-50 border border-indigo-150 text-indigo-700 px-2.5 py-0.5 rounded-full font-bold">صلاحية مطلقة</span>
+                  <span className="text-[9px] bg-purple-50 border border-purple-150 text-purple-700 px-2 py-0.5 rounded-full font-bold">صلاحية مطلقة</span>
                 </div>
 
-                {/* Director Premium Identity Widget */}
-                <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 p-4.5 rounded-2xl text-white shadow-xl border border-slate-850 flex-1 flex flex-col justify-between relative overflow-hidden group">
-                  <div className="absolute -top-10 -right-10 w-28 h-28 bg-indigo-500/10 rounded-full blur-2xl group-hover:bg-indigo-500/15 transition-all duration-500" />
+                <div className="bg-slate-950 p-4.5 rounded-2xl text-white shadow-xl border border-slate-800 flex-1 flex flex-col justify-between relative overflow-hidden group">
+                  <div className="absolute -top-10 -right-10 w-28 h-28 bg-purple-600/15 rounded-full blur-2xl group-hover:bg-purple-600/25 transition-all duration-500" />
                   
                   <div className="space-y-4 relative z-10">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-amber-400 border border-white/20">
+                      <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-purple-400 border border-white/25 shadow-inner">
                         <Landmark size={20} />
                       </div>
                       <div className="leading-tight">
-                        <h4 className="font-extrabold text-sm text-slate-100 group-hover:text-white transition-colors">م. معتز يونس</h4>
-                        <span className="text-[9px] text-indigo-400 font-extrabold uppercase mt-0.5 block tracking-wider">moataz • المدير الرئيسي</span>
+                        <h4 className="text-sm font-black tracking-wide text-white">{user?.nameAr || 'م. معتز يونس'}</h4>
+                        <p className="text-[10px] text-purple-300 font-bold mt-1">المطور والمدير العام التنفيذي للبرنامج</p>
                       </div>
                     </div>
 
-                    <p className="text-[10px] text-slate-300 leading-normal font-semibold">
-                      المشرف والمسؤول العام لمشروعات بنيان. يُشرف على إدارة الصلاحيات وميزان المراجعات المالي المركزي لكامل مواقع الطبقة الثانية والثالثة.
-                    </p>
-
-                    {/* Stats mini grid */}
-                    <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2 text-[10px] font-bold text-slate-300">
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">الفروع الإدارية:</span>
-                        <span className="font-mono text-amber-300">{adminsList.length + 1}</span>
+                    <div className="space-y-2 pt-2 border-t border-white/10 text-[11px] text-slate-300">
+                      <div className="flex justify-between items-center bg-white/5 px-2.5 py-1.5 rounded-lg">
+                        <span>قناة الربط:</span>
+                        <span className="font-mono font-bold text-white text-xs">سحابة فيدرالية</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">مواقع الفروع:</span>
-                        <span className="font-mono text-amber-300">{sites.length}</span>
+                      <div className="flex justify-between items-center bg-white/5 px-2.5 py-1.5 rounded-lg">
+                        <span>أمان البيانات:</span>
+                        <span className="text-emerald-400 font-bold flex items-center gap-1">
+                          <CheckCircle2 size={10} />
+                          مؤمن بالكامل
+                        </span>
                       </div>
-                      <div className="flex justify-between items-center text-[9px] text-emerald-400 pt-1 border-t border-white/5">
-                        <span>قناة البيانات النشطة:</span>
-                        <span className="flex items-center gap-1"><CheckCircle2 size={10} /> آمن وموثق</span>
+                      <div className="flex justify-between items-center bg-white/5 px-2.5 py-1.5 rounded-lg">
+                        <span>الفروع التابعة:</span>
+                        <span className="font-mono font-bold text-white">{adminsList.length} فروع</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-5 space-y-2 relative z-10">
-                    {user?.username.toLowerCase() === 'moataz' && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowReorgControlCenter(true);
-                          fetchReorgStatus();
-                        }}
-                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[10.5px] font-black rounded-xl transition-all cursor-pointer shadow-md inline-flex items-center justify-center gap-2 active:scale-95 border border-indigo-500/30"
-                      >
-                        <Shield size={14} className="text-indigo-200" />
-                        <span>لوحة حوكمة وصيانة قاعدة البيانات</span>
-                      </button>
-                    )}
-                    <p className="text-[9px] text-slate-450 leading-relaxed font-semibold text-right">
-                      * حدد أي مدير نظام بالعمود التالي لاستعراض مواقعه المعزولة المعتمدة ومشاريعها وأعضائها.
-                    </p>
+                  <div className="pt-4 no-print">
+                    <button
+                      onClick={() => {
+                        setSelectedAdminUsername('moataz');
+                        setSuccessMsg('تم اختيار الإدارة العليا كمحور البحث الحالي');
+                      }}
+                      className={`w-full py-2.5 rounded-xl font-bold text-xs transition duration-200 flex items-center justify-center gap-2 border cursor-pointer ${
+                        selectedAdminUsername === 'moataz' 
+                          ? 'bg-purple-600 border-purple-500 text-white shadow-md shadow-purple-600/20' 
+                          : 'bg-white/10 border-white/10 text-slate-300 hover:bg-white/15'
+                      }`}
+                    >
+                      <UserCheck size={13} />
+                      <span>اختيار الإدارة العليا</span>
+                    </button>
                   </div>
                 </div>
               </div>
 
 
-              {/* LEVEL 2 CARD: BRANCH ADMINISTRATORS MANAGEMENT */}
-              <div className="flex flex-col bg-slate-50/30 p-4 rounded-2xl border border-slate-150 text-right space-y-3.5">
-                <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+              {/* LEVEL 2: BRANCH MANAGERS */}
+              <div className="flex flex-col bg-white p-4 rounded-2xl border border-slate-200 text-right space-y-3.5 shadow-sm print-full-width">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 no-print">
                   <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-indigo-650 text-white text-[10px] font-black flex items-center justify-center font-mono">٢</span>
-                    <span className="text-xs font-black text-slate-900">مدراء الفروع والمكاتب</span>
+                    <span className="w-5 h-5 rounded-full bg-purple-600 text-white text-[10px] font-black flex items-center justify-center font-mono">٢</span>
+                    <span className="text-xs font-extrabold text-slate-900">مدراء قطاعات الفروع</span>
                   </div>
-                  
                   {user?.username.toLowerCase() === 'moataz' && (
                     <button
-                      type="button"
                       onClick={() => {
                         setIsEditingAdmin(false);
                         setAdminUsername('');
@@ -904,428 +1131,529 @@ export default function SiteSelectionScreen({
                         setAdminNameAr('');
                         setShowAddAdminModal(true);
                       }}
-                      className="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[9.5px] font-extrabold rounded-lg inline-flex items-center gap-1 shadow-sm transition active:scale-95 cursor-pointer"
+                      className="p-1 text-purple-600 hover:bg-purple-50 rounded-lg transition"
+                      title="تسجيل مسؤول فرع جديد"
                     >
-                      <Plus size={11} className="stroke-[3]" />
-                      <span>إضافة مدّير</span>
+                      <Plus size={16} />
                     </button>
                   )}
                 </div>
 
-                {/* Quick Search For Level 2 */}
-                <div className="relative">
-                  <span className="absolute inset-y-0 right-3 flex items-center text-slate-400 pointer-events-none">
-                    <Search size={12} />
-                  </span>
+                {/* Search Bar */}
+                <div className="relative no-print">
                   <input
                     type="text"
-                    placeholder="ابحث عن مدير نظام..."
                     value={adminSearchQuery}
                     onChange={(e) => setAdminSearchQuery(e.target.value)}
-                    className="w-full pl-3 pr-8 py-2 text-[11px] bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white text-right font-bold text-slate-700 placeholder:text-slate-400"
+                    placeholder="ابحث عن مدير فرع..."
+                    className="w-full text-xs pr-8 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 focus:bg-white text-right font-medium"
                   />
-                  {adminSearchQuery && (
-                    <button 
-                      onClick={() => setAdminSearchQuery('')} 
-                      className="absolute inset-y-0 left-2.5 flex items-center text-[10px] text-slate-400 hover:text-slate-600"
-                    >
-                      ✕
-                    </button>
-                  )}
+                  <Search size={13} className="absolute right-2.5 top-2.5 text-slate-400" />
                 </div>
 
-                {/* Administrators Stack Scroll Area */}
-                <div className="space-y-2 overflow-y-auto pr-0.5 flex-1 max-h-[440px] scrollbar-thin">
-                  {(() => {
-                    const isMoatazVisible = 
-                      'معتز يونس'.includes(adminSearchQuery.trim()) ||
-                      'moataz'.includes(adminSearchQuery.toLowerCase().trim()) ||
-                      adminSearchQuery.trim() === '';
-                    
-                    const moatazSitesCount = sites.filter((site: any) => (site.tenantId || 'moataz') === 'moataz').length;
-
-                    const filteredAdminsList = adminsList.filter((adm: any) => 
-                      adm.nameAr?.includes(adminSearchQuery.trim()) ||
-                      adm.username?.toLowerCase().includes(adminSearchQuery.toLowerCase().trim())
-                    );
-
-                    return (
-                      <>
-                        {/* Moataz Default Owner Card */}
-                        {isMoatazVisible && (
-                          <div 
-                            onClick={() => {
-                              setSelectedAdminUsername('moataz');
-                              const defaultAdminSites = sites.filter((s: any) => (s.tenantId || 'moataz') === 'moataz');
-                              if (defaultAdminSites.length > 0) {
-                                setSelectedSiteIdForHierarchy(defaultAdminSites[0].id);
-                              } else {
-                                setSelectedSiteIdForHierarchy('');
-                              }
-                            }}
-                            className={`p-3 rounded-xl border text-right cursor-pointer transition-all duration-200 flex items-center justify-between ${
-                              selectedAdminUsername === 'moataz'
-                                ? 'bg-indigo-50/90 border-indigo-400 text-indigo-950 font-black shadow-sm ring-1 ring-indigo-400/20'
-                                : 'bg-white hover:bg-slate-50/80 border-slate-200/90 text-slate-700'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${selectedAdminUsername === 'moataz' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                                م ي
-                              </div>
-                              <div className="text-right min-w-0">
-                                <h5 className="text-[11.5px] font-extrabold text-slate-900 truncate">مكتب معتز يونس الافتراضي</h5>
-                                <p className="text-[9.5px] text-slate-400 font-mono font-bold mt-0.5">moataz • مكتب رئيسي</p>
-                              </div>
-                            </div>
-                            <span className="text-[9px] font-black font-mono px-1.5 py-0.5 bg-slate-100/80 text-slate-600 border rounded-md shrink-0">
-                              {moatazSitesCount} مواقع
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Branch Administrator Cards */}
-                        {filteredAdminsList.map((adm, idx) => {
-                          const admSitesCount = sites.filter((s: any) => (s.tenantId || 'moataz') === adm.username.toLowerCase()).length;
-                          const isSelected = selectedAdminUsername === adm.username.toLowerCase();
-                          return (
-                            <div 
-                              key={adm.docId || `${adm.username}_${idx}`}
-                              onClick={() => {
-                                setSelectedAdminUsername(adm.username.toLowerCase());
-                                const adminSites = sites.filter((s: any) => (s.tenantId || 'moataz') === adm.username.toLowerCase());
-                                if (adminSites.length > 0) {
-                                  setSelectedSiteIdForHierarchy(adminSites[0].id);
-                                } else {
-                                  setSelectedSiteIdForHierarchy('');
-                                }
-                              }}
-                              className={`p-3 rounded-xl border text-right cursor-pointer transition-all duration-200 relative group/admin ${
-                                isSelected
-                                  ? 'bg-indigo-50/90 border-indigo-400 text-indigo-950 font-black shadow-sm ring-1 ring-indigo-400/20'
-                                  : 'bg-white hover:bg-slate-50/80 border-slate-200/90 text-slate-700'
-                              }`}
-                            >
-                              <div className="flex justify-between items-center gap-2 min-w-0">
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs transition-colors ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                                    {getAvatarInitials(adm.nameAr)}
-                                  </div>
-                                  <div className="text-right min-w-0">
-                                    <h5 className="text-[11.5px] font-black text-slate-900 truncate">{adm.nameAr}</h5>
-                                    <p className="text-[9.5px] text-slate-400 font-mono font-bold mt-0.5">{adm.username} • فرع إداري</p>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  <span className="text-[9px] font-black font-mono px-1.5 py-0.5 bg-slate-100/90 text-slate-600 border rounded-lg">
-                                    {admSitesCount} مواقع
-                                  </span>
-
-                                  {/* Fast Actions for Director ONLY */}
-                                  {user?.username.toLowerCase() === 'moataz' && (
-                                    <div className="flex items-center gap-0.5 opacity-0 group-hover/admin:opacity-100 transition-opacity duration-150">
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleEditAdminClick(adm);
-                                        }}
-                                        className="p-1 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 cursor-pointer"
-                                        title="تعديل الحساب"
-                                      >
-                                        <Edit size={11} />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleDeleteAdmin(adm.username);
-                                        }}
-                                        className="p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 cursor-pointer"
-                                        title="إلغاء الترخيص"
-                                      >
-                                        <Trash2 size={11} />
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-
-                        {filteredAdminsList.length === 0 && !isMoatazVisible && (
-                          <div className="text-center py-10 text-xs text-slate-400 font-medium leading-relaxed font-sans border-2 border-dashed border-slate-150 rounded-2xl">
-                            لا يوجد نتائج للبحث
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
-
-
-              {/* LEVEL 3 CARD: BRANCH CONSTRUCTION SITES (مواقع هذا المدير) */}
-              <div className="flex flex-col bg-slate-50/30 p-4 rounded-2xl border border-slate-150 text-right space-y-3.5">
-                <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-                  <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center font-mono">٣</span>
-                    <span className="text-xs font-black text-slate-900">مواقع عمل المسؤول المعتمدة</span>
+                {/* Managers List */}
+                <div className="flex-1 overflow-y-auto space-y-2 max-h-[420px] pr-0.5">
+                  {/* Root Admin Option */}
+                  <div 
+                    onClick={() => {
+                      setSelectedAdminUsername('moataz');
+                      const defaultAdminSites = sites.filter((s: any) => (s.tenantId || 'moataz') === 'moataz');
+                      if (defaultAdminSites.length > 0) {
+                        setSelectedSiteIdForHierarchy(defaultAdminSites[0].id);
+                      } else {
+                        setSelectedSiteIdForHierarchy('');
+                      }
+                    }}
+                    className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
+                      selectedAdminUsername === 'moataz'
+                        ? 'bg-purple-50 border-purple-300 shadow-xs'
+                        : 'bg-slate-50/50 border-slate-150 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h5 className="text-xs font-black text-slate-900">م. معتز يونس (الإدارة)</h5>
+                        <p className="text-[10px] text-slate-400 mt-0.5">المدير العام والمنسق الفيدرالي</p>
+                      </div>
+                      <span className="text-[9px] bg-slate-900 text-white font-black px-2 py-0.5 rounded font-mono">ROOT</span>
+                    </div>
                   </div>
-                  <span className="text-[9px] bg-slate-100 font-mono text-slate-600 px-2 py-0.5 rounded-md border font-extrabold">
-                    {sites.filter((s: any) => (s.tenantId || 'moataz') === selectedAdminUsername).length} مسجل
-                  </span>
-                </div>
 
-                {/* Search Bar for Level 3 */}
-                <div className="relative">
-                  <span className="absolute inset-y-0 right-3 flex items-center text-slate-400 pointer-events-none">
-                    <Search size={12} />
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="ابحث في مواقع هذا المسؤول..."
-                    value={siteSearchQuery}
-                    onChange={(e) => setSiteSearchQuery(e.target.value)}
-                    className="w-full pl-3 pr-8 py-2 text-[11px] bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white text-right font-bold text-slate-700 placeholder:text-slate-400"
-                  />
-                  {siteSearchQuery && (
-                    <button 
-                      onClick={() => setSiteSearchQuery('')} 
-                      className="absolute inset-y-0 left-2.5 flex items-center text-[10px] text-slate-400 hover:text-slate-600"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-
-                {/* Construction sites list with connection indicators */}
-                <div className="space-y-2 overflow-y-auto pr-0.5 flex-1 max-h-[440px] scrollbar-thin">
-                  {(() => {
-                    const rawMySites = sites.filter((site: any) => (site.tenantId || 'moataz') === selectedAdminUsername);
-                    const filteredHierarchySites = rawMySites.filter((site: any) => 
-                      site.nameAr?.includes(siteSearchQuery.trim()) ||
-                      site.location?.includes(siteSearchQuery.trim()) ||
-                      site.id?.toLowerCase().includes(siteSearchQuery.toLowerCase().trim())
-                    );
-
-                    return (
-                      <>
-                        {filteredHierarchySites.map((site, idx) => {
-                          const isSelected = selectedSiteIdForHierarchy === site.id;
-                          const projectsCount = (site.projects || []).length;
-                          return (
-                            <div 
-                              key={site.id || `site_${idx}`}
-                              onClick={() => setSelectedSiteIdForHierarchy(site.id)}
-                              className={`p-3 rounded-xl border text-right cursor-pointer transition-all duration-200 relative group/site active:scale-98 flex flex-col justify-between min-h-[95px] ${
-                                isSelected
-                                  ? 'bg-emerald-50/50 border-emerald-500 text-emerald-900 font-bold shadow-sm ring-1 ring-emerald-400/25'
-                                  : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                              }`}
-                            >
-                              <div className="space-y-1.5 min-w-0">
-                                <div className="flex items-start justify-between gap-1.5">
-                                  <div className="flex items-center gap-2 min-w-0 text-right">
-                                    <Building size={13} className={`${isSelected ? 'text-emerald-600' : 'text-slate-400'} shrink-0`} />
-                                    <h5 className="text-[11.5px] font-extrabold truncate text-slate-900 leading-snug">{site.nameAr}</h5>
-                                  </div>
-                                  <span className="text-[9px] font-black font-mono px-1.5 py-0.5 bg-emerald-100/50 text-emerald-800 border border-emerald-200 rounded-md shrink-0">
-                                    {projectsCount} مشاريع
-                                  </span>
-                                </div>
-                                
-                                <p className="text-[10px] text-slate-500 font-semibold flex items-center gap-1">
-                                  <MapPin size={11} className="text-slate-400 shrink-0" />
-                                  <span className="truncate">{site.location}</span>
-                                </p>
-                              </div>
-
-                              <div className="pt-1.5 mt-1 border-t border-slate-100/80 flex items-center justify-between text-[9px] font-mono font-bold text-slate-400">
-                                <span>كود: {site.id}</span>
-                                {isSelected && (
-                                  <span className="text-emerald-700 font-bold flex items-center gap-1">
-                                    <span>مفتوح ومحدد</span>
-                                    <ChevronLeft size={10} className="stroke-[3]" />
-                                  </span>
-                                )}
-                              </div>
+                  {adminsList
+                    .filter(a => 
+                      (a.nameAr || '').toLowerCase().includes(adminSearchQuery.toLowerCase()) ||
+                      (a.username || '').toLowerCase().includes(adminSearchQuery.toLowerCase())
+                    )
+                    .map((adm, idx) => {
+                      const adminSites = sites.filter(s => (s.tenantId || 'moataz') === adm.username.toLowerCase());
+                      const isSelected = selectedAdminUsername === adm.username.toLowerCase();
+                      
+                      return (
+                        <div 
+                          key={adm.username || idx}
+                          onClick={() => {
+                            setSelectedAdminUsername(adm.username.toLowerCase());
+                            const adminSites = sites.filter((s: any) => (s.tenantId || 'moataz') === adm.username.toLowerCase());
+                            if (adminSites.length > 0) {
+                              setSelectedSiteIdForHierarchy(adminSites[0].id);
+                            } else {
+                              setSelectedSiteIdForHierarchy('');
+                            }
+                          }}
+                          className={`p-3 rounded-xl border text-right transition-all cursor-pointer relative group/admin ${
+                            isSelected
+                              ? 'bg-purple-50 border-purple-300 shadow-sm'
+                              : 'bg-white border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h5 className="text-xs font-bold text-slate-950 group-hover:text-purple-700 transition">
+                                {adm.nameAr}
+                              </h5>
+                              <p className="text-[9.5px] text-slate-500 font-mono mt-0.5">@{adm.username}</p>
                             </div>
-                          );
-                        })}
-
-                        {filteredHierarchySites.length === 0 && (
-                          <div className="text-center py-10 text-xs text-slate-400 border border-dashed border-slate-200 bg-slate-50/20 rounded-2xl p-5">
-                            <p className="font-extrabold text-slate-600 text-[10.5px] mb-1 flex items-center justify-center gap-1">
-                              <AlertTriangle size={13} className="text-amber-500" />
-                              لا يوجد مواقع لهذا المسؤول
-                            </p>
-                            <p className="text-[9.5px]">يرجى تعديل الفرز أو تأسيس كود جديد.</p>
-                            {user?.role === 'admin' && (
-                              <button
-                                onClick={() => {
-                                  setIsEditMode(false);
-                                  const nextCodeSuggested = generateNextSiteId(sites);
-                                  setNewSiteId(nextCodeSuggested);
-                                  setNewSiteName('');
-                                  setNewSiteLoc('');
-                                  setNewSiteDesc('');
-                                  setNewSiteTenantId(selectedAdminUsername);
-                                  setShowAddSiteModal(true);
-                                }}
-                                className="mt-3.5 text-[9.5px] font-black bg-indigo-600 text-white px-2.5 py-1.5 rounded-lg transition cursor-pointer inline-flex items-center gap-1 shadow-sm"
-                              >
-                                <span>تأسيس موقع جديد +</span>
-                              </button>
+                            
+                            {/* Quick edit/delete controls */}
+                            {user?.username.toLowerCase() === 'moataz' && (
+                              <div className="flex items-center gap-1 no-print opacity-0 group-hover/admin:opacity-100 transition-opacity">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditAdminClick(adm);
+                                  }}
+                                  className="p-1 text-slate-500 hover:text-purple-600 rounded hover:bg-slate-100 transition"
+                                  title="تعديل الحساب"
+                                >
+                                  <Edit size={11} />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (confirm(`هل أنت متأكد من رغبتك في حذف حساب مدير الفرع "${adm.nameAr}" بشكل نهائي؟`)) {
+                                      handleDeleteAdmin(adm.username);
+                                    }
+                                  }}
+                                  className="p-1 text-slate-500 hover:text-red-600 rounded hover:bg-slate-100 transition"
+                                  title="حذف الحساب"
+                                >
+                                  <Trash2 size={11} />
+                                </button>
+                              </div>
                             )}
                           </div>
-                        )}
-                      </>
-                    );
-                  })()}
+
+                          <div className="mt-2 flex justify-between items-center text-[10px] font-semibold text-slate-500 border-t border-slate-100/70 pt-1.5">
+                            <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono">مدير فرعي</span>
+                            <span>المواقع: <strong className="text-purple-600 font-mono">{adminSites.length}</strong></span>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                  {adminsList.length === 0 && (
+                    <div className="text-center py-8 text-xs text-slate-400 border border-dashed border-slate-200 bg-slate-50/20 rounded-xl p-3">
+                      لا يوجد مدراء فروع مسجلين حالياً.
+                    </div>
+                  )}
                 </div>
               </div>
 
 
-              {/* LEVEL 4 CONFIGURATION AND ACTIVE DETAILED PROJECTS BLOCK */}
-              <div className="flex flex-col bg-slate-50/50 p-4 rounded-2xl border border-slate-150 text-right space-y-3.5">
-                <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+              {/* LEVEL 3: ACTIVE CONSTRUCTION SITES */}
+              <div className="flex flex-col bg-white p-4 rounded-2xl border border-slate-200 text-right space-y-3.5 shadow-sm print-full-width">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 no-print">
                   <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-rose-600 text-white text-[10px] font-black flex items-center justify-center font-mono">٤</span>
-                    <span className="text-xs font-black text-slate-900">مشاريع ومعاوضات الموقع</span>
+                    <span className="w-5 h-5 rounded-full bg-purple-600 text-white text-[10px] font-black flex items-center justify-center font-mono">٣</span>
+                    <span className="text-xs font-extrabold text-slate-900">مواقع العمل الإنشائية</span>
                   </div>
+                  <button
+                    onClick={() => {
+                      setIsEditMode(false);
+                      setNewSiteId(generateNextSiteId(sites));
+                      setNewSiteName('');
+                      setNewSiteLoc('');
+                      setNewSiteDesc('');
+                      setNewSiteTenantId(selectedAdminUsername);
+                      setShowAddSiteModal(true);
+                    }}
+                    className="p-1 text-purple-600 hover:bg-purple-50 rounded-lg transition"
+                    title="تأسيس موقع عمل جديد"
+                  >
+                    <Plus size={16} />
+                  </button>
                 </div>
 
-                <div className="space-y-3 overflow-y-auto pr-0.5 flex-1 max-h-[500px] scrollbar-thin">
-                  {(() => {
-                    const activeSite = sites.find(s => s.id === selectedSiteIdForHierarchy);
-                    const activeProjects = activeSite?.projects || [];
-                    
-                    if (!selectedSiteIdForHierarchy) {
+                {/* Search Sites */}
+                <div className="relative no-print">
+                  <input
+                    type="text"
+                    value={siteSearchQuery}
+                    onChange={(e) => setSiteSearchQuery(e.target.value)}
+                    placeholder="ابحث عن موقع عمل..."
+                    className="w-full text-xs pr-8 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 focus:bg-white text-right font-medium"
+                  />
+                  <Search size={13} className="absolute right-2.5 top-2.5 text-slate-400" />
+                </div>
+
+                {/* Sites List */}
+                <div className="flex-1 overflow-y-auto space-y-2 max-h-[420px] pr-0.5">
+                  {sites
+                    .filter(s => {
+                      const belongsToSelectedAdmin = (s.tenantId || 'moataz') === selectedAdminUsername;
+                      const matchesSearch = (s.nameAr || '').toLowerCase().includes(siteSearchQuery.toLowerCase()) ||
+                                            (s.id || '').toLowerCase().includes(siteSearchQuery.toLowerCase());
+                      return belongsToSelectedAdmin && matchesSearch;
+                    })
+                    .map((st, idx) => {
+                      const isSelected = selectedSiteIdForHierarchy === st.id;
+                      const projCount = (st.projects || []).length;
+                      
                       return (
-                        <div className="text-center py-16 text-xs text-slate-400 border border-dashed border-slate-200 bg-white/50 rounded-2xl p-6">
-                          <Compass size={24} className="mx-auto text-slate-400 mb-2" />
-                          <p className="font-extrabold text-slate-600 text-[11px]">بانتظار تحديد موقع العمل</p>
-                          <p className="text-[10px] leading-relaxed mt-1 text-slate-400">حدد أحد العناوين المعتمدة بالعمود الإداري الثالث لقراءة الدفاتر.</p>
-                        </div>
-                      );
-                    }
-
-                    // Filter search inside activeProjects
-                    const filteredHierarchyProjects = activeProjects.filter((p: any) => 
-                      p.name?.includes(projectSearchQuery.trim()) ||
-                      p.id?.toLowerCase().includes(projectSearchQuery.toLowerCase().trim()) ||
-                      p.assignmentNumber?.includes(projectSearchQuery.trim())
-                    );
-
-                    return (
-                      <div className="space-y-3 flex flex-col h-full">
-                        {/* Selected Active Site Header with entering button */}
-                        <div className="p-4 bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-2xl space-y-3 shadow-md border border-emerald-500 relative">
-                          <div className="space-y-1">
-                            <span className="text-[9px] uppercase font-black text-emerald-100 bg-white/10 px-2 py-0.5 rounded-md inline-block">موقع العمل المفتوح</span>
-                            <h4 className="text-xs font-black truncate">{activeSite?.nameAr}</h4>
-                            <p className="text-[10px] text-emerald-100 flex items-center gap-1 font-semibold leading-none mt-1">
-                              <MapPin size={10} /> {activeSite?.location}
-                            </p>
+                        <div
+                          key={st.id || idx}
+                          onClick={() => setSelectedSiteIdForHierarchy(st.id)}
+                          className={`p-3 rounded-xl border text-right transition-all cursor-pointer relative group ${
+                            isSelected
+                              ? 'bg-purple-50 border-purple-300 shadow-sm'
+                              : 'bg-white border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="space-y-1">
+                              <h5 className="text-xs font-bold text-slate-900 flex items-center gap-1">
+                                <Building size={12} className={isSelected ? 'text-purple-600' : 'text-slate-400'} />
+                                <span>{st.nameAr}</span>
+                              </h5>
+                              <p className="text-[10px] text-slate-400 flex items-center gap-1 font-mono">
+                                <MapPin size={9} />
+                                <span>{st.location}</span>
+                              </p>
+                            </div>
+                            
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-1 no-print opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingSiteId(st.id);
+                                  setNewSiteId(st.id);
+                                  setNewSiteName(st.nameAr);
+                                  setNewSiteLoc(st.location);
+                                  setNewSiteDesc(st.description || '');
+                                  setNewSiteTenantId(st.tenantId || 'moataz');
+                                  setIsEditMode(true);
+                                  setShowAddSiteModal(true);
+                                }}
+                                className="p-1 text-slate-500 hover:text-purple-600 rounded hover:bg-slate-100 transition"
+                                title="تعديل بيانات الموقع"
+                              >
+                                <Edit size={11} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSiteToDelete(st);
+                                  setDeleteCaptcha(generateCaptcha());
+                                  setDeleteCaptchaInput('');
+                                  setDeleteAdminPassword('');
+                                  setShowDeleteConfirmModal(true);
+                                }}
+                                className="p-1 text-slate-500 hover:text-red-600 rounded hover:bg-slate-100 transition"
+                                title="حذف وإسقاط الموقع"
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            </div>
                           </div>
 
-                          <button
-                            onClick={() => {
-                              if (activeSite) {
-                                onSiteSelected(activeSite);
-                              }
-                            }}
-                            className="w-full py-2.5 bg-white hover:bg-slate-50 text-emerald-950 font-black text-xs rounded-xl transition-all duration-200 shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
-                          >
-                            <FolderPlus size={13} className="text-emerald-700" />
-                            <span>دخول لوحة السجلات بالكامل</span>
-                            <ArrowRight size={12} className="rotate-180 text-emerald-700 font-bold" />
-                          </button>
-                        </div>
+                          {/* Restructuring Dropdown for Tenant/Branch Assignment */}
+                          <div className="mt-3.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-2 no-print">
+                            <span className="text-[9.5px] font-bold text-slate-400">نقل التبعية:</span>
+                            <div className="relative">
+                              <select
+                                value={st.tenantId || 'moataz'}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`هل أنت متأكد من نقل ملكية ومسؤولية الموقع الإنشائي "${st.nameAr}" بالكامل؟`)) {
+                                    handleReassignSiteManager(st.id, e.target.value);
+                                  }
+                                }}
+                                className="text-[9.5px] bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-extrabold rounded px-1.5 py-1 focus:outline-none cursor-pointer"
+                              >
+                                <option value="moataz">الإدارة العليا (معتز)</option>
+                                {adminsList.map(a => (
+                                  <option key={a.username} value={a.username.toLowerCase()}>{a.nameAr}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
 
-                        {/* Search Bar for level 4 Projects */}
-                        <div className="relative">
-                          <span className="absolute inset-y-0 right-3 flex items-center text-slate-400 pointer-events-none">
-                            <Search size={11} />
-                          </span>
-                          <input
-                            type="text"
-                            placeholder="البحث في مشاريع هذا الموقع..."
-                            value={projectSearchQuery}
-                            onChange={(e) => setProjectSearchQuery(e.target.value)}
-                            className="w-full pl-3 pr-8 py-2 text-[11px] bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-rose-500 focus:bg-white text-right font-medium text-slate-700 placeholder:text-slate-405"
-                          />
-                          {projectSearchQuery && (
-                            <button 
-                              onClick={() => setProjectSearchQuery('')} 
-                              className="absolute inset-y-0 left-2.5 flex items-center text-[10px] text-slate-400 hover:text-slate-600"
+                          <div className="mt-2.5 flex justify-between items-center text-[10px] text-slate-400 font-semibold border-t border-slate-100/50 pt-1.5">
+                            <span className="font-mono text-slate-500">كود: {st.id}</span>
+                            <span className="bg-purple-100/70 text-purple-700 px-2 py-0.5 rounded-full font-black font-mono">
+                              {projCount} مشاريع
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                  {sites.filter(s => (s.tenantId || 'moataz') === selectedAdminUsername).length === 0 && (
+                    <div className="text-center py-12 text-xs text-slate-400 border border-dashed border-slate-200 bg-slate-50/20 rounded-xl p-3">
+                      لا يوجد أي مواقع عمل تحت إشراف هذا المدير حالياً.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+
+              {/* LEVEL 4: PROJECTS & CONTRACTUAL LINKING */}
+              <div className="flex flex-col bg-white p-4 rounded-2xl border border-slate-200 text-right space-y-3.5 shadow-sm lg:col-span-1 print-full-width">
+                {(() => {
+                  const activeSite = sites.find(s => s.id === selectedSiteIdForHierarchy);
+                  const activeProjects = activeSite?.projects || [];
+                  const filteredProjects = activeProjects.filter((p: any) => 
+                    (p.name || '').toLowerCase().includes(projectSearchQuery.toLowerCase()) ||
+                    (p.id || '').toLowerCase().includes(projectSearchQuery.toLowerCase()) ||
+                    (p.assignmentNumber || '').toLowerCase().includes(projectSearchQuery.toLowerCase())
+                  );
+
+                  return (
+                    <>
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-100 no-print">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-purple-600 text-white text-[10px] font-black flex items-center justify-center font-mono">٤</span>
+                          <span className="text-xs font-extrabold text-slate-900">المشاريع والمستندات</span>
+                        </div>
+                        {activeSite && (
+                          <button
+                            onClick={() => setShowAddProjectInline(!showAddProjectInline)}
+                            className={`p-1 rounded-lg transition ${showAddProjectInline ? 'bg-red-50 text-red-600' : 'text-purple-600 hover:bg-purple-50'}`}
+                            title={showAddProjectInline ? "إلغاء الإضافة" : "ربط مشروع جديد"}
+                          >
+                            <Plus size={16} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Display Selected Site Title for Print */}
+                      <div className="hidden print:block mb-4 border-b pb-2">
+                        <p className="text-xs text-slate-500">موقع العمل المختار:</p>
+                        <h3 className="text-base font-bold text-slate-900">{activeSite ? activeSite.nameAr : "غير محدد"}</h3>
+                        <p className="text-[10px] text-slate-500">الفرع المسؤول: {adminsList.find(a => a.username.toLowerCase() === activeSite?.tenantId?.toLowerCase())?.nameAr || 'الإدارة العليا'}</p>
+                      </div>
+
+                      {activeSite && (
+                        <div className="space-y-3 flex flex-col">
+                          {/* Active Site Premium Banner */}
+                          <div className="p-4 bg-slate-950 text-white rounded-2xl space-y-3.5 shadow-md border border-slate-800 relative overflow-hidden no-print">
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-purple-600/10 rounded-full blur-xl" />
+                            <div className="space-y-1 relative z-10">
+                              <span className="text-[9px] font-black text-purple-400 bg-purple-950 border border-purple-900/50 px-2 py-0.5 rounded-md inline-block">
+                                موقع العمل النشط
+                              </span>
+                              <h4 className="text-xs font-black truncate text-white">{activeSite.nameAr}</h4>
+                              <p className="text-[10px] text-slate-400 flex items-center gap-1 font-semibold">
+                                <MapPin size={10} className="text-purple-500" />
+                                <span className="truncate">{activeSite.location}</span>
+                              </p>
+                            </div>
+
+                            <button
+                              onClick={() => onSiteSelected(activeSite)}
+                              className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
                             >
-                              ✕
+                              <span>دخول لوحة السجلات بالكامل</span>
+                              <ChevronLeft size={13} />
                             </button>
+                          </div>
+
+                          {/* Inline Form to Add & Link Project */}
+                          {showAddProjectInline && (
+                            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-right space-y-2.5 no-print animate-fade-in">
+                              <h6 className="text-[11px] font-black text-slate-800">تأسيس وربط مشروع جديد بالموقع</h6>
+                              
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-slate-500">كود المشروع (إنجليزي فريد):</label>
+                                <input
+                                  type="text"
+                                  required
+                                  value={newProjectId}
+                                  onChange={(e) => setNewProjectId(e.target.value)}
+                                  placeholder="مثال: proj-301"
+                                  className="w-full text-xs px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-right font-semibold"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-slate-500">اسم المشروع بالعربي:</label>
+                                <input
+                                  type="text"
+                                  required
+                                  value={newProjectName}
+                                  onChange={(e) => setNewProjectName(e.target.value)}
+                                  placeholder="اسم المشروع الإنشائي..."
+                                  className="w-full text-xs px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-right font-semibold"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-slate-500">رقم التكليف / العقد الإداري:</label>
+                                <input
+                                  type="text"
+                                  value={newProjectAssignmentNo}
+                                  onChange={(e) => setNewProjectAssignmentNo(e.target.value)}
+                                  placeholder="أدخل رقم الإسناد التعاقدي..."
+                                  className="w-full text-xs px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-right font-semibold"
+                                />
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                  <label className="text-[9px] font-bold text-slate-500">تاريخ الإسناد:</label>
+                                  <input
+                                    type="date"
+                                    value={newProjectStartDate}
+                                    onChange={(e) => setNewProjectStartDate(e.target.value)}
+                                    className="w-full text-[10px] px-2 py-1 bg-white border border-slate-200 rounded-lg font-semibold"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[9px] font-bold text-slate-500">تاريخ التسليم:</label>
+                                  <input
+                                    type="date"
+                                    value={newProjectHandoverDate}
+                                    onChange={(e) => setNewProjectHandoverDate(e.target.value)}
+                                    className="w-full text-[10px] px-2 py-1 bg-white border border-slate-200 rounded-lg font-semibold"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="pt-1.5 flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    handleLinkProjectInline(e);
+                                  }}
+                                  disabled={isSavingProjectInline}
+                                  className="flex-1 py-1.5 bg-purple-600 text-white rounded-lg font-bold text-xs hover:bg-purple-700 disabled:opacity-50 transition cursor-pointer"
+                                >
+                                  {isSavingProjectInline ? "جاري الحفظ..." : "حفظ وربط"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowAddProjectInline(false)}
+                                  className="px-2.5 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-bold text-xs hover:bg-slate-300 transition"
+                                >
+                                  إلغاء
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Search Projects */}
+                          {!showAddProjectInline && (
+                            <div className="relative no-print">
+                              <input
+                                type="text"
+                                value={projectSearchQuery}
+                                onChange={(e) => setProjectSearchQuery(e.target.value)}
+                                placeholder="ابحث في مشاريع الموقع..."
+                                className="w-full text-xs pr-8 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 focus:bg-white text-right font-medium"
+                              />
+                              <Search size={13} className="absolute right-2.5 top-2.5 text-slate-400" />
+                            </div>
                           )}
                         </div>
+                      )}
 
-                        {/* List of Projects */}
-                        <div className="space-y-2 pb-4">
-                          {filteredHierarchyProjects.map((p: any, idx: number) => {
-                            const statusLabel = p.status || 'نشط';
-                            const statusColor = statusLabel === 'نشط' 
+                      {/* Projects View */}
+                      <div className="flex-1 overflow-y-auto space-y-2 max-h-[440px] pr-0.5 print:max-h-none print:overflow-visible mt-3">
+                        {activeSite ? (
+                          filteredProjects.map((p: any, idx) => {
+                            const statusColor = 
+                              p.status === 'نشط' 
                               ? 'bg-emerald-50 text-emerald-800 border-emerald-250' 
-                              : statusLabel === 'مكتمل'
+                              : p.status === 'مكتمل'
                               ? 'bg-blue-50 text-blue-800 border-blue-200'
                               : 'bg-amber-50 text-amber-800 border-amber-250';
 
                             return (
-                              <div 
-                                key={p.id || `proj_${idx}`} 
-                                className="p-3 bg-white hover:bg-slate-50/55 border border-slate-200 text-right rounded-xl space-y-2 relative transition-all duration-150 hover:shadow-xs"
+                              <div
+                                key={p.id || idx}
+                                className="p-3 bg-white border border-slate-200 rounded-xl text-right space-y-2.5 relative group shadow-xs hover:border-purple-300 transition-all print:border-slate-800 print:mb-4"
                               >
-                                <div className="flex items-center justify-between gap-1">
+                                <div className="flex justify-between items-center">
                                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 border text-[9px] font-black rounded ${statusColor}`}>
-                                    {statusLabel === 'نشط' ? (
+                                    {p.status === 'نشط' ? (
                                       <>
                                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                         <span>نشط</span>
                                       </>
                                     ) : (
-                                      <span>{statusLabel}</span>
+                                      <span>{p.status || 'معلق'}</span>
                                     )}
                                   </span>
-                                  <span className="text-[9px] font-mono text-slate-400 font-bold">كود: {p.id}</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[9.5px] font-mono text-slate-400 font-bold">كود: {p.id}</span>
+                                    
+                                    {/* Quick Unlink Action */}
+                                    <button
+                                      onClick={() => {
+                                        if (confirm(`هل أنت متأكد من فك ارتباط المشروع "${p.name}" (كود: ${p.id}) وإزالته من موقع العمل "${activeSite.nameAr}" بالكامل؟`)) {
+                                          handleUnlinkProjectInline(p.id);
+                                        }
+                                      }}
+                                      className="p-1 text-slate-400 hover:text-red-600 rounded hover:bg-slate-100 transition opacity-0 group-hover:opacity-100 no-print"
+                                      title="شطب وفك ارتباط المشروع"
+                                    >
+                                      <Trash2 size={11} />
+                                    </button>
+                                  </div>
                                 </div>
 
-                                <div className="space-y-1 text-right">
-                                  <div className="flex items-center gap-1.5">
-                                    <h6 className="text-[11px] font-bold text-slate-900 leading-snug">{p.name}</h6>
-                                  </div>
-                                  <p className="text-[9.5px] text-slate-500 font-semibold bg-slate-50 border px-2 py-0.5 rounded flex items-center gap-1 w-max">
+                                <div className="space-y-1">
+                                  <h6 className="text-xs font-extrabold text-slate-900 leading-snug">{p.name}</h6>
+                                  <p className="text-[10px] text-slate-500 font-semibold bg-slate-50 border px-2 py-0.5 rounded flex items-center gap-1 w-max print:bg-transparent">
                                     <span>رقم التكليف:</span>
                                     <span className="font-mono text-slate-800 font-black">{p.assignmentNumber || 'غير كود'}</span>
                                   </p>
                                 </div>
 
-                                <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[9px] font-semibold text-slate-500">
-                                  <div>تاريخ البدء: <span className="font-mono text-slate-800 font-bold">{p.assignmentDate || 'مستمر'}</span></div>
-                                  <div>التسليم: <span className="font-mono text-slate-800 font-bold">{p.handoverDate || 'مستمر'}</span></div>
+                                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[9px] font-bold text-slate-500">
+                                  <div className="flex items-center gap-1">
+                                    <Calendar size={10} className="text-slate-400" />
+                                    <span>تاريخ البدء: <strong className="font-mono text-slate-800 font-bold">{p.assignmentDate || 'مستمر'}</strong></span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Clock size={10} className="text-slate-400" />
+                                    <span>التسليم: <strong className="font-mono text-slate-800 font-black">{p.handoverDate || 'مستمر'}</strong></span>
+                                  </div>
                                 </div>
                               </div>
                             );
-                          })}
+                          })
+                        ) : (
+                          <div className="text-center py-12 text-xs text-slate-400 border border-dashed border-slate-200 bg-slate-50/20 rounded-xl p-4 leading-relaxed">
+                            <Compass className="mx-auto text-slate-300 mb-2" size={24} />
+                            <p className="font-bold text-slate-600">لم يتم اختيار أي موقع عمل للربط</p>
+                            <p className="text-[10px] text-slate-400 mt-1">يرجى الضغط على أحد مواقع العمل الإنشائية في العمود المجاور لعرض مشاريعه وإضافة تكاليفه.</p>
+                          </div>
+                        )}
 
-                          {filteredHierarchyProjects.length === 0 && (
-                            <div className="text-center py-10 text-xs text-slate-400 border border-dashed border-slate-200 bg-slate-50/20 rounded-2xl leading-relaxed text-right p-5">
-                              <p className="font-bold text-slate-500 text-[10.5px] mb-1">لم يتم إرفاق أي مشروعات بالبحث</p>
-                              <p className="text-[9.5px]">دخول لوحة السجلات بالكامل يتيح لك إضافة المشروعات وبنود BOQ بالكامل.</p>
-                            </div>
-                          )}
-                        </div>
+                        {activeSite && filteredProjects.length === 0 && (
+                          <div className="text-center py-10 text-xs text-slate-400 border border-dashed border-slate-200 bg-slate-50/20 rounded-xl p-4 leading-relaxed">
+                            <p className="font-bold text-slate-600">لا توجد مشاريع مرتبطة بهذا الموقع</p>
+                            <p className="text-[10px] text-slate-400 mt-1">يمكنك الضغط على زر (+) في الأعلى لتأسيس وربط أول مشروع إنشائي سحابي بهذا الموقع.</p>
+                          </div>
+                        )}
                       </div>
-                    );
-                  })()}
-                </div>
+                    </>
+                  );
+                })()}
               </div>
 
             </div>

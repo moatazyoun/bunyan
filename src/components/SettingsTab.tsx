@@ -27,11 +27,16 @@ import {
   Cpu,
   Tv,
   CheckCircle2,
-  Lock
+  Lock,
+  Palette,
+  Paintbrush,
+  Sparkles
 } from 'lucide-react';
 import { getSessionLogs, SessionEvent } from '../lib/sessionTracker';
 import { UserItem } from '../types';
 import { confirmWithRandomCode } from '../utils/confirmHelper';
+import { getAuth, getRedirectResult } from 'firebase/auth';
+import { COLOR_THEMES } from '../utils/themeHelper';
 
 interface SettingsTabProps {
   selectedSite: { id: string; nameAr: string; location: string } | null;
@@ -41,6 +46,10 @@ interface SettingsTabProps {
   currentUserRole?: string;
   dbConnected: boolean | null;
   triggerTestBackupReminder: () => void;
+  currentThemeId: string;
+  onThemeChange: (themeId: string) => void;
+  currentBgType: 'none' | 'waves' | 'particles' | 'matrix' | 'bubbles' | 'vortex';
+  onBgTypeChange: (bgType: 'none' | 'waves' | 'particles' | 'matrix' | 'bubbles' | 'vortex') => void;
 }
 
 interface BackupFile {
@@ -56,9 +65,13 @@ export default function SettingsTab({
   currentUser,
   currentUserRole,
   dbConnected,
-  triggerTestBackupReminder
+  triggerTestBackupReminder,
+  currentThemeId,
+  onThemeChange,
+  currentBgType,
+  onBgTypeChange
 }: SettingsTabProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'cloud' | 'local' | 'session'>('cloud');
+  const [activeSubTab, setActiveSubTab] = useState<'cloud' | 'local' | 'session' | 'theme'>('cloud');
 
   // Backups lists state
   const [isLoadingBackups, setIsLoadingBackups] = useState(false);
@@ -374,6 +387,18 @@ export default function SettingsTab({
         >
           <Clock className="w-4 h-4" />
           <span>تفاصيل وبيانات الجلسة</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('theme')}
+          className={`flex-1 md:flex-initial px-6 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeSubTab === 'theme' 
+              ? 'bg-slate-900 text-white shadow-md' 
+              : 'text-slate-650 hover:bg-slate-50'
+          }`}
+        >
+          <Palette className="w-4 h-4" />
+          <span>المظهر وألوان الهوية</span>
         </button>
       </div>
 
@@ -773,6 +798,187 @@ export default function SettingsTab({
                     </tbody>
                   </table>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeSubTab === 'theme' && (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* Theme Color Selector Card */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-150 shadow-sm space-y-6">
+              <div className="space-y-1">
+                <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                  <Paintbrush className="w-4.5 h-4.5 text-indigo-600" />
+                  <span>تخصيص اللون الرئيسي للتطبيق</span>
+                </h3>
+                <p className="text-[10px] text-slate-500 font-bold">اختر اللون والهوية البصرية المفضلة لديك. سيقوم النظام بتحديث كافة الأزرار والأيقونات والروابط والواجهات فوراً.</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {COLOR_THEMES.map((theme) => {
+                  const isActive = currentThemeId === theme.id;
+                  return (
+                    <button
+                      key={theme.id}
+                      onClick={() => onThemeChange(theme.id)}
+                      className={`p-4 rounded-2xl border text-right transition-all flex items-center justify-between group cursor-pointer ${
+                        isActive 
+                          ? 'border-indigo-600 bg-indigo-50/20 shadow-xs animate-in fade-in duration-300' 
+                          : 'border-slate-200 hover:border-slate-350 hover:bg-slate-50/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span 
+                          className="w-5.5 h-5.5 rounded-full border border-black/10 flex-shrink-0 shadow-sm"
+                          style={{ backgroundColor: theme.primaryColor }}
+                        />
+                        <span className="text-xs font-black text-slate-850">{theme.nameAr}</span>
+                      </div>
+                      {isActive && (
+                        <span className="p-1 bg-indigo-600 text-white rounded-lg shrink-0">
+                          <CheckCircle className="w-3.5 h-3.5" />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Interactive Background Settings Card */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-150 shadow-sm space-y-6">
+              <div className="space-y-1">
+                <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                  <Sparkles className="w-4.5 h-4.5 text-indigo-600 animate-pulse" />
+                  <span>الخلفية التفاعلية والمتحركة</span>
+                </h3>
+                <p className="text-[10px] text-slate-500 font-bold">يمكنك تفعيل خلفية حية ومتحركة على شاشتك. تتحرك العناصر بهدوء وتتفاعل تلقائياً مع حركة الماوس لتضيف جمالاً وفخامة للوحة العمل.</p>
+              </div>
+
+              <div className="space-y-3">
+                {/* Option 1: Waves */}
+                <button
+                  onClick={() => onBgTypeChange('waves')}
+                  className={`w-full p-4 rounded-2xl border text-right transition-all flex items-center justify-between cursor-pointer ${
+                    currentBgType === 'waves'
+                      ? 'border-indigo-600 bg-indigo-50/20 shadow-xs'
+                      : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
+                  }`}
+                >
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-black text-slate-800 block">أمواج انسيابية متحركة (Waves)</span>
+                    <span className="text-[9.5px] text-slate-400 font-bold block">أمواج هندسية مهدئة تتدفق في أسفل الشاشة وتتجاوب مع حركة الماوس.</span>
+                  </div>
+                  {currentBgType === 'waves' && (
+                    <span className="p-1 bg-indigo-600 text-white rounded-lg shrink-0">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                    </span>
+                  )}
+                </button>
+
+                {/* Option 2: Cosmic Particles */}
+                <button
+                  onClick={() => onBgTypeChange('particles')}
+                  className={`w-full p-4 rounded-2xl border text-right transition-all flex items-center justify-between cursor-pointer ${
+                    currentBgType === 'particles'
+                      ? 'border-indigo-600 bg-indigo-50/20 shadow-xs'
+                      : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
+                  }`}
+                >
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-black text-slate-800 block">جسيمات كونية عائمة (Cosmic Particles)</span>
+                    <span className="text-[9.5px] text-slate-400 font-bold block">شبكة جزيئات عائمة ومترابطة تتبع مؤشر الماوس بديناميكية فائقة ومريحة للعين.</span>
+                  </div>
+                  {currentBgType === 'particles' && (
+                    <span className="p-1 bg-indigo-600 text-white rounded-lg shrink-0">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                    </span>
+                  )}
+                </button>
+
+                {/* Option 3: Matrix Grid */}
+                <button
+                  onClick={() => onBgTypeChange('matrix')}
+                  className={`w-full p-4 rounded-2xl border text-right transition-all flex items-center justify-between cursor-pointer ${
+                    currentBgType === 'matrix'
+                      ? 'border-indigo-600 bg-indigo-50/20 shadow-xs'
+                      : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
+                  }`}
+                >
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-black text-slate-800 block">مصفوفة الشبكة الهندسية الرقمية (Matrix Grid)</span>
+                    <span className="text-[9.5px] text-slate-400 font-bold block">نقاط ومؤشرات تخطيط هندسية ثلاثية الأبعاد تتفاعل مع الماوس وتتوهج مع رموز المخططات.</span>
+                  </div>
+                  {currentBgType === 'matrix' && (
+                    <span className="p-1 bg-indigo-600 text-white rounded-lg shrink-0">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                    </span>
+                  )}
+                </button>
+
+                {/* Option 4: Floating Bubbles */}
+                <button
+                  onClick={() => onBgTypeChange('bubbles')}
+                  className={`w-full p-4 rounded-2xl border text-right transition-all flex items-center justify-between cursor-pointer ${
+                    currentBgType === 'bubbles'
+                      ? 'border-indigo-600 bg-indigo-50/20 shadow-xs'
+                      : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
+                  }`}
+                >
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-black text-slate-800 block">فقاعات مهدئة عائمة (Floating Bubbles)</span>
+                    <span className="text-[9.5px] text-slate-400 font-bold block">فقاعات دائرية دافئة ترتفع بنعومة وتتباعد تلقائياً عن مسار حركة الماوس.</span>
+                  </div>
+                  {currentBgType === 'bubbles' && (
+                    <span className="p-1 bg-indigo-600 text-white rounded-lg shrink-0">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                    </span>
+                  )}
+                </button>
+
+                {/* Option 5: Gravity Vortex */}
+                <button
+                  onClick={() => onBgTypeChange('vortex')}
+                  className={`w-full p-4 rounded-2xl border text-right transition-all flex items-center justify-between cursor-pointer ${
+                    currentBgType === 'vortex'
+                      ? 'border-indigo-600 bg-indigo-50/20 shadow-xs'
+                      : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
+                  }`}
+                >
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-black text-slate-800 block">دوامة الجاذبية الإنشائية (Gravity Vortex)</span>
+                    <span className="text-[9.5px] text-slate-400 font-bold block">جسيمات تدور بنعومة في مدارات مغناطيسية تتبع مؤشر حركة الماوس بديناميكية فائقة ومريحة.</span>
+                  </div>
+                  {currentBgType === 'vortex' && (
+                    <span className="p-1 bg-indigo-600 text-white rounded-lg shrink-0">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                    </span>
+                  )}
+                </button>
+
+                {/* Option 6: None */}
+                <button
+                  onClick={() => onBgTypeChange('none')}
+                  className={`w-full p-4 rounded-2xl border text-right transition-all flex items-center justify-between cursor-pointer ${
+                    currentBgType === 'none'
+                      ? 'border-indigo-600 bg-indigo-50/20 shadow-xs'
+                      : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
+                  }`}
+                >
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-black text-slate-800 block">خلفية كلاسيكية ساكنة (بدون حركة)</span>
+                    <span className="text-[9.5px] text-slate-400 font-bold block">تعطيل الحركة والمؤثرات تماماً للحصول على أعلى مستويات الأداء في الأجهزة القديمة.</span>
+                  </div>
+                  {currentBgType === 'none' && (
+                    <span className="p-1 bg-indigo-600 text-white rounded-lg shrink-0">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                    </span>
+                  )}
+                </button>
               </div>
             </div>
           </div>

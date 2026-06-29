@@ -19,6 +19,7 @@ import {
   Layers3,
   AlertTriangle
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { WbsTaskRecord, BOQItem, Project, Transaction, Contract } from '../types';
 import { confirmWithRandomCode } from '../utils/confirmHelper';
 
@@ -46,6 +47,129 @@ export default function PlanningDashboard({
   // Set scheduler tab active by default
   const [activeTab, setActiveTab] = useState<'scheduler' | 'structuring'>('scheduler');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // WBS Dependencies Management States
+  const [dependencies, setDependencies] = useState<{
+    id: string;
+    taskAId: string;
+    taskAName: string;
+    taskBId: string;
+    taskBName: string;
+    type: 'FS' | 'SS' | 'FF' | 'SF';
+    lag: number;
+    refNo: string;
+    createdAt: string;
+  }[]>(() => {
+    try {
+      const saved = localStorage.getItem('wbs_dependencies');
+      return saved ? JSON.parse(saved) : [
+        {
+          id: 'dep-1',
+          taskAId: 'task-1',
+          taskAName: 'أعمال التجهيز وإخلاء الموقع',
+          taskBId: 'task-2',
+          taskBName: 'أعمال الحفر والتسوية الميكانيكية',
+          type: 'FS',
+          lag: 1,
+          refNo: 'REF-742910',
+          createdAt: new Date().toISOString()
+        },
+        {
+          id: 'dep-2',
+          taskAId: 'task-2',
+          taskAName: 'أعمال الحفر والتسوية الميكانيكية',
+          taskBId: 'task-3',
+          taskBName: 'صب الخرسانة العادية لأساسات الطريق',
+          type: 'FS',
+          lag: 0,
+          refNo: 'REF-523104',
+          createdAt: new Date().toISOString()
+        }
+      ];
+    } catch {
+      return [];
+    }
+  });
+
+  const [depTaskA, setDepTaskA] = useState('');
+  const [depTaskB, setDepTaskB] = useState('');
+  const [depType, setDepType] = useState<'FS' | 'SS' | 'FF' | 'SF'>('FS');
+  const [depLag, setDepLag] = useState<number>(0);
+  const [depError, setDepError] = useState<string | null>(null);
+
+  const saveDependencies = (updated: typeof dependencies) => {
+    setDependencies(updated);
+    localStorage.setItem('wbs_dependencies', JSON.stringify(updated));
+  };
+
+  const handleAddDependency = (e: React.FormEvent) => {
+    e.preventDefault();
+    setDepError(null);
+
+    if (!depTaskA || !depTaskB) {
+      setDepError('يرجى تحديد الأنشطة المراد ربطها.');
+      return;
+    }
+
+    if (depTaskA === depTaskB) {
+      setDepError('لا يمكن ربط النشاط بنفسه (تداخل دائري مغلق).');
+      return;
+    }
+
+    // Check if link already exists
+    const exists = dependencies.some(d => d.taskAId === depTaskA && d.taskBId === depTaskB && d.type === depType);
+    if (exists) {
+      setDepError('هذا الرابط المنطقي معرف بالفعل في جدول التداخلات.');
+      return;
+    }
+
+    const tA = activeTasks.find(t => t.id === depTaskA) || { name: depTaskA };
+    const tB = activeTasks.find(t => t.id === depTaskB) || { name: depTaskB };
+
+    const refNo = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
+    const newDep = {
+      id: `dep-${Date.now()}`,
+      taskAId: depTaskA,
+      taskAName: tA.name,
+      taskBId: depTaskB,
+      taskBName: tB.name,
+      type: depType,
+      lag: depLag,
+      refNo,
+      createdAt: new Date().toISOString()
+    };
+
+    const updated = [newDep, ...dependencies];
+    saveDependencies(updated);
+
+    addAuditLog(
+      `ربط علاقة زمنية [${tA.name} ➔ ${tB.name}]`,
+      'الجدولة والتحكم',
+      `تعريف علاقة تداخل منطقي من النوع (${depType}) مع فترة سماح قدرها ${depLag} أيام`,
+      refNo
+    );
+
+    // Reset Form
+    setDepTaskA('');
+    setDepTaskB('');
+    setDepLag(0);
+  };
+
+  const handleDeleteDependency = (id: string, taskAName: string, taskBName: string) => {
+    if (confirmWithRandomCode(`هل أنت متأكد من إلغاء وحذف رابط التداخل بين [${taskAName}] و [${taskBName}]؟`)) {
+      const updated = dependencies.filter(d => d.id !== id);
+      saveDependencies(updated);
+
+      const refNo = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
+      addAuditLog(
+        `إلغاء علاقة زمنية [${taskAName} ➔ ${taskBName}]`,
+        'الجدولة والتحكم',
+        `حذف تداخل النشاطين بالكامل من شبكة الأنشطة المعتمدة`,
+        refNo
+      );
+    }
+  };
+
   const [phaseFilter, setPhaseFilter] = useState<string>('all');
   
   // Gantt Control States
@@ -80,6 +204,175 @@ export default function PlanningDashboard({
   const [optimizationResult, setOptimizationResult] = useState<{
     suggestedChanges: { taskId: string; field: string; from: any; to: any; reason: string }[]
   } | null>(null);
+
+  // New: AI Schedule Generation states and handler
+  const [aiGeneratingSchedule, setAiGeneratingSchedule] = useState(false);
+  const [scheduleGenLogs, setScheduleGenLogs] = useState<string[]>([]);
+
+  const generateScheduleWithAI = async () => {
+    if (!boqItems || boqItems.length === 0) {
+      alert("عذراً! لا توجد بنود مقايسة معتمدة حالياً لتوليد جدول زمني منها. يرجى إدخال أو رفع بنود المقايسة أولاً في تبويب المقايسة.");
+      return;
+    }
+
+    if (!confirm("هل أنت متأكد من توليد جدول زمني كامل بالذكاء الاصطناعي بناءً على بنود المقايسة الحالية؟ سيؤدي ذلك لاستبدال الأنشطة الحالية بالجدول المولد الجديد.")) {
+      return;
+    }
+
+    setAiGeneratingSchedule(true);
+    setScheduleGenLogs(["تهيئة موديول التخطيط وتصفية بنود المقايسة لتغذية الذكاء الاصطناعي...", "بدء الاتصال بخادم الذكاء الاصطناعي لـ Gemini وجاري تحليل التبعيات والمدد..."]);
+
+    try {
+      const res = await fetch("/api/gemini/generate-schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ boqItems })
+      });
+
+      if (!res.ok) {
+        let errData;
+        try { errData = await res.json(); } catch {}
+        throw new Error((errData && errData.error) || "فشل توليد الجدول الزمني بالذكاء الاصطناعي.");
+      }
+
+      setScheduleGenLogs(prev => [...prev, "جاري استقبال بيانات الجدول وتصميم شبكة الأنشطة والمراحل المتعاقبة..."]);
+
+      const streamReader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let resultText = '';
+      if (streamReader) {
+        while (true) {
+          const { done, value } = await streamReader.read();
+          if (done) break;
+          resultText += decoder.decode(value, { stream: true });
+        }
+      }
+
+      setScheduleGenLogs(prev => [...prev, "تحليل مخرجات الذكاء الاصطناعي وبناء سجلات المسار الحرج..."]);
+
+      let data: any = {};
+      try {
+        data = JSON.parse(resultText);
+      } catch (err) {
+        throw new Error("فشل في معالجة مخرجات الاستجابة المستلمة من الذكاء الاصطناعي.");
+      }
+
+      if (data.tasks && Array.isArray(data.tasks)) {
+        const mappedTasks: WbsTaskRecord[] = data.tasks.map((t: any, index: number) => {
+          const refNo = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
+          return {
+            id: `ai-task-${Date.now()}-${index}`,
+            wbsCode: t.wbsCode || '',
+            name: t.name || '',
+            phase: t.phase || 'preparatory',
+            phaseNameAr: t.phaseNameAr || phasesMapAr[t.phase || 'preparatory'] || 'أعمال تحضيرية وتجهيز الموقع',
+            plannedProgress: Number(t.plannedProgress) || 100,
+            actualProgress: Number(t.actualProgress) || 0,
+            startDate: t.startDate || '2026-06-01',
+            endDate: t.endDate || '2026-06-15',
+            criticalPath: !!t.criticalPath,
+            status: t.status || 'on_track',
+            referenceNo: refNo
+          };
+        });
+
+        saveTasksList(mappedTasks);
+        setScheduleGenLogs(prev => [...prev, "اكتمل البناء! تم تحديث الجدول الزمني بنجاح وترقية حوكمة المسار الحرج وبنود المقايسة المربوطة."]);
+        
+        const refNo = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
+        addAuditLog(
+          "توليد جدول زمني كامل بالذكاء الاصطناعي",
+          "الجدولة والتحكم",
+          `تم تلقائيًا بناء هيكل تجزئة العمل (WBS) وجدولة عدد (${mappedTasks.length}) نشاط بالارتباط مع بنود المقايسة.`,
+          refNo
+        );
+
+        setTimeout(() => {
+          setAiGeneratingSchedule(false);
+          alert(`تم توليد جدول زمني كامل مكون من (${mappedTasks.length}) نشاط بنجاح واقترانه ببنود المقايسة المعتمدة!`);
+        }, 1000);
+
+      } else {
+        throw new Error("لم يرجع الذكاء الاصطناعي أي أنشطة صالحة للهيكل الزمني.");
+      }
+
+    } catch (error: any) {
+      console.error(error);
+      setScheduleGenLogs(prev => [...prev, `❌ خطأ: ${error.message}`]);
+      setTimeout(() => {
+        setAiGeneratingSchedule(false);
+        alert(`فشل التوليد: ${error.message}`);
+      }, 1500);
+    }
+  };
+
+  const exportScheduleToExcel = () => {
+    const dataToExport = filteredTasks.map((task, index) => {
+      const durationDays = Math.max(
+        1,
+        Math.ceil((new Date(task.endDate).getTime() - new Date(task.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1
+      );
+      
+      return {
+        'م': index + 1,
+        'رمز WBS': task.wbsCode,
+        'اسم النشاط / بند المقايسة المربوط': task.name,
+        'المرحلة الإنشائية': task.phaseNameAr || phasesMapAr[task.phase] || task.phase,
+        'تاريخ البداية': task.startDate,
+        'تاريخ النهاية': task.endDate,
+        'المدة (يوم)': durationDays,
+        'النسبة المخططة %': `${task.plannedProgress}%`,
+        'النسبة الفعلية %': `${task.actualProgress}%`,
+        'حالة النشاط': task.status === 'completed' ? 'مكتمل' :
+                       task.status === 'behind' ? 'متأخر زمنيًا' : 'منتظم',
+        'المسار الحرج': task.criticalPath ? 'نعم (حرج)' : 'لا',
+        'الرقم المرجعي (ID)': task.referenceNo || `REF-${task.id}`
+      };
+    });
+
+    // Create sheet
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+
+    // Set text direction to RTL for native Arabic presentation in Excel
+    worksheet['!dir'] = 'rtl';
+
+    // Set column widths matching the professional display
+    const colWidths = [
+      { wch: 6 },   // م
+      { wch: 15 },  // رمز WBS
+      { wch: 45 },  // اسم النشاط / بند المقايسة المربوط
+      { wch: 25 },  // المرحلة الإنشائية
+      { wch: 14 },  // تاريخ البداية
+      { wch: 14 },  // تاريخ النهاية
+      { wch: 12 },  // المدة
+      { wch: 16 },  // النسبة المخططة
+      { wch: 16 },  // النسبة الفعلية
+      { wch: 18 },  // حالة النشاط
+      { wch: 14 },  // المسار الحرج
+      { wch: 20 }   // الرقم المرجعي
+    ];
+    worksheet['!cols'] = colWidths;
+
+    // Create workbook and append sheet
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'الجدول الزمني المعتمد WBS');
+
+    // Filename: BYN-Project-Schedule-[Date].xlsx
+    const dateStr = new Date().toISOString().split('T')[0];
+    const filename = `BYN-Project-Schedule-${dateStr}.xlsx`;
+
+    // Write file
+    XLSX.writeFile(workbook, filename);
+
+    // Add audit log
+    const refNo = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
+    addAuditLog(
+      'تصدير الجدول الزمني إلى Excel',
+      'الجدولة والتحكم',
+      `تم تصدير عدد (${filteredTasks.length}) نشاط مجدول بصيغة Excel فنية مطابقة للعرض`,
+      refNo
+    );
+  };
 
   // Directly bind to wbsTasks from props - zero fallback default/dummy data!
   const activeTasks = useMemo(() => {
@@ -595,6 +888,14 @@ export default function PlanningDashboard({
                   </div>
 
                   <button
+                    onClick={generateScheduleWithAI}
+                    className="bg-purple-600 hover:bg-purple-700 text-white font-black text-xs px-3.5 py-2.5 rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Sparkles size={14} className="text-purple-200" />
+                    <span>توليد الجدول الزمني من المقايسة (AI)</span>
+                  </button>
+
+                  <button
                     onClick={runAiOptimization}
                     className="bg-purple-50 hover:bg-purple-100 text-purple-700 font-black text-xs px-3.5 py-2.5 rounded-xl transition-all flex items-center gap-1.5"
                   >
@@ -611,7 +912,7 @@ export default function PlanningDashboard({
                   </button>
 
                   <button
-                    onClick={() => alert('تم تصدير الجدول الزمني والمقايسة المربوطة بصيغة Excel فنية معتمدة بنجاح!')}
+                    onClick={exportScheduleToExcel}
                     className="bg-slate-100 hover:bg-slate-200 text-black font-bold text-xs px-3 py-2.5 rounded-xl transition-all flex items-center gap-1"
                   >
                     <FileSpreadsheet size={14} />
@@ -629,6 +930,24 @@ export default function PlanningDashboard({
                   </div>
                   <div className="space-y-1 text-neutral-400">
                     {optimizationLogs.map((log, i) => (
+                      <div key={i} className="flex gap-2">
+                        <span className="text-purple-400">✓</span>
+                        <span>{log}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* AI Schedule Gen Logs */}
+              {aiGeneratingSchedule && (
+                <div className="bg-neutral-950 text-white rounded-2xl p-5 border border-neutral-800 font-mono space-y-2 text-xs ai-alert-box">
+                  <div className="flex items-center gap-2 text-purple-400 font-sans font-black">
+                    <RefreshCw size={14} className="animate-spin" />
+                    <span>جاري توليد جدول زمني كامل بالذكاء الاصطناعي...</span>
+                  </div>
+                  <div className="space-y-1 text-neutral-400">
+                    {scheduleGenLogs.map((log, i) => (
                       <div key={i} className="flex gap-2">
                         <span className="text-purple-400">✓</span>
                         <span>{log}</span>
@@ -950,22 +1269,184 @@ export default function PlanningDashboard({
           {/* TAB 2: STRUCTURING */}
           {activeTab === 'structuring' && (
             <div className="space-y-6">
-              <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
-                <h3 className="text-base font-black text-black flex items-center gap-2 border-r-4 border-purple-600 pr-3 mb-6">
-                  <GitBranch size={16} className="text-purple-600" />
-                  <span>هيكلة البنود وربط العلاقات الزمنية (WBS Dependencies & Linking)</span>
-                </h3>
-                
-                <p className="text-xs text-neutral-600 leading-relaxed mb-6">
-                  استخدم هذه اللوحة لهيكلة وتنسيق علاقات التداخل بين بنود العمل بالجدول الزمني. يتيح النظام ربط أنشطة المشروع (WBS) ببعضها البعض (مثل "النهاية-البداية") وتوزيعها تلقائياً على كامل مدة العملية الإنشائية بناءً على معايير الأسبقية الهندسية.
-                </p>
-
-                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 text-center">
-                  <p className="text-xs font-bold text-slate-500">
-                    واجهة التفاعل والربط المنطقي للأنشطة قيد التطوير... سيتم إتاحة خيارات سحب وإسقاط المهام لربط التواريخ وتحديد التداخلات قريباً.
+              
+              {/* Info Banner */}
+              <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
+                <div className="space-y-1">
+                  <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                    <GitBranch size={16} className="text-purple-600" />
+                    <span>مجدول العلاقات الزمنية وشبكة تداخل الأنشطة (WBS Dependencies Network)</span>
+                  </h4>
+                  <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                    قم بربط علاقات التتابع الهندسية بين بنود العمل ومراقبة فترات السماح (Lag/Lead) لضمان اتساق المسار الحرج للمشروع ومنع انحراف التوريدات.
                   </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black flex items-center gap-2 transition cursor-pointer self-start md:self-auto shrink-0 shadow-sm"
+                >
+                  <Printer size={14} />
+                  <span>طباعة تقرير العلاقات</span>
+                </button>
               </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Section A: Form to Add Dependency (Column 1 - Left) */}
+                <div className="lg:col-span-1 bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-5 h-fit no-print">
+                  <h3 className="text-xs font-black text-purple-600 uppercase tracking-widest border-r-4 border-purple-500 pr-3">
+                    تعريف رابط تداخل منطقي جديد
+                  </h3>
+
+                  <form onSubmit={handleAddDependency} className="space-y-4">
+                    {depError && (
+                      <div className="bg-rose-50 border border-rose-100 p-3 rounded-xl text-rose-800 text-xs font-bold leading-relaxed">
+                        ⚠️ {depError}
+                      </div>
+                    )}
+
+                    {/* Predecessor (Task A) */}
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black text-slate-500 mr-1">النشاط المسبق (Predecessor) *</label>
+                      <select
+                        required
+                        value={depTaskA}
+                        onChange={e => setDepTaskA(e.target.value)}
+                        className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-bold text-slate-900"
+                      >
+                        <option value="">-- اختر النشاط المسبق --</option>
+                        {activeTasks.map(task => (
+                          <option key={task.id} value={task.id}>
+                            [{task.wbsCode}] {task.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Link Type */}
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black text-slate-500 mr-1">نوع العلاقة الزمنية *</label>
+                      <select
+                        required
+                        value={depType}
+                        onChange={e => setDepType(e.target.value as any)}
+                        className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-bold text-slate-900"
+                      >
+                        <option value="FS">نهاية إلى بداية (FS) - تقليدي</option>
+                        <option value="SS">بداية إلى بداية (SS) - توازي</option>
+                        <option value="FF">نهاية إلى نهاية (FF) - تسليم مشترك</option>
+                        <option value="SF">بداية إلى نهاية (SF) - تبادلي</option>
+                      </select>
+                    </div>
+
+                    {/* Successor (Task B) */}
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black text-slate-500 mr-1">النشاط اللاحق (Successor) *</label>
+                      <select
+                        required
+                        value={depTaskB}
+                        onChange={e => setDepTaskB(e.target.value)}
+                        className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-bold text-slate-900"
+                      >
+                        <option value="">-- اختر النشاط اللاحق --</option>
+                        {activeTasks.map(task => (
+                          <option key={task.id} value={task.id}>
+                            [{task.wbsCode}] {task.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Lag / Lead days */}
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black text-slate-500 mr-1">فترة السماح / التداخل بالأيام (Lag) *</label>
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={depLag}
+                        onChange={e => setDepLag(parseInt(e.target.value) || 0)}
+                        className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-bold text-slate-900 font-mono"
+                      />
+                      <span className="block text-[9px] text-slate-400 font-bold mr-1">أدخل (0) للتداخل المباشر دون تأخير زمني.</span>
+                    </div>
+
+                    {/* Submit */}
+                    <button
+                      type="submit"
+                      className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-md"
+                    >
+                      حفظ وربط العلاقة
+                    </button>
+                  </form>
+                </div>
+
+                {/* Section B: Grid / Table of Dependencies (Column 2 - Right) */}
+                <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest border-r-4 border-slate-900 pr-3">
+                      شبكة العلاقات المعتمدة ({dependencies.length})
+                    </h3>
+                    <div className="text-[10px] text-slate-400 font-bold no-print">
+                      مجدولة تلقائياً
+                    </div>
+                  </div>
+
+                  {dependencies.length === 0 ? (
+                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-12 text-center text-slate-400 text-xs font-bold">
+                      لا يوجد علاقات تداخل مسجلة حالياً لهذا المشروع.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto border border-slate-100 rounded-2xl">
+                      <table className="w-full text-right border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-black">
+                            <th className="p-3.5 font-black">المرجع</th>
+                            <th className="p-3.5 font-black">النشاط المسبق (A)</th>
+                            <th className="p-3.5 font-black text-center">نوع الرابط</th>
+                            <th className="p-3.5 font-black">النشاط اللاحق (B)</th>
+                            <th className="p-3.5 font-black text-center">التأخير (أيام)</th>
+                            <th className="p-3.5 font-black text-left no-print">إجراءات</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {dependencies.map((dep) => (
+                            <tr key={dep.id} className="hover:bg-slate-50/50 transition">
+                              <td className="p-3.5 font-mono font-extrabold text-purple-600 whitespace-nowrap">{dep.refNo}</td>
+                              <td className="p-3.5 font-bold text-slate-900">{dep.taskAName}</td>
+                              <td className="p-3.5 text-center">
+                                <span className="inline-block px-2.5 py-1 bg-purple-50 text-purple-800 border border-purple-100 font-mono font-black text-[10.5px] rounded-lg">
+                                  {dep.type}
+                                </span>
+                              </td>
+                              <td className="p-3.5 font-bold text-slate-900">{dep.taskBName}</td>
+                              <td className="p-3.5 text-center font-mono font-extrabold text-slate-950">{dep.lag}</td>
+                              <td className="p-3.5 text-left no-print whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteDependency(dep.id, dep.taskAName, dep.taskBName)}
+                                  className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition"
+                                  title="حذف العلاقة"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* Print Notice for compliance */}
+                  <div className="hidden print:block text-right pt-6 text-[10px] text-slate-400 font-bold border-t border-slate-100">
+                    تم التصدير والطباعة من بنيان الذكي لإدارة المواقع والمشروعات. الرقم المرجعي للتقرير: {`REP-${Math.floor(100000 + Math.random() * 900000)}`}
+                  </div>
+                </div>
+
+              </div>
+
             </div>
           )}
         </motion.div>

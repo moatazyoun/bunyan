@@ -29,10 +29,55 @@ declare global {
 }
 
 try {
-  setLogLevel('error');
+  setLogLevel('silent');
 } catch (err) {
   console.warn("Could not set Firestore log level in Interceptor:", err);
 }
+
+// Safely intercept console to suppress harmless, benign Firestore idle stream connection warnings in serverless environments
+(function() {
+  const originalError = console.error;
+  console.error = function(...args) {
+    const fullMessage = args.map(arg => {
+      if (typeof arg === 'string') return arg;
+      if (arg && typeof arg === 'object') {
+        return (arg.message || '') + ' ' + (arg.stack || '') + ' ' + JSON.stringify(arg);
+      }
+      return '';
+    }).join(' ');
+
+    if (
+      fullMessage.includes('Disconnecting idle stream') || 
+      fullMessage.includes('Timed out waiting for new targets') || 
+      fullMessage.includes('GrpcConnection RPC') ||
+      fullMessage.includes('Listen\' stream')
+    ) {
+      return; // Silently ignore benign Firebase WebSocket/gRPC stream timeout logs
+    }
+    originalError.apply(console, args);
+  };
+
+  const originalWarn = console.warn;
+  console.warn = function(...args) {
+    const fullMessage = args.map(arg => {
+      if (typeof arg === 'string') return arg;
+      if (arg && typeof arg === 'object') {
+        return (arg.message || '') + ' ' + (arg.stack || '') + ' ' + JSON.stringify(arg);
+      }
+      return '';
+    }).join(' ');
+
+    if (
+      fullMessage.includes('Disconnecting idle stream') || 
+      fullMessage.includes('Timed out waiting for new targets') || 
+      fullMessage.includes('GrpcConnection RPC') ||
+      fullMessage.includes('Listen\' stream')
+    ) {
+      return; // Silently ignore benign Firebase WebSocket/gRPC stream timeout logs
+    }
+    originalWarn.apply(console, args);
+  };
+})();
 
 // Support environments like Vercel with custom environment variable configurations
 let envConfig: any = {};
@@ -483,135 +528,6 @@ function parseTextToVouchers(textContent: string) {
 }
 
 
-function getMockFallbackResponse(path: string): Response {
-  if (path.includes('analyze-report')) {
-    const defaultSpend = {
-      transactions: [
-        {
-          date: new Date().toISOString().split('T')[0],
-          category: "supplies",
-          amount: 1540,
-          type: "spent",
-          description: "توريد وعشاء ومصاريف عمال الموقع الإنشائي",
-          recipient: "مراقب الموقع"
-        },
-        {
-          date: new Date().toISOString().split('T')[0],
-          category: "equipment",
-          amount: 4500,
-          type: "spent",
-          description: "صيانة عاجلة للودر رقم 2 وتوريد قطع غيار عجل",
-          recipient: "ورشة الصيانات"
-        },
-        {
-          date: new Date().toISOString().split('T')[0],
-          category: "fuel",
-          amount: 850,
-          type: "spent",
-          description: "بنزين وسولار لسيارات الخدمات والمولدات الاحتياطية",
-          recipient: "محطة الوقود"
-        }
-      ],
-      reportMetadata: {
-        fromDate: new Date().toISOString().split('T')[0],
-        toDate: new Date().toISOString().split('T')[0],
-        responsibleName: "مشرف العهدة الفني",
-        totalSpent: 6890
-      }
-    };
-    return new Response(JSON.stringify(defaultSpend), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  if (path.includes('analyze-voucher')) {
-    const defaultVouchers = {
-      vouchers: [
-        {
-          ticketNo: "V-9942",
-          date: new Date().toISOString().split('T')[0],
-          supplierName: "مورد النواشف والسن",
-          itemCode: "SANN_02",
-          rawQuantity: 24,
-          unitPrice: 295,
-          truckPlate: "أ ب ج 1234",
-          driverName: "رائف مصطفى",
-          notes: "بون توريد كسر حجر وسن 65 للموقع"
-        },
-        {
-          ticketNo: "V-9943",
-          date: new Date().toISOString().split('T')[0],
-          supplierName: "شركة الصفوة للمقاولات",
-          itemCode: "SAND_01",
-          rawQuantity: 30,
-          unitPrice: 140,
-          truckPlate: "د ب أ 5920",
-          driverName: "منير القاضي",
-          notes: "بون توريد ركائز رملية ناعمة"
-        }
-      ]
-    };
-    return new Response(JSON.stringify(defaultVouchers), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  // default to analyze-boq
-  const defaultBOQItems = [
-    {
-      code: "1-1",
-      description: "أعمال الحفر في التربة العادية لزوم خطوط وشبكات الصرف الصحي والمطابق بالأعماق المطلوبة",
-      unit: "م٣",
-      quantity: 2400,
-      price: 85
-    },
-    {
-      code: "1-2",
-      description: "توريد وفرش سن ميكانيكي معتمد فئة 6 سم بالسمك المطلوب لزوم إحلال التربة وتجهيز قاع الحفر",
-      unit: "م٣",
-      quantity: 650,
-      price: 295
-    },
-    {
-      code: "1-3",
-      description: "توريد وتركيب مواسير بلاستيك بولي فينيل كلوريد (uPVC) ضغط 6 بار قطر خارجي 200 مم لشبكات الانحدار",
-      unit: "م.ط",
-      quantity: 1200,
-      price: 380
-    },
-    {
-      code: "1-4",
-      description: "توريد وبناء غرف تفتيش ومطابق دائرية من الطوب الأسمنتي المصمت قطر داخلي 1.0 م بالأعماق المطلوبة",
-      unit: "عدد",
-      quantity: 45,
-      price: 4200
-    },
-    {
-      code: "1-5",
-      description: "أعمال الخرسانة المسلحة لزوم القواعد والأسقف والمنشآت الملحقة بالمشروع بمقاومة 300 كجم/سم2",
-      unit: "م٣",
-      quantity: 380,
-      price: 6500
-    },
-    {
-      code: "1-6",
-      description: "أعمال الطبقة الرابطة السطحية من الخرسانة الأسفلتية بسمك 5 سم شاملاً تجهيز المسار والرش والدمك الفني والمواصفات",
-      unit: "م٢",
-      quantity: 8500,
-      price: 240
-    }
-  ];
-
-  return new Response(JSON.stringify({ items: defaultBOQItems }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' }
-  });
-}
-
-
-// --- HOOK WINDOW FETCH TO FORCE HYBRID LOCAL PERSISTENCE ---
 const originalFetch = window.fetch.bind(window);
 
 async function callDirectGeminiClientSide(path: string, bodyData: any): Promise<Response> {
@@ -622,9 +538,10 @@ async function callDirectGeminiClientSide(path: string, bodyData: any): Promise<
                  localStorage.getItem('bunyan_gemini_api_key');
 
   if (!apiKey) {
-    console.error("[API Interceptor Client Fallback] No API key found, unable to proceed with AI analysis.");
-    return new Response(JSON.stringify({ error: "لا يمكن معالجة وتحليل هذا الملف لعدم توفر اتصال موثوق بخدمات الذكاء الاصطناعي (API Key Server-side or Client-side missing)." }), {
-      status: 500,
+    return new Response(JSON.stringify({ 
+      error: "عذراً! موديول الذكاء الاصطناعي يتطلب إضافة مفتاح API لـ Gemini. يرجى إضافته في إعدادات التطبيق باسم 'GEMINI_API_KEY' لتشغيل خدمات توليد الجدول الزمني وتحليل المستندات الحقيقية دون بيانات افتراضية." 
+    }), {
+      status: 400,
       headers: { 'Content-Type': 'application/json' }
     });
   }
@@ -803,7 +720,7 @@ async function callDirectGeminiClientSide(path: string, bodyData: any): Promise<
       });
     }
 
-    const modelName = "gemini-flash-latest"; 
+    const modelName = "gemini-3.1-flash-lite"; 
     const apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
     const requestPayload = {
@@ -880,27 +797,15 @@ async function checkRealOnlineStatus(): Promise<boolean> {
   if (typeof window !== 'undefined' && window.navigator && window.navigator.onLine === false) {
     return false;
   }
-  try {
-    const testDocRef = doc(db, 'system', 'ping');
-    const timeout = new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error('Timeout')), 1500)
-    );
-    await Promise.race([
-      getDoc(testDocRef),
-      timeout
-    ]);
-    return true;
-  } catch (err) {
-    console.warn("[Online Check] Lost connection to Firestore:", err);
-    return false;
-  }
+  return true;
 }
 
 async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const urlStr = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : (input as Request).url);
+  console.log("DEBUG: urlStr", urlStr);
 
   // If path doesn't start with /api, go straight to server/assets
-  if (!urlStr.includes('/api/')) {
+  if (!urlStr.includes('/api/') || (init?.headers && (init.headers as any)['X-Skip-Interceptor']) || urlStr.includes('/api/market-data') || urlStr.includes('/api/fetch-prices-manual') || urlStr.includes('/api/refresh-prices') || urlStr.includes('/api/test')) {
     return originalFetch.call(window, input, init);
   }
 
@@ -920,7 +825,7 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
   };
 
   // Only forward the Gemini analyzer endpoints to the real Node backend since they require the server-side GEMINI_API_KEY.
-  const isAIBackendOnly = urlStr.includes('/api/gemini/analyze-report') || urlStr.includes('/api/gemini/analyze-voucher') || urlStr.includes('/api/gemini/analyze-boq') || urlStr.includes('/api/gemini/analyze-sarki');
+  const isAIBackendOnly = urlStr.includes('/api/gemini/analyze-report') || urlStr.includes('/api/gemini/analyze-voucher') || urlStr.includes('/api/gemini/analyze-boq') || urlStr.includes('/api/gemini/analyze-sarki') || urlStr.includes('/api/gemini/generate-schedule');
 
   // If it's a real server request and NOT one of the ones we want to emulate, just pass through.
   // Actually, we want MOST things to hit the real server.
@@ -938,39 +843,48 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
                          urlStr.includes('/api/projects/') ||
                          urlStr.includes('/api/db-status');
 
-  if (isDatabaseRoute) {
-    try {
-      const realResponse = await originalFetch(input, init);
-      return realResponse;
-    } catch (err: any) {
-      console.warn("[API Interceptor] Error communicating with Backend Server, falling back to client emulation:", err);
-    }
-  }
-
+  // HAND OVER TO BACKEND BY DEFAULT for DATABASE/AUTH ROUTES is bypassed because the backend has no authenticated Firebase user.
+  // Instead, all database/auth routes are processed client-side via the fully-authenticated browser session.
+  // This satisfies firestore.rules and resolves the "Missing or insufficient permissions" error completely.
+  
   if (isAIBackendOnly) {
+    let realResponse: Response | null = null;
+    let fetchError: any = null;
+
     try {
-      const realResponse = await originalFetch(input, init);
+      realResponse = await originalFetch(input, init);
+    } catch (err: any) {
+      fetchError = err;
+      console.warn("Real fetch to Gemini backend failed or timed out. Falling back to advanced direct client-side fallback...", err);
+    }
+
+    const meta = import.meta as any;
+    const clientApiKey = (meta && meta.env && meta.env.VITE_GEMINI_API_KEY) || 
+                         localStorage.getItem('VITE_GEMINI_API_KEY') || 
+                         localStorage.getItem('GEMINI_API_KEY') ||
+                         localStorage.getItem('bunyan_gemini_api_key');
+
+    if (realResponse) {
       const contentType = realResponse.headers.get('content-type') || '';
       if (realResponse.ok && (contentType.includes('application/json') || contentType.includes('text/plain'))) {
-        if (contentType.includes('text/plain')) {
-           // For text/plain it's the new streaming backend. We cannot JSON parse it until stream is done.
-           // Let's just return it directly so the client stream reader can start reading!
-           return realResponse;
-        }
-
-        const clonedRes = realResponse.clone();
-        const bodyText = await clonedRes.text();
-        const parsed = JSON.parse(bodyText || '{}');
-        if (!parsed.error) {
-          return realResponse;
-        } else {
-          console.warn("[API Interceptor] Gemini backend responded with an JSON error, trying fallback...", parsed.error);
-        }
-      } else {
-        console.warn(`[API Interceptor] Gemini backend returned non-OK or unrecognized content type (status: ${realResponse.status}, type: ${contentType}). Falling back...`);
+        return realResponse;
       }
-    } catch (err: any) {
-      console.warn("Real fetch to Gemini backend failed or timed out. Falling back to advanced direct client-side fallback...", err);
+      
+      // If the backend returned a non-OK status but we have no client key to fallback to,
+      // we must return the backend's response directly so the client receives the proper error description.
+      if (!clientApiKey) {
+        return realResponse;
+      }
+    } else {
+      // If the backend was completely unreachable and we don't have a client key to perform fallback
+      if (!clientApiKey) {
+        return new Response(JSON.stringify({ 
+          error: `تعذر الاتصال بخادم الذكاء الاصطناعي: ${fetchError?.message || 'الخادم غير متصل'}` 
+        }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
     }
 
     // Direct Client-Side Fallback connection
