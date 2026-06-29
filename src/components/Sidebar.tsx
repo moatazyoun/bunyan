@@ -84,7 +84,6 @@ export default function Sidebar({
 
   const menuItems = [
     { id: 'dashboard', label: 'الصفحة الرئيسية', subtitle: 'Dashboard', icon: Home, perm: true },
-    { id: 'ai-fetcher', label: 'وكيل جلب أسعار AI', subtitle: 'AI Price Fetcher', icon: Sparkles, perm: true },
     { id: 'projects', label: 'المشروعات والإسناد', subtitle: 'Projects', icon: Briefcase, perm: checkPerm('projects') },
     { id: 'boq', label: 'المقايسة التثمنية', subtitle: 'Bill of Quantities', icon: FileText, perm: checkPerm('boq') },
     { id: 'transactions', label: 'دفتر الحركات المالي', subtitle: 'Ledger', icon: Receipt, perm: checkPerm('transactions') },
@@ -122,7 +121,7 @@ export default function Sidebar({
       id: 'control',
       title: 'لوحة التحكم والتحليلات',
       subtitle: 'Dashboard & Reports',
-      itemIds: ['dashboard', 'ai-fetcher']
+      itemIds: ['dashboard']
     },
     {
       id: 'technical',
@@ -377,8 +376,7 @@ export default function Sidebar({
             </div>
           </div>
           
-          <div className="text-[10px] text-slate-500 flex justify-between items-center font-mono">
-            <span>بنيان ERP Enterprise v2.4</span>
+          <div className="text-[10px] text-slate-500 flex justify-end items-center font-mono">
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[9px] border border-emerald-100">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
               قيد الاتصال
