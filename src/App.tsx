@@ -123,6 +123,7 @@ import * as firestore from 'firebase/firestore';
 import { 
   doc, 
   getDoc, 
+  setDoc,
   updateDoc, 
   arrayUnion, 
   query, 
@@ -130,7 +131,7 @@ import {
   orderBy, 
   onSnapshot 
 } from 'firebase/firestore';
-import { db } from './lib/firebase';
+import { db, ensureAuthenticated } from './lib/firebase';
 import { appendSessionLog } from './lib/sessionTracker';
 import { applyColorTheme, COLOR_THEMES } from './utils/themeHelper';
 import InteractiveBackground from './components/InteractiveBackground';
@@ -258,7 +259,9 @@ export default function App() {
       localStorage.setItem(`bunyan_theme_id_${user.username}`, themeId);
       if (dbConnected) {
         const userDocRef = doc(db, 'users', user.username);
-        updateDoc(userDocRef, { themeId }).catch(err => console.error("Error saving user theme in Firestore:", err));
+        ensureAuthenticated().then(() => {
+            setDoc(userDocRef, { themeId }, { merge: true }).catch(err => console.error("Error saving user theme in Firestore:", err));
+        }).catch(err => console.error("Error saving user theme in Firestore - auth failed:", err));
       }
     } else {
       localStorage.setItem('bunyan_theme_id_guest', themeId);
@@ -270,7 +273,9 @@ export default function App() {
       localStorage.setItem(`bunyan_bg_type_${user.username}`, bgType);
       if (dbConnected) {
         const userDocRef = doc(db, 'users', user.username);
-        updateDoc(userDocRef, { bgType }).catch(err => console.error("Error saving user bgType in Firestore:", err));
+        ensureAuthenticated().then(() => {
+            setDoc(userDocRef, { bgType }, { merge: true }).catch(err => console.error("Error saving user bgType in Firestore:", err));
+        }).catch(err => console.error("Error saving user bgType in Firestore - auth failed:", err));
       }
     } else {
       localStorage.setItem('bunyan_bg_type_guest', bgType);
@@ -282,6 +287,7 @@ export default function App() {
     if (user && dbConnected) {
       const fetchUserData = async () => {
         try {
+          await ensureAuthenticated();
           const userDocRef = doc(db, 'users', user.username);
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {

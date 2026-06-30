@@ -83,86 +83,88 @@ export default function Sidebar({
   };
 
   const menuItems = [
-    { id: 'dashboard', label: 'الصفحة الرئيسية', subtitle: 'Dashboard', icon: Home, perm: true },
-    { id: 'projects', label: 'المشروعات والإسناد', subtitle: 'Projects', icon: Briefcase, perm: checkPerm('projects') },
-    { id: 'boq', label: 'المقايسة التثمنية', subtitle: 'Bill of Quantities', icon: FileText, perm: checkPerm('boq') },
-    { id: 'transactions', label: 'دفتر الحركات المالي', subtitle: 'Ledger', icon: Receipt, perm: checkPerm('transactions') },
-    { id: 'supplies', label: 'إدارة التوريدات', subtitle: 'Supplies', icon: Truck, perm: checkPerm('supplies') },
-    { id: 'subcontractors', label: 'مقاولين باطن', subtitle: 'Subcontractors', icon: Users, perm: checkPerm('subcontractors') },
-    { id: 'extracts', label: 'المستخلصات الفنية', subtitle: 'Extracts', icon: FileSpreadsheet, perm: checkPerm('extracts') },
-    { id: 'contracts', label: 'العقود', subtitle: 'Contracts', icon: Scroll, perm: true },
-    { id: 'risk-management', label: 'إدارة المخاطر', subtitle: 'Risk Management', icon: AlertTriangle, perm: true },
-    { id: 'quality-management', label: 'إدارة الجودة الشاملة', subtitle: 'Quality Management', icon: ShieldCheck, perm: true },
-    { id: 'inventory', label: 'المخازن والمستودعات', subtitle: 'Inventory', icon: Package, perm: true },
-    { id: 'planning', label: 'الجدولة الزمنية', subtitle: 'Planning', icon: Calendar, perm: true },
-    { id: 'hse', label: 'الصحة والسلامة المهنية', subtitle: 'HSE', icon: ShieldAlert, perm: true },
-    { id: 'documents', label: 'إدارة الوثائق', subtitle: 'Documents', icon: FileText, perm: true },
-    { id: 'crm', label: 'إدارة العملاء', subtitle: 'CRM', icon: Users, perm: true },
-    { id: 'activity-log', label: 'سجل النشاطات', subtitle: 'Activity Log', icon: Activity, perm: true },
+    { id: 'dashboard', label: 'لوحة التحكم', subtitle: 'Dashboard', icon: Home, perm: true },
+    { id: 'projects', label: 'المشروعات', subtitle: 'Projects', icon: Briefcase, perm: checkPerm('projects') },
+    { id: 'boq', label: 'المقايسات', subtitle: 'BOQs', icon: FileText, perm: checkPerm('boq') },
+    { id: 'extracts', label: 'المستخلصات', subtitle: 'Extracts', icon: FileSpreadsheet, perm: checkPerm('extracts') },
+    { id: 'planning', label: 'الجدول الزمنى', subtitle: 'Schedule', icon: Calendar, perm: true },
+    { id: 'quality-management', label: 'الجودة والاختبارات', subtitle: 'Quality & Tests', icon: ShieldCheck, perm: true },
     { id: 'deliveries', label: 'التسليمات وفحص الأعمال', subtitle: 'Deliveries & Inspection', icon: FileCheck, perm: checkPerm('deliveries') },
-    { id: 'site-workers', label: 'العاملين بالموقع', subtitle: 'Site Workers', icon: Users, perm: checkPerm('siteWorkers') },
-    { id: 'fuel-dashboard', label: 'حساب المحروقات', subtitle: 'Fuel Log', icon: Fuel, perm: checkPerm('fuelDashboard') },
-    { id: 'equipment-dashboard', label: 'بيان المعدات والآلات', subtitle: 'Equipment Log', icon: LayoutDashboard, perm: checkPerm('equipmentDashboard') },
-    { id: 'weekly-report', label: 'المنصرف الأسبوعي', subtitle: 'Weekly Report', icon: FileText, perm: checkPerm('weeklyReport') },
+    { id: 'risk-management', label: 'إدارة المخاطر', subtitle: 'Risk Management', icon: AlertTriangle, perm: true },
+    { id: 'documents', label: 'إدارة الوثائق', subtitle: 'Documents', icon: FileText, perm: true },
+    { id: 'transactions', label: 'سجل الحركات المالية', subtitle: 'Transactions', icon: Receipt, perm: checkPerm('transactions') },
+    { id: 'weekly-report', label: 'تقرير العهدة الموقعية', subtitle: 'Site Custody Report', icon: FileText, perm: checkPerm('weeklyReport') },
+    { id: 'supplies', label: 'إدارة التوريدات', subtitle: 'Supplies', icon: Truck, perm: checkPerm('supplies') },
+    { id: 'subcontractors', label: 'مقاولى الباطن', subtitle: 'Subcontractors', icon: Users, perm: checkPerm('subcontractors') },
+    { id: 'equipment-dashboard', label: 'المعدات', subtitle: 'Equipment', icon: LayoutDashboard, perm: checkPerm('equipmentDashboard') },
+    { id: 'fuel-dashboard', label: 'المحروقات', subtitle: 'Fuel Log', icon: Fuel, perm: checkPerm('fuelDashboard') },
+    { id: 'contracts', label: 'العقود', subtitle: 'Contracts', icon: Scroll, perm: true },
+    { id: 'inventory', label: 'المخازن', subtitle: 'Inventory', icon: Package, perm: true },
+    { id: 'hse', label: 'الصحة والسلامة المهنية', subtitle: 'HSE', icon: ShieldAlert, perm: true },
+    { id: 'hr-strategy', label: 'الموارد البشرية', subtitle: 'HR Strategy', icon: Users, perm: true },
+    { id: 'crm', label: 'العملاء', subtitle: 'CRM', icon: Users, perm: true },
+    { id: 'activity-log', label: 'سجل النشاطات', subtitle: 'Activity Log', icon: Activity, perm: true },
     { id: 'notifications', label: 'مركز الإشعارات', subtitle: 'Notification Center', icon: Bell, perm: true },
+    { id: 'settings', label: 'الإعدادات', subtitle: 'Settings', icon: Settings, perm: true },
     { 
       id: 'admin-users', 
-      label: 'حسابات المستخدمين والصلاحيات', 
-      subtitle: 'User Roles', 
+      label: 'المستخدمين', 
+      subtitle: 'Users', 
       icon: Users, 
       perm: user?.role === 'admin' || user?.permissions?.usersManagement !== 'none' 
     },
-    { id: 'settings', label: 'الإعدادات', subtitle: 'Settings', icon: Settings, perm: true },
   ];
 
   // Define logical menu groups / categories
   const categories = [
     {
-      id: 'control',
-      title: 'لوحة التحكم والتحليلات',
-      subtitle: 'Dashboard & Reports',
+      id: 'main',
+      title: 'الصفحة الرئيسية',
+      subtitle: 'Main Dashboard',
       itemIds: ['dashboard']
     },
     {
-      id: 'technical',
-      title: 'المكتب الفني والتخطيط',
+      id: 'eng',
+      title: 'المكتب الفنى والتخطيط',
       subtitle: 'Engineering & Planning',
-      itemIds: ['projects', 'boq', 'planning', 'deliveries', 'documents']
+      itemIds: ['projects', 'boq', 'extracts', 'planning', 'quality-management', 'deliveries', 'risk-management', 'documents']
     },
     {
       id: 'financial',
-      title: 'الإدارة المالية والتعاقدات',
+      title: 'الادارة المالية والتعاقدات',
       subtitle: 'Finance & Contracts',
-      itemIds: ['transactions', 'weekly-report', 'contracts', 'subcontractors', 'extracts']
+      itemIds: [
+        'transactions',
+        'weekly-report',
+        'supplies',
+        'subcontractors',
+        'equipment-dashboard',
+        'fuel-dashboard',
+        'contracts',
+        'inventory'
+      ]
     },
     {
-      id: 'logistics',
-      title: 'العمليات واللوجستيات',
-      subtitle: 'Operations & Logistics',
-      itemIds: ['supplies', 'inventory', 'fuel-dashboard', 'equipment-dashboard']
+      id: 'hr',
+      title: 'القوى البشرية',
+      subtitle: 'Human Resources & Safety',
+      itemIds: ['hse', 'hr-strategy', 'crm']
     },
     {
-      id: 'site',
-      title: 'الموقع والقوى البشرية',
-      subtitle: 'Site & Human Resources',
-      itemIds: ['site-workers', 'hse']
-    },
-    {
-      id: 'governance',
-      title: 'الحوكمة والإدارة العامة',
-      subtitle: 'Governance & Settings',
-      itemIds: ['crm', 'risk-management', 'quality-management', 'activity-log', 'notifications', 'admin-users', 'settings']
+      id: 'admin',
+      title: 'الادارة العامة',
+      subtitle: 'General Management',
+      itemIds: ['activity-log', 'notifications', 'settings', 'admin-users']
     }
   ];
 
-  // Keep state for collapsed categories
+  // Keep state for collapsed categories (not used anymore for layout, but keeping for compatibility)
   const [openCategories, setOpenCategories] = React.useState<Record<string, boolean>>({
-    control: true,
-    technical: true,
-    financial: false,
-    logistics: false,
-    site: false,
-    governance: false,
+    main: true,
+    eng: true,
+    financial: true,
+    hr: true,
+    admin: true,
   });
 
   // Auto-expand active category
@@ -357,6 +359,14 @@ export default function Sidebar({
             </div>
             
             <div className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={() => { setActiveTab('settings'); setIsOpen(false); }}
+                className="p-1.5 text-slate-500 hover:text-purple-650 hover:bg-slate-100 rounded-lg transition"
+                title="إعدادات النظام"
+                id="sidebar-settings-btn"
+              >
+                <Settings size={15} />
+              </button>
               <button
                 onClick={onChangeSite}
                 className="p-1.5 text-slate-500 hover:text-purple-650 hover:bg-slate-100 rounded-lg transition"

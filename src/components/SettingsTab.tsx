@@ -352,10 +352,10 @@ export default function SettingsTab({
       </div>
 
       {/* Internal Sub-navigation tabs */}
-      <div className="flex border-b border-slate-200 gap-1 bg-white p-2.5 rounded-2xl border shadow-sm">
+      <div className="flex flex-wrap border-b border-slate-200 gap-1 bg-white p-2.5 rounded-2xl border shadow-sm">
         <button
           onClick={() => setActiveSubTab('cloud')}
-          className={`flex-1 md:flex-initial px-6 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+          className={`flex-1 min-w-[140px] px-6 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
             activeSubTab === 'cloud' 
               ? 'bg-slate-900 text-white shadow-md' 
               : 'text-slate-650 hover:bg-slate-50'
@@ -367,7 +367,7 @@ export default function SettingsTab({
 
         <button
           onClick={() => setActiveSubTab('local')}
-          className={`flex-1 md:flex-initial px-6 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+          className={`flex-1 min-w-[140px] px-6 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
             activeSubTab === 'local' 
               ? 'bg-slate-900 text-white shadow-md' 
               : 'text-slate-650 hover:bg-slate-50'
@@ -379,7 +379,7 @@ export default function SettingsTab({
 
         <button
           onClick={() => setActiveSubTab('session')}
-          className={`flex-1 md:flex-initial px-6 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+          className={`flex-1 min-w-[140px] px-6 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
             activeSubTab === 'session' 
               ? 'bg-slate-900 text-white shadow-md' 
               : 'text-slate-650 hover:bg-slate-50'
@@ -391,7 +391,7 @@ export default function SettingsTab({
 
         <button
           onClick={() => setActiveSubTab('theme')}
-          className={`flex-1 md:flex-initial px-6 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+          className={`flex-1 min-w-[140px] px-6 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
             activeSubTab === 'theme' 
               ? 'bg-slate-900 text-white shadow-md' 
               : 'text-slate-650 hover:bg-slate-50'

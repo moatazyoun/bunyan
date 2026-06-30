@@ -509,6 +509,32 @@ export default function DashboardOverview({
         ))}
       </div>
 
+      {/* NEW: CRITICAL QUICK ACTIONS & ALERTS SUMMARY */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 no-print">
+        <div className="bg-white border border-gray-100 p-5 rounded-2xl shadow-sm">
+          <h4 className="text-sm font-black text-gray-900 mb-4 flex items-center justify-end gap-2">إجراءات سريعة <CheckCircle2 className="text-emerald-600" size={16} /></h4>
+          <div className="grid grid-cols-2 gap-3">
+             <button onClick={() => setActiveTab('transactions')} className="text-xs font-bold bg-gray-50 hover:bg-gray-100 p-3 rounded-lg text-gray-700 transition">تسجيل حركة مالية</button>
+             <button onClick={() => setActiveTab('supplies')} className="text-xs font-bold bg-gray-50 hover:bg-gray-100 p-3 rounded-lg text-gray-700 transition">إضافة توريد جديد</button>
+             <button onClick={() => setActiveTab('hse')} className="text-xs font-bold bg-gray-50 hover:bg-gray-100 p-3 rounded-lg text-gray-700 transition">تسجيل واقعة سلامة</button>
+             <button onClick={() => setActiveTab('deliveries')} className="text-xs font-bold bg-gray-50 hover:bg-gray-100 p-3 rounded-lg text-gray-700 transition">طلب فحص استلام</button>
+          </div>
+        </div>
+        <div className="bg-white border border-gray-100 p-5 rounded-2xl shadow-sm">
+           <h4 className="text-sm font-black text-gray-900 mb-4 flex items-center justify-end gap-2">تنبيهات حرجة <AlertCircle className="text-rose-600" size={16} /></h4>
+           <div className="space-y-2">
+             <div className="flex justify-between items-center text-xs font-bold bg-rose-50 p-3 rounded-lg text-rose-800">
+               <span>{stats.lowStockItems.length} أصناف مخزنية بحاجة لتوريد</span>
+               <span className="bg-rose-100 px-2 py-0.5 rounded">تحقق</span>
+             </div>
+             <div className="flex justify-between items-center text-xs font-bold bg-amber-50 p-3 rounded-lg text-amber-800">
+               <span>{stats.criticalIncidents} وقائع سلامة حرجة</span>
+               <span className="bg-amber-100 px-2 py-0.5 rounded">راجع</span>
+             </div>
+           </div>
+        </div>
+      </div>
+
       {/* 3. SYNCHRONIZED FINANCIAL & OPERATIONAL KPIs GRID */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         

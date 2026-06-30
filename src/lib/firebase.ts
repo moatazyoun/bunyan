@@ -85,17 +85,17 @@ try {
 }
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCqxNnSulVuQ3J-Js-mWau-wS0EJ8uNClE",
-  authDomain: "boreal-trail-h6ppv.firebaseapp.com",
-  projectId: "boreal-trail-h6ppv",
-  storageBucket: "boreal-trail-h6ppv.firebasestorage.app",
-  messagingSenderId: "779246676764",
-  appId: "1:779246676764:web:b2b9a2081dd240c34ca8d9",
-  measurementId: "",
-  firestoreDatabaseId: "ai-studio-remix-501502fb-f6ce-49c4-ba1d-3ca11e85bfc5"
+  apiKey: appletConfig.apiKey,
+  authDomain: appletConfig.authDomain,
+  projectId: appletConfig.projectId,
+  storageBucket: appletConfig.storageBucket,
+  messagingSenderId: appletConfig.messagingSenderId,
+  appId: appletConfig.appId,
+  measurementId: appletConfig.measurementId,
+  firestoreDatabaseId: appletConfig.firestoreDatabaseId
 };
 
-console.log('Firebase config:', firebaseConfig);
+console.log('Firebase config updated from appletConfig:', firebaseConfig.projectId);
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 console.log('Firebase app initialized:', app.name);
 
@@ -126,8 +126,31 @@ export const auth = getAuth(app);
 onAuthStateChanged(auth, (user) => {
   if (!user) {
     signInAnonymously(auth).catch((err) => {
-      console.warn("Firestore implicit auth connection notice:", err.message || err);
+        if (err.code !== 'auth/admin-restricted-operation') {
+            console.warn("Firestore implicit auth connection notice:", err.message || err);
+        }
     });
   }
 });
+
+// Helper for implicit auth state if anonymous login is taking time
+export const ensureAuthenticated = async () => {
+    return new Promise((resolve, reject) => {
+        const user = auth.currentUser;
+        if (user) {
+            resolve(user);
+            return;
+        }
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            unsubscribe();
+            if (user) {
+                resolve(user);
+            } else {
+                // If no user, just resolve with null, 
+                // don't force anonymous sign-in if it's restricted.
+                resolve(null);
+            }
+        });
+    });
+};
 

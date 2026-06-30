@@ -389,6 +389,22 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
     return defaultProjId;
   };
 
+  if (projects.length === 0) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-6 text-center px-4 animate-in fade-in duration-500">
+        <div className="w-20 h-20 bg-indigo-50 rounded-[30px] flex items-center justify-center mx-auto border-4 border-white shadow-xl">
+          <Briefcase className="w-10 h-10 text-indigo-600" />
+        </div>
+        <div className="space-y-2 max-w-md">
+          <h2 className="text-2xl font-black text-slate-800 tracking-tight">لا توجد مشروعات مسجلة في هذا الموقع</h2>
+          <p className="text-slate-500 text-sm font-bold leading-relaxed">
+            يرجى التوجه لعلامة تبويب <span className="text-indigo-600 font-black">"المشروعات والإسناد"</span> لإنشاء وتسجيل أول مشروع/عملية حتى تتمكن من عرض وتسجيل بنود المقايسة الفنية الخاصة بها بشكل متزامن مع قاعدة البيانات السحابية.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // Open Form Modal for adding
   const handleOpenAddModal = () => {
     if (userRole === 'viewer') {
@@ -612,31 +628,15 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
           </div>
           <div className="flex-1 w-full">
             <label className="text-[10px] font-black text-slate-400 mb-1 block uppercase tracking-wider">العملية النشطة وموقع المقايسة</label>
-            {projects.length === 0 ? (
-              <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-slate-800">
-                <span className="text-xs font-bold">
-                  لا توجد مشاريع مسجلة بعد.
-                </span>
-                {setProjects && (
-                  <button 
-                    onClick={ensureDefaultProject}
-                    className="bg-amber-600 font-sans text-white font-black text-[10px] rounded-lg px-2.5 py-1.5 hover:bg-amber-700 transition"
-                  >
-                    تفعيل عملية افتراضية
-                  </button>
-                )}
-              </div>
-            ) : (
-              <select 
-                value={selectedProjectId}
-                onChange={(e) => setSelectedProjectId(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs font-black outline-none focus:border-purple-500 focus:bg-white transition-all cursor-pointer text-slate-900"
-              >
-                {projects.map(p => (
-                  <option key={p.id} value={p.id}>{p.name} - ({p.assignmentNumber})</option>
-                ))}
-              </select>
-            )}
+            <select 
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs font-black outline-none focus:border-purple-500 focus:bg-white transition-all cursor-pointer text-slate-900"
+            >
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name} - ({p.assignmentNumber})</option>
+              ))}
+            </select>
           </div>
         </div>
         <div className="h-12 w-[1px] bg-slate-100 hidden md:block" />

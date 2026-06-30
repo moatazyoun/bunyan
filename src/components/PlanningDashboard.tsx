@@ -209,6 +209,35 @@ export default function PlanningDashboard({
   const [aiGeneratingSchedule, setAiGeneratingSchedule] = useState(false);
   const [scheduleGenLogs, setScheduleGenLogs] = useState<string[]>([]);
 
+  // Redesigned Schedule Generation Component (UI Wizard)
+  const renderScheduleGenerationSection = () => (
+    <div className="bg-white border-2 border-purple-100 rounded-3xl p-6 shadow-sm mb-6 animate-in slide-in-from-bottom-2 duration-300">
+      <div className="flex items-start gap-4">
+        <div className="p-3 bg-purple-100 rounded-2xl text-purple-700">
+          <Sparkles className="w-8 h-8" />
+        </div>
+        <div className="flex-1 space-y-2">
+          <h3 className="text-sm font-black text-slate-950">توليد الجدول الزمني الذكي (AI Schedule Wizard)</h3>
+          <p className="text-xs font-bold text-slate-500 max-w-2xl leading-relaxed">
+            محرك الذكاء الاصطناعي يقوم الآن بجلب كافة بنود المقايسة المسجلة (BOQ Items)، وتحليل منطق التبعية الإنشائي (Dependencies)، واحتساب المدد الزمنية المثالية، لتوليد جدول زمني (Gantt Chart) متكامل ومهني.
+          </p>
+          <button
+            onClick={generateScheduleWithAI}
+            disabled={aiGeneratingSchedule}
+            className="bg-black hover:bg-neutral-800 text-white font-black text-xs px-6 py-3 rounded-2xl transition-all flex items-center gap-2 shadow-md disabled:bg-slate-400"
+          >
+            {aiGeneratingSchedule ? (
+              <RefreshCw size={16} className="animate-spin" />
+            ) : (
+              <Sparkles size={16} />
+            )}
+            <span>{aiGeneratingSchedule ? 'جاري التحليل والتوليد...' : 'بدء توليد الجدول الزمني من المقايسة'}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   const generateScheduleWithAI = async () => {
     if (!boqItems || boqItems.length === 0) {
       alert("عذراً! لا توجد بنود مقايسة معتمدة حالياً لتوليد جدول زمني منها. يرجى إدخال أو رفع بنود المقايسة أولاً في تبويب المقايسة.");
@@ -305,6 +334,7 @@ export default function PlanningDashboard({
       }, 1500);
     }
   };
+
 
   const exportScheduleToExcel = () => {
     const dataToExport = filteredTasks.map((task, index) => {
@@ -817,6 +847,7 @@ export default function PlanningDashboard({
           {/* TAB 1: SCHEDULER */}
           {activeTab === 'scheduler' && (
             <div className="space-y-6">
+              {renderScheduleGenerationSection()}
               {/* Controls bar */}
               <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 no-print">
                 <div className="flex flex-wrap gap-3 w-full md:w-auto items-center">
@@ -886,14 +917,6 @@ export default function PlanningDashboard({
                       </button>
                     ))}
                   </div>
-
-                  <button
-                    onClick={generateScheduleWithAI}
-                    className="bg-purple-600 hover:bg-purple-700 text-white font-black text-xs px-3.5 py-2.5 rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
-                  >
-                    <Sparkles size={14} className="text-purple-200" />
-                    <span>توليد الجدول الزمني من المقايسة (AI)</span>
-                  </button>
 
                   <button
                     onClick={runAiOptimization}
