@@ -35,7 +35,7 @@ import {
 import { getSessionLogs, SessionEvent } from '../lib/sessionTracker';
 import { UserItem } from '../types';
 import { confirmWithRandomCode } from '../utils/confirmHelper';
-import { getAuth, getRedirectResult } from 'firebase/auth';
+import { getAuth, getRedirectResult } from '../lib/firebase';
 import { COLOR_THEMES } from '../utils/themeHelper';
 
 interface SettingsTabProps {
@@ -225,7 +225,7 @@ export default function SettingsTab({
 
   const handleRestoreDbBackup = async (file: BackupFile) => {
     if (!selectedSite) return;
-    const isConfirmed = confirmWithRandomCode(
+    const isConfirmed = await confirmWithRandomCode(
       `تنبيه هام جداً:\n\nهل أنت متأكد بنسبة 100% من استعادة النسخة الاحتياطية السحابية المباشرة "${file.name}"؟\n` +
       `هذا الإجراء سيقوم باستبدال وحفظ كافة السجلات والعمال والتكاليف الحالية بهذا الموقع واستبدالها بما في النسخة المحددة.`
     );
@@ -258,7 +258,7 @@ export default function SettingsTab({
 
   const handleDeleteDbBackup = async (file: BackupFile) => {
     if (!selectedSite) return;
-    const isConfirmed = confirmWithRandomCode(`هل أنت متأكد من حذف نسخة البيانات الاحتياطية السحابية المباشرة الفورية؟`);
+    const isConfirmed = await confirmWithRandomCode(`هل أنت متأكد من حذف نسخة البيانات الاحتياطية السحابية المباشرة الفورية؟`);
     if (!isConfirmed) return;
 
     setErrorMsg(null);
@@ -313,12 +313,12 @@ export default function SettingsTab({
     }
   };
 
-  const handleUploadLocalFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadLocalFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const targetInput = e.target;
     const file = targetInput.files?.[0];
     if (!file) return;
 
-    const isConfirmed = confirmWithRandomCode('تحذير:\n\nهل أنت متأكد من رغبتك في استيراد هذه النسخة الاحتياطية المحلية؟ سيتم إعادة كتابة كافة بيانات المشروع النشط بالبيانات المستوردة.');
+    const isConfirmed = await confirmWithRandomCode('تحذير:\n\nهل أنت متأكد من رغبتك في استيراد هذه النسخة الاحتياطية المحلية؟ سيتم إعادة كتابة كافة بيانات المشروع النشط بالبيانات المستوردة.');
     if (!isConfirmed) {
       targetInput.value = '';
       return;

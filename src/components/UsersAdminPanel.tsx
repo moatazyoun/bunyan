@@ -346,9 +346,9 @@ export default function UsersAdminPanel({ currentUser, auditLogs }: UsersAdminPa
               return (
                 <motion.div 
                   layout
-                  initial={{ opacity: 0, y: 15 }}
+                  initial={{ opacity: 1, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
+                  exit={{ opacity: 1, scale: 0.95 }}
                   key={item.username} 
                   className="group bg-white shadow-sm p-6 rounded-[2rem] border border-slate-200 hover:border-amber-500/20 shadow-2xl space-y-5 hover:bg-slate-50 shadow-md transition-all duration-300 relative overflow-hidden flex flex-col justify-between"
                 >
@@ -633,9 +633,9 @@ export default function UsersAdminPanel({ currentUser, auditLogs }: UsersAdminPa
         {showAddModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
             <motion.div 
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 1, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
+              exit={{ opacity: 1, y: 20 }}
               className="bg-white border border-slate-200 p-8 rounded-[3rem] w-full max-w-2xl shadow-3xl overflow-hidden relative"
             >
               <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/5 rounded-full blur-3xl -z-10 translate-x-20 -translate-y-20"></div>
@@ -804,9 +804,9 @@ export default function UsersAdminPanel({ currentUser, auditLogs }: UsersAdminPa
         {editingUser && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 1, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              exit={{ opacity: 1, scale: 0.95 }}
               className="bg-white border border-slate-200 p-8 rounded-[3rem] w-full max-w-3xl shadow-3xl text-right"
               dir="rtl"
             >
@@ -1063,9 +1063,9 @@ export default function UsersAdminPanel({ currentUser, auditLogs }: UsersAdminPa
         {userToDelete && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
             <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.9, opacity: 1 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+              exit={{ scale: 0.9, opacity: 1 }}
               className="bg-white border border-rose-900/30 p-10 rounded-[3.5rem] w-full max-w-sm text-center relative overflow-hidden"
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-rose-600/50"></div>
@@ -1092,7 +1092,7 @@ export default function UsersAdminPanel({ currentUser, auditLogs }: UsersAdminPa
         {siteToDelete && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
             <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.9, opacity: 1 }}
               animate={{ scale: 1, opacity: 1 }}
               className="bg-white border border-rose-500/20 p-8 rounded-[2.5rem] w-full max-w-sm text-center"
             >

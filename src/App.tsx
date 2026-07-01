@@ -119,8 +119,9 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import BunyanLogo from './components/BunyanLogo';
-import * as firestore from 'firebase/firestore';
 import { 
+  db, 
+  ensureAuthenticated,
   doc, 
   getDoc, 
   setDoc,
@@ -130,12 +131,17 @@ import {
   collection, 
   orderBy, 
   onSnapshot 
-} from 'firebase/firestore';
-import { db, ensureAuthenticated } from './lib/firebase';
+} from './lib/firebase';
 import { appendSessionLog } from './lib/sessionTracker';
 import { applyColorTheme, COLOR_THEMES } from './utils/themeHelper';
 import InteractiveBackground from './components/InteractiveBackground';
 import LoadingScreen from './components/LoadingScreen';
+
+// Safe alert helper
+const safeAlert = (msg: string) => {
+  try { window.alert(msg); } catch (e) { console.warn("Alert prevented by browser:", msg); }
+};
+
 
 function sanitizeLoadedData<T extends { id: string; referenceNo?: string }>(items: any[], prefix: string): T[] {
   if (!items || !Array.isArray(items)) return [];
@@ -229,7 +235,18 @@ export default function App() {
 
   const [selectedSite, setSelectedSite] = useState<{id: string; nameAr: string; location: string; description: string} | null>(() => {
     const saved = localStorage.getItem('bunyan_current_site');
-    return saved ? JSON.parse(saved) : null;
+    if (!saved) return null;
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed && typeof parsed === 'object' && parsed.id && parsed.nameAr) {
+        return parsed;
+      }
+      localStorage.removeItem('bunyan_current_site');
+      return null;
+    } catch {
+      localStorage.removeItem('bunyan_current_site');
+      return null;
+    }
   });
 
   const [isDbLoaded, setIsDbLoaded] = useState<boolean>(false);
@@ -316,13 +333,25 @@ export default function App() {
   } | null>(null);
 
   const [globalConfirmInput, setGlobalConfirmInput] = useState('');
+  const [confirmError, setConfirmError] = useState('');
+  const [globalAlert, setGlobalAlert] = useState<string | null>(null);
 
   useEffect(() => {
     setConfirmListener((req) => {
       setGlobalConfirm(req);
       setGlobalConfirmInput('');
+      setConfirmError('');
     });
     return () => setConfirmListener(() => {});
+  }, []);
+
+  useEffect(() => {
+    const handleAppAlert = (e: Event) => {
+      const customEvent = e as CustomEvent<{ message: string }>;
+      setGlobalAlert(customEvent.detail?.message || '');
+    };
+    window.addEventListener('app-alert', handleAppAlert);
+    return () => window.removeEventListener('app-alert', handleAppAlert);
   }, []);
 
   // DB Connection status continuous check
@@ -419,14 +448,14 @@ export default function App() {
 
         if (isAction && !isNav) {
           blockEvent(e);
-          alert('عذراً، حالة حسابك (مشاهد) ولا تملك صلاحية لهذه العملية.');
+          safeAlert('عذراً، حالة حسابك (مشاهد) ولا تملك صلاحية لهذه العملية.');
         }
       }
     };
 
     const handleFormSubmit = (e: SubmitEvent) => {
       blockEvent(e);
-      alert('عذراً، حالة حسابك (مشاهد) ولا تملك صلاحية للحفظ.');
+      safeAlert('عذراً، حالة حسابك (مشاهد) ولا تملك صلاحية للحفظ.');
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -650,21 +679,36 @@ export default function App() {
 
       const timer = setTimeout(async () => {
         try {
+          // Ensure client is authenticated anonymously before writing
+          await ensureAuthenticated();
+
           // Deep clean payload of undefined values which Firestore doesn't accept
           const cleanPayload = JSON.parse(JSON.stringify(siteDataPayload));
           
-          // Use reliable server API instead of direct client-side Firestore SDK
-          const response = await fetch(`/api/site/${selectedSite.id}/save`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ data: cleanPayload })
-          });
-          if (!response.ok) {
-            throw new Error('Failed to save data to database.');
-          }
+          // Save directly to Firestore from the browser using the client SDK
+          const docRef = doc(db, 'projects', selectedSite.id);
+          await setDoc(docRef, cleanPayload);
+          setDbConnected(true);
         } catch (err) {
-          console.warn("Error saving site data via API:", err);
-          setDbConnected(false);
+          console.warn("Error saving site data directly:", err);
+          
+          // Fallback to server API if direct save fails
+          try {
+            const cleanPayload = JSON.parse(JSON.stringify(siteDataPayload));
+            const response = await fetch(`/api/site/${selectedSite.id}/save`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ data: cleanPayload })
+            });
+            if (response.ok) {
+              setDbConnected(true);
+            } else {
+              setDbConnected(false);
+            }
+          } catch (apiErr) {
+            console.warn("Fallback API saving also failed:", apiErr);
+            setDbConnected(false);
+          }
         }
       }, 500);
       return () => clearTimeout(timer);
@@ -765,14 +809,30 @@ export default function App() {
           let hasDoc = false;
           let data: any = null;
 
-          // Using reliable server API to fetch site data
-          const res = await fetch(`/api/site/${selectedSite.id}/data`);
-          if (!res.ok) {
-            throw new Error(`Server returned status ${res.status}`);
-          }
-          data = await res.json();
-          if (data && Object.keys(data).length > 0) {
-            hasDoc = true;
+          try {
+            // Ensure client is authenticated anonymously before reading
+            await ensureAuthenticated();
+
+            // Load directly from Firestore from the browser using the client SDK
+            const docRef = doc(db, 'projects', selectedSite.id);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+              data = docSnap.data();
+              hasDoc = true;
+            }
+          } catch (directErr) {
+            console.warn("Direct Firestore load failed, falling back to server API:", directErr);
+            // Fallback to server API to fetch site data
+            const res = await fetch(`/api/site/${selectedSite.id}/data`);
+            if (res.ok) {
+              data = await res.json();
+              if (data && Object.keys(data).length > 0) {
+                hasDoc = true;
+              }
+            } else {
+              const errorData = await res.json().catch(() => ({}));
+              throw new Error(`Server returned status ${res.status}: ${JSON.stringify(errorData)}`);
+            }
           }
           
           if (hasDoc && data) {
@@ -891,7 +951,7 @@ export default function App() {
 
         } catch (err) {
           console.error("Complete catalog loading error:", err);
-          alert("فشل الاتصال بقاعدة البيانات. لا يمكن تحميل بيانات الموقع. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.");
+          safeAlert(`فشل الاتصال بقاعدة البيانات. لا يمكن تحميل بيانات الموقع. تفاصيل الخطأ: ${err.message}`);
           setSelectedSite(null);
           setIsDbLoaded(false);
         }
@@ -1213,7 +1273,8 @@ export default function App() {
         username: user?.username || 'engineer',
         actionAr: `${action} [${module}]`,
         type: 'site',
-        detailsAr: `${details} (الرقم المرجعي: ${refNo})`
+        detailsAr: `${details} (الرقم المرجعي: ${refNo})`,
+        referenceNo: refNo
       })
     }).catch(console.error);
   };
@@ -1304,7 +1365,7 @@ export default function App() {
   // MAIN TRANSACTION HANDLERS
   const handleAddTransaction = (newTx: Omit<Transaction, 'id'>) => {
     if (dbConnected === false) {
-      alert('⚠️ تنبيه حماية التسجيل الآمن مفعل: لا تتوفر تغطية لقاعدة البيانات السحابية حالياً. تم تعليق إضافة المعاملات مؤقتاً لضمان عدم حدوث تباين في الحسابات بين أجهزة المهندسين.');
+      safeAlert('⚠️ تنبيه حماية التسجيل الآمن مفعل: لا تتوفر تغطية لقاعدة البيانات السحابية حالياً. تم تعليق إضافة المعاملات مؤقتاً لضمان عدم حدوث تباين في الحسابات بين أجهزة المهندسين.');
       return;
     }
     const finalRef = (newTx as any).referenceNo?.trim() || `REF-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -1325,7 +1386,7 @@ export default function App() {
 
   const handleDeleteTransaction = (id: string) => {
     if (dbConnected === false) {
-      alert('⚠️ تنبيه حماية التسجيل الآمن مفعل: لا تتوفر تغطية لقاعدة البيانات السحابية حالياً. تم تعليق حذف المعاملات لحين عودة الاتصال ومزامنة البيانات.');
+      safeAlert('⚠️ تنبيه حماية التسجيل الآمن مفعل: لا تتوفر تغطية لقاعدة البيانات السحابية حالياً. تم تعليق حذف المعاملات لحين عودة الاتصال ومزامنة البيانات.');
       return;
     }
     const target = transactions.find(t => t.id === id);
@@ -1336,7 +1397,7 @@ export default function App() {
 
   const handleUpdateTransaction = (updatedTx: Transaction) => {
     if (dbConnected === false) {
-      alert('⚠️ تنبيه حماية التسجيل الآمن مفعل: لا تتوفر تغطية لقاعدة البيانات السحابية حالياً. تم تعليق تعديل الحركات لضمان تماسك السجلات بين الطواقم الإنشائية المختلفة.');
+      safeAlert('⚠️ تنبيه حماية التسجيل الآمن مفعل: لا تتوفر تغطية لقاعدة البيانات السحابية حالياً. تم تعليق تعديل الحركات لضمان تماسك السجلات بين الطواقم الإنشائية المختلفة.');
       return;
     }
     const finalRef = updatedTx.referenceNo?.trim() || `REF-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -1347,7 +1408,7 @@ export default function App() {
 
   const handleAddCustody = (name: string, amount: number, notes?: string) => {
     if (dbConnected === false) {
-      alert('⚠️ تنبيه حماية التسجيل الآمن مفعل: لا يمكن فتح عهد مالي جديدة للعهدة الموقع بدون مزامنة سحابية نشطة مع الإدارة المالية المركزية.');
+      safeAlert('⚠️ تنبيه حماية التسجيل الآمن مفعل: لا يمكن فتح عهد مالي جديدة للعهدة الموقع بدون مزامنة سحابية نشطة مع الإدارة المالية المركزية.');
       return;
     }
     const finalRef = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -1698,7 +1759,7 @@ export default function App() {
 
   const handleDownloadLocalFile = () => {
     if (!selectedSite) {
-      alert('فضلاً، يجب تسجيل موقع عمل نشط للتصدير.');
+      safeAlert('فضلاً، يجب تسجيل موقع عمل نشط للتصدير.');
       return;
     }
     try {
@@ -1722,50 +1783,154 @@ export default function App() {
       downloadAnchor.click();
       downloadAnchor.remove();
     } catch (err: any) {
-      alert('فشل إعداد التصدير المحلي للملف: ' + err.message);
+      safeAlert('فشل إعداد التصدير المحلي للملف: ' + err.message);
     }
   };
 
-  const handleRestoreBackup = (backupDoc: any) => {
+  const handleRestoreBackup = async (backupDoc: any) => {
     console.log("Restoring backup:", backupDoc);
     if (!backupDoc || typeof backupDoc !== 'object') {
-      alert('ملف البيانات غير صالح الاستيراد.');
+      safeAlert('ملف البيانات غير صالح الاستيراد.');
       return;
     }
     const data = backupDoc.payload || backupDoc;
     console.log("Backup payload data:", data);
     
-    if (data.transactions) setTransactions(sanitizeLoadedData<Transaction>(data.transactions, 'tx'));
-    if (data.custodies) setCustodies(sanitizeLoadedData<CustodyRecord>(data.custodies, 'cust'));
-    if (data.contractors) setContractors(sanitizeLoadedData<ContractorCertificate>(data.contractors, 'sub'));
-    if (data.equipment) setEquipment(sanitizeLoadedData<EquipmentRecord>(data.equipment, 'eq'));
-    if (data.maintenanceOrders) setMaintenanceOrders(sanitizeLoadedData<MaintenanceOrder>(data.maintenanceOrders, 'maint'));
-    if (data.labTests) setLabTests(sanitizeLoadedData<LabTestRecord>(data.labTests, 'test'));
-    if (data.hseIncidents) setHseIncidents(sanitizeLoadedData<HseIncidentRecord>(data.hseIncidents, 'hse'));
-    if (data.wbsTasks) setWbsTasks(sanitizeLoadedData<WbsTaskRecord>(data.wbsTasks, 'task'));
-    if (data.warehouseItems) setWarehouseItems(sanitizeLoadedData<WarehouseItemRecord>(data.warehouseItems, 'wh'));
-    if (data.mrirLogs) setMrirLogs(sanitizeLoadedData<MRIRRecord>(data.mrirLogs, 'mrir'));
-    if (data.mrnLogs) setMrnLogs(sanitizeLoadedData<MRNRecord>(data.mrnLogs, 'mrn'));
-    if (data.warehouseAuditLogs) setWarehouseAuditLogs(sanitizeLoadedData<AuditCountRecord>(data.warehouseAuditLogs, 'waudit'));
-    if (data.auditLogs) setAuditLogs(sanitizeLoadedData<AuditTrailRecord>(data.auditLogs, 'audit'));
-    if (data.workers) setWorkers(sanitizeLoadedData<SiteWorker>(data.workers, 'w'));
-    if (data.attendanceLogs) setAttendanceLogs(data.attendanceLogs || []);
-    if (data.salaryPayments) setSalaryPayments(data.salaryPayments || []);
-    if (data.extracts) setExtracts(sanitizeLoadedData<CustomExtract>(data.extracts, 'ext'));
-    if (data.projects) setProjects(sanitizeLoadedData<Project>(data.projects, 'p'));
-    if (data.boqItems) setBoqItems(sanitizeLoadedData<BOQItem>(data.boqItems, 'boq'));
-    if (data.submissions) setSubmissions(sanitizeLoadedData<Submission>(data.submissions, 'sub'));
-    if (data.subcontractors) setSubcontractors(sanitizeLoadedData<Subcontractor>(data.subcontractors, 'sub'));
-    if (data.equipmentSummary) setEquipmentList(sanitizeLoadedData<EquipmentSummary>(data.equipmentSummary, 'eqsum'));
+    const sanTransactions = sanitizeLoadedData<Transaction>(data.transactions || [], 'tx');
+    const sanCustodies = sanitizeLoadedData<CustodyRecord>(data.custodies || [], 'cust');
+    const sanContractors = sanitizeLoadedData<ContractorCertificate>(data.contractors || [], 'sub');
+    const sanEquipment = sanitizeLoadedData<EquipmentRecord>(data.equipment || [], 'eq');
+    const sanMaintenanceOrders = sanitizeLoadedData<MaintenanceOrder>(data.maintenanceOrders || [], 'maint');
+    const sanLabTests = sanitizeLoadedData<LabTestRecord>(data.labTests || [], 'test');
+    const sanHseIncidents = sanitizeLoadedData<HseIncidentRecord>(data.hseIncidents || [], 'hse');
+    const sanWbsTasks = sanitizeLoadedData<WbsTaskRecord>(data.wbsTasks || [], 'task');
+    const sanWarehouseItems = sanitizeLoadedData<WarehouseItemRecord>(data.warehouseItems || [], 'wh');
+    const sanMrirLogs = sanitizeLoadedData<MRIRRecord>(data.mrirLogs || [], 'mrir');
+    const sanMrnLogs = sanitizeLoadedData<MRNRecord>(data.mrnLogs || [], 'mrn');
+    const sanWarehouseAuditLogs = sanitizeLoadedData<AuditCountRecord>(data.warehouseAuditLogs || [], 'waudit');
+    const sanAuditLogs = sanitizeLoadedData<AuditTrailRecord>(data.auditLogs || [], 'audit');
+    const sanWorkers = sanitizeLoadedData<SiteWorker>(data.workers || [], 'w');
+    const sanAttendanceLogs = data.attendanceLogs || [];
+    const sanSalaryPayments = data.salaryPayments || [];
+    const sanExtracts = sanitizeLoadedData<CustomExtract>(data.extracts || [], 'ext');
+    const sanProjects = sanitizeLoadedData<Project>(data.projects || [], 'p');
+    const sanBoqItems = sanitizeLoadedData<BOQItem>(data.boqItems || [], 'boq');
+    const sanSubmissions = sanitizeLoadedData<Submission>(data.submissions || [], 'sub');
+    const sanSubcontractors = sanitizeLoadedData<Subcontractor>(data.subcontractors || [], 'sub');
+    const sanEquipmentList = sanitizeLoadedData<EquipmentSummary>(data.equipmentSummary || data.equipmentList || [], 'eqsum');
+    const sanSupplyRecords = data.supplyRecords || [];
+    const sanSupplyItems = data.supplyItems || [];
+    const sanCubicCertificates = data.cubicCertificates || [];
+    const sanContractorsReport = data.contractorsReport || [];
+    const sanFuelLogs = data.fuelLogs || [];
+    const sanCustodyBudget = data.custodyBudget !== undefined ? data.custodyBudget : 0;
+    const sanFuelStations = data.fuelStations || [];
+    const sanRisks = data.risks || [];
+    const sanDcrRecords = data.dcrRecords || [];
+    const sanWeeklyReportBenodTree = data.weeklyReportBenodTree || null;
+    const sanWeeklyReportClosingDayIndex = data.weeklyReportClosingDayIndex !== undefined ? data.weeklyReportClosingDayIndex : 2;
+    const sanWeeklyReportSignatures = data.weeklyReportSignatures || {
+      sig1Title: 'المحاسب المالي',
+      sig2Title: 'مهندس أول المشروع والمراجعة',
+      sig3Title: 'مدير عام قطاع التنفيذ للمشاريع',
+      sig1Name: '',
+      sig2Name: '',
+      sig3Name: '',
+    };
+
+    // Update frontend React states
+    setTransactions(sanTransactions);
+    setCustodies(sanCustodies);
+    setContractors(sanContractors);
+    setEquipment(sanEquipment);
+    setMaintenanceOrders(sanMaintenanceOrders);
+    setLabTests(sanLabTests);
+    setHseIncidents(sanHseIncidents);
+    setWbsTasks(sanWbsTasks);
+    setWarehouseItems(sanWarehouseItems);
+    setMrirLogs(sanMrirLogs);
+    setMrnLogs(sanMrnLogs);
+    setWarehouseAuditLogs(sanWarehouseAuditLogs);
+    setAuditLogs(sanAuditLogs);
+    setWorkers(sanWorkers);
+    setAttendanceLogs(sanAttendanceLogs);
+    setSalaryPayments(sanSalaryPayments);
+    setExtracts(sanExtracts);
+    setProjects(sanProjects);
+    setBoqItems(sanBoqItems);
+    setSubmissions(sanSubmissions);
+    setSubcontractors(sanSubcontractors);
+    setEquipmentList(sanEquipmentList);
+    setSupplyRecords(sanSupplyRecords);
+    setSupplyItems(sanSupplyItems);
+    setCubicCertificates(sanCubicCertificates);
+    setContractorsReport(sanContractorsReport);
+    setFuelLogs(sanFuelLogs);
+    setCustodyBudget(sanCustodyBudget);
+    setFuelStations(sanFuelStations);
+    setRisks(sanRisks);
+    setDcrRecords(sanDcrRecords);
+    setWeeklyReportBenodTree(sanWeeklyReportBenodTree);
+    setWeeklyReportClosingDayIndex(sanWeeklyReportClosingDayIndex);
+    setWeeklyReportSignatures(sanWeeklyReportSignatures);
     
-    if (data.supplyRecords) setSupplyRecords(data.supplyRecords);
-    if (data.supplyItems) setSupplyItems(data.supplyItems);
-    if (data.cubicCertificates) setCubicCertificates(data.cubicCertificates);
-    if (data.contractorsReport) setContractorsReport(data.contractorsReport);
-    if (data.fuelLogs) setFuelLogs(data.fuelLogs);
-    if (data.custodyBudget !== undefined) setCustodyBudget(data.custodyBudget);
-    
-    alert('تمت استعادة البيانات بنجاح!');
+    // Immediately save to PostgreSQL database on server via direct API call
+    if (selectedSite) {
+      const siteDataPayload = {
+        transactions: sanTransactions,
+        custodies: sanCustodies,
+        contractors: sanContractors,
+        equipment: sanEquipment,
+        maintenanceOrders: sanMaintenanceOrders,
+        labTests: sanLabTests,
+        hseIncidents: sanHseIncidents,
+        wbsTasks: sanWbsTasks,
+        warehouseItems: sanWarehouseItems,
+        mrirLogs: sanMrirLogs,
+        mrnLogs: sanMrnLogs,
+        warehouseAuditLogs: sanWarehouseAuditLogs,
+        auditLogs: sanAuditLogs,
+        workers: sanWorkers,
+        attendanceLogs: sanAttendanceLogs,
+        salaryPayments: sanSalaryPayments,
+        extracts: sanExtracts,
+        projects: sanProjects,
+        boqItems: sanBoqItems,
+        submissions: sanSubmissions,
+        subcontractors: sanSubcontractors,
+        equipmentSummary: sanEquipmentList,
+        supplyRecords: sanSupplyRecords,
+        supplyItems: sanSupplyItems,
+        cubicCertificates: sanCubicCertificates,
+        contractorsReport: sanContractorsReport,
+        fuelLogs: sanFuelLogs,
+        custodyBudget: sanCustodyBudget,
+        fuelStations: sanFuelStations,
+        risks: sanRisks,
+        dcrRecords: sanDcrRecords,
+        weeklyReportBenodTree: sanWeeklyReportBenodTree,
+        weeklyReportClosingDayIndex: sanWeeklyReportClosingDayIndex,
+        weeklyReportSignatures: sanWeeklyReportSignatures
+      };
+
+      try {
+        const response = await fetch(`/api/site/${selectedSite.id}/save`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: siteDataPayload })
+        });
+        if (response.ok) {
+          safeAlert('تمت استعادة البيانات بنجاح وحفظها مباشرة في قاعدة البيانات السحابية!');
+        } else {
+          safeAlert('تمت الاستعادة مؤقتاً، ولكن حدث خطأ أثناء الحفظ على السيرفر.');
+        }
+      } catch (err) {
+        console.error("Failed to save restored data to PostgreSQL:", err);
+        safeAlert('تمت الاستعادة محلياً، ولكن تعذر الاتصال بالخادم لحفظ التحديثات.');
+      }
+    } else {
+      safeAlert('تمت استعادة البيانات بنجاح!');
+    }
   };
 
   // Tab Router
@@ -2002,6 +2167,7 @@ export default function App() {
       case 'extracts':
         return (
           <ExtractsTab 
+            siteId={selectedSite.id}
             projectId={selectedSite.id}
             projects={projects} 
             boqItems={boqItems} 
@@ -2011,6 +2177,7 @@ export default function App() {
             branding={{companyName: 'بنيان'}}
             extractType="Owner"
             userRole={userRole}
+            addAuditLog={addAuditLog}
           />
         );
 
@@ -2158,7 +2325,7 @@ export default function App() {
 
   if (!user) {
     return (
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <motion.div initial={{ opacity: 1 }} animate={{ opacity: 1 }} exit={{ opacity: 1 }}>
         <LoginScreen 
           onLogin={(u) => { 
             setUser(u); 
@@ -2174,7 +2341,7 @@ export default function App() {
 
   if (!selectedSite) {
     return (
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+      <motion.div initial={{ opacity: 1, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 1, y: -20 }}>
         <SiteSelectionScreen 
           user={user} 
           onSiteSelected={(site) => {
@@ -2201,7 +2368,7 @@ export default function App() {
 
   return (
     <motion.div 
-      initial={{ opacity: 0 }} 
+      initial={{ opacity: 1 }} 
       animate={{ opacity: 1 }} 
       transition={{ duration: 0.8 }}
       className="min-h-screen bg-slate-50/75 flex relative z-10" 
@@ -2368,9 +2535,9 @@ export default function App() {
         {showNotificationModal && activeNotifications.length > 0 && (
           <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md" dir="rtl">
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.9, opacity: 1 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+              exit={{ scale: 0.9, opacity: 1 }}
               className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
             >
               <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
@@ -2406,9 +2573,9 @@ export default function App() {
         {showBackupReminder && (
           <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md" dir="rtl">
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.9, opacity: 1 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+              exit={{ scale: 0.9, opacity: 1 }}
               className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col p-6 space-y-4"
             >
               <h3 className="text-lg font-black text-slate-900">تذكير بالنسخ الاحتياطي اليومي</h3>
@@ -2440,9 +2607,9 @@ export default function App() {
         {globalConfirm && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]" dir="rtl">
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              initial={{ opacity: 1, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              exit={{ opacity: 1, scale: 0.95, y: 15 }}
               className="bg-white rounded-3xl border-t-4 border-rose-600 p-6 w-full max-w-md shadow-2xl relative overflow-hidden"
             >
               <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
@@ -2473,6 +2640,12 @@ export default function App() {
                 />
               </div>
               
+              {confirmError && (
+                <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-2xl text-[11px] font-black mb-4 text-center">
+                  {confirmError}
+                </div>
+              )}
+
               <div className="flex gap-2.5">
                 <button 
                   type="button"
@@ -2480,7 +2653,7 @@ export default function App() {
                     if (globalConfirmInput === globalConfirm.randomCode) {
                       globalConfirm.resolve(true);
                     } else {
-                      alert('كود التأكيد غير صحيح. يرجى المحاولة مرة أخرى.');
+                      setConfirmError('كود التأكيد المكتوب غير مطابق للرقم الموضح أعلاه. يرجى إعادة التحقق.');
                     }
                   }}
                   disabled={globalConfirmInput !== globalConfirm.randomCode}
@@ -2500,6 +2673,51 @@ export default function App() {
                   className="py-3.5 px-6 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl transition duration-200 border border-slate-200 cursor-pointer flex-1 text-center"
                 >
                   إلغاء وتراجع
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Global Custom Alert Modal (Light, Purple & Black) */}
+      <AnimatePresence>
+        {globalAlert !== null && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[10000]" dir="rtl">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="bg-white rounded-3xl border-t-4 border-purple-600 p-6 w-full max-w-sm shadow-2xl relative overflow-hidden text-right border border-slate-100"
+            >
+              <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+                <div className="flex items-center gap-2 text-purple-700">
+                  <span className="p-1.5 bg-purple-50 rounded-xl text-purple-600">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </span>
+                  <h3 className="text-sm font-black">تنبيه النظام</h3>
+                </div>
+                <button 
+                  onClick={() => setGlobalAlert(null)}
+                  className="p-1.5 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <p className="mb-6 text-slate-700 text-xs font-bold leading-relaxed">
+                {globalAlert}
+              </p>
+              
+              <div className="flex justify-end">
+                <button 
+                  type="button"
+                  onClick={() => setGlobalAlert(null)}
+                  className="w-full py-3 px-5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black rounded-xl transition duration-200 shadow-lg shadow-purple-100 active:scale-95 cursor-pointer text-center"
+                >
+                  حسناً، فهمت
                 </button>
               </div>
             </motion.div>

@@ -94,12 +94,12 @@ export default function QualityDashboard({
     setShowAddModal(false);
   };
 
-  const handleDeleteLabTest = (id: string) => {
+  const handleDeleteLabTest = async (id: string) => {
     if (userRole === 'viewer') {
       alert('عذراً، لا تملك الصلاحية لحذف السجلات.');
       return;
     }
-    if (confirmWithRandomCode('هل أنت متأكد من حذف هذا الاختبار الفني نهائياً؟')) {
+    if (await confirmWithRandomCode('هل أنت متأكد من حذف هذا الاختبار الفني نهائياً؟')) {
       const target = labTests.find(t => t.id === id);
       setLabTests(prev => prev.filter(t => t.id !== id));
       if (addAuditLog && target) {

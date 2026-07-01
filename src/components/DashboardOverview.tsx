@@ -414,6 +414,57 @@ export default function DashboardOverview({
     );
   }, [transactions, searchQuery]);
 
+  const projectDurations = useMemo(() => {
+    const list = (projects && projects.length > 0) ? projects : [
+      {
+        id: 'default-proj-1',
+        name: 'مشروع إنشاء وتطوير طريق البستان المزدوج',
+        assignmentDate: '2026-01-01',
+        handoverDate: '2026-02-15',
+        durationMonths: 10,
+        status: 'Active'
+      }
+    ];
+    
+    const todayMs = new Date().getTime();
+    
+    return list.map(p => {
+      // تاريخ استلام الموقع
+      const start = new Date(p.handoverDate || p.assignmentDate || '2026-01-01');
+      
+      // نهاية الأعمال = تاريخ استلام الموقع + مدة تنفيذ الأعمال بالشهور
+      const months = Number(p.durationMonths) || 12;
+      const end = new Date(start);
+      end.setMonth(end.getMonth() + months);
+      
+      const totalTime = end.getTime() - start.getTime();
+      const elapsedTime = todayMs - start.getTime();
+      const remainingTime = end.getTime() - todayMs;
+      
+      const totalDays = Math.max(1, Math.ceil(totalTime / (1000 * 60 * 60 * 24)));
+      const elapsedDays = Math.max(0, Math.ceil(elapsedTime / (1000 * 60 * 60 * 24)));
+      const remainingDays = Math.max(0, Math.ceil(remainingTime / (1000 * 60 * 60 * 24)));
+      
+      // Calculate remaining % vs total project duration
+      let pctRemaining = 0;
+      if (totalDays > 0) {
+        pctRemaining = Math.max(0, Math.min(100, (remainingDays / totalDays) * 100));
+      }
+      
+      return {
+        id: p.id,
+        name: p.name,
+        remainingDays,
+        totalDays,
+        pctRemaining: Math.round(pctRemaining),
+        isOverdue: remainingTime < 0,
+        handoverDate: start.toISOString().split('T')[0],
+        endDate: end.toISOString().split('T')[0],
+        durationMonths: months
+      };
+    });
+  }, [projects]);
+
   const handlePrint = () => {
     window.print();
   };
@@ -448,7 +499,7 @@ export default function DashboardOverview({
               <div className="h-2 w-2 rounded-full bg-purple-600 animate-pulse"></div>
             </div>
             <h2 className="text-3xl lg:text-4xl font-black text-gray-900 tracking-tight leading-tight">
-              غرفة التحكم والتحليل التنفيذي
+              لوحة التحكم
             </h2>
             <p className="text-xs lg:text-sm text-gray-500 font-medium max-w-2xl leading-relaxed">
               منصة قيادة موحدة لمشروع بنيان. تتيح لك مراقبة كفاءة الإنتاج، التدفقات النقدية والعهد التشغيلية، مستجدات التوريد، والاعتمادات الهندسية للمخططات بشكل متزامن وبأعلى معايير جودة التصميم والتحليل الرقمي.
@@ -520,18 +571,35 @@ export default function DashboardOverview({
              <button onClick={() => setActiveTab('deliveries')} className="text-xs font-bold bg-gray-50 hover:bg-gray-100 p-3 rounded-lg text-gray-700 transition">طلب فحص استلام</button>
           </div>
         </div>
-        <div className="bg-white border border-gray-100 p-5 rounded-2xl shadow-sm">
-           <h4 className="text-sm font-black text-gray-900 mb-4 flex items-center justify-end gap-2">تنبيهات حرجة <AlertCircle className="text-rose-600" size={16} /></h4>
-           <div className="space-y-2">
-             <div className="flex justify-between items-center text-xs font-bold bg-rose-50 p-3 rounded-lg text-rose-800">
-               <span>{stats.lowStockItems.length} أصناف مخزنية بحاجة لتوريد</span>
-               <span className="bg-rose-100 px-2 py-0.5 rounded">تحقق</span>
-             </div>
-             <div className="flex justify-between items-center text-xs font-bold bg-amber-50 p-3 rounded-lg text-amber-800">
-               <span>{stats.criticalIncidents} وقائع سلامة حرجة</span>
-               <span className="bg-amber-100 px-2 py-0.5 rounded">راجع</span>
-             </div>
-           </div>
+        <div className="bg-white border border-gray-100 p-5 rounded-2xl shadow-sm flex flex-col justify-between">
+          <h4 className="text-sm font-black text-gray-900 mb-4 flex items-center justify-end gap-2">
+            <span>المدد المتبقية للمشروعات</span>
+            <Clock className="text-purple-600" size={16} />
+          </h4>
+          <div className="space-y-4">
+            {projectDurations.slice(0, 3).map((proj) => (
+              <div key={proj.id} className="space-y-1.5 text-right">
+                <div className="flex justify-between items-center text-xs font-bold">
+                  <span className="text-purple-700 font-mono bg-purple-50 px-2 py-0.5 rounded">
+                    {proj.remainingDays > 0 ? `${proj.remainingDays} يوم متبقي` : 'منتهي أو متأخر'}
+                  </span>
+                  <span className="text-gray-900 truncate max-w-[180px]" title={proj.name}>
+                    {proj.name}
+                  </span>
+                </div>
+                <div className="relative w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+                  <div 
+                    className="bg-purple-600 h-full rounded-full transition-all duration-500" 
+                    style={{ width: `${proj.pctRemaining}%` }}
+                  ></div>
+                </div>
+                <div className="flex justify-between text-[10px] text-gray-400 font-bold">
+                  <span>المدة الكلية: {proj.totalDays} يوم ({proj.durationMonths} شهر)</span>
+                  <span className="font-mono">استلام الموقع: {proj.handoverDate}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

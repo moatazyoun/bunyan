@@ -58,10 +58,10 @@ export default function SiteSelectionScreen({
 
   // Hierarchy Navigation States
   const [viewMode, setViewMode] = useState<'grid' | 'hierarchy'>(
-    user?.username.toLowerCase() === 'moataz' ? 'hierarchy' : 'grid'
+    (user?.username || '').toLowerCase() === 'moataz' ? 'hierarchy' : 'grid'
   );
   const [adminsList, setAdminsList] = useState<any[]>([]);
-  const [selectedAdminUsername, setSelectedAdminUsername] = useState<string>(user?.tenantId || user?.username.toLowerCase() || 'moataz');
+  const [selectedAdminUsername, setSelectedAdminUsername] = useState<string>(user?.tenantId || (user?.username || '').toLowerCase() || 'moataz');
   const [selectedSiteIdForHierarchy, setSelectedSiteIdForHierarchy] = useState<string>('');
   
   // Hierarchy search and filter states
@@ -74,7 +74,7 @@ export default function SiteSelectionScreen({
   const [newSiteName, setNewSiteName] = useState('');
   const [newSiteLoc, setNewSiteLoc] = useState('');
   const [newSiteDesc, setNewSiteDesc] = useState('');
-  const [newSiteTenantId, setNewSiteTenantId] = useState(user?.tenantId || user?.username.toLowerCase() || 'moataz');
+  const [newSiteTenantId, setNewSiteTenantId] = useState(user?.tenantId || (user?.username || '').toLowerCase() || 'moataz');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Edit Mode state
@@ -418,7 +418,7 @@ export default function SiteSelectionScreen({
       if (response.ok) {
         setSites(data);
         
-        const currentTenantId = user?.tenantId || user?.username.toLowerCase() || 'moataz';
+        const currentTenantId = user?.tenantId || (user?.username || '').toLowerCase() || 'moataz';
         const initialAdmin = currentTenantId;
         setSelectedAdminUsername(initialAdmin);
 
@@ -633,7 +633,7 @@ export default function SiteSelectionScreen({
           nameAr: newSiteName.trim(),
           location: newSiteLoc.trim(),
           description: newSiteDesc.trim(),
-          tenantId: user?.username.toLowerCase() === 'moataz' ? newSiteTenantId : (user?.tenantId || 'moataz')
+          tenantId: (user?.username || '').toLowerCase() === 'moataz' ? newSiteTenantId : (user?.tenantId || 'moataz')
         })
       });
 
@@ -836,7 +836,7 @@ export default function SiteSelectionScreen({
           </div>
 
           {/* View Mode Switching Controls */}
-          {user?.username.toLowerCase() === 'moataz' && (
+          {(user?.username || '').toLowerCase() === 'moataz' && (
             <div className="flex gap-1.5 bg-slate-100 p-1.5 rounded-2xl self-start border border-slate-200 shadow-inner">
               <button
                 onClick={() => setViewMode('hierarchy')}
@@ -868,9 +868,9 @@ export default function SiteSelectionScreen({
         <AnimatePresence mode="popLayout">
           {errorMsg && (
             <motion.div 
-              initial={{ y: -10, opacity: 0 }}
+              initial={{ y: -10, opacity: 1 }}
               animate={{ y: 0, opacity: 1 }}
-              exit={{ y: -10, opacity: 0 }}
+              exit={{ y: -10, opacity: 1 }}
               className="p-3.5 mb-5 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold rounded-2xl max-w-2xl flex items-center gap-2"
             >
               <AlertTriangle size={15} className="text-rose-500 shrink-0" />
@@ -880,9 +880,9 @@ export default function SiteSelectionScreen({
 
           {successMsg && (
             <motion.div 
-              initial={{ y: -10, opacity: 0 }}
+              initial={{ y: -10, opacity: 1 }}
               animate={{ y: 0, opacity: 1 }}
-              exit={{ y: -10, opacity: 0 }}
+              exit={{ y: -10, opacity: 1 }}
               className="p-3.5 mb-5 bg-emerald-50 border border-emerald-250 text-emerald-800 text-xs font-bold rounded-2xl max-w-2xl flex items-center gap-2 shadow-sm"
             >
               <CheckCircle2 size={16} className="text-emerald-500 shrink-0 animate-bounce" />
@@ -1122,7 +1122,7 @@ export default function SiteSelectionScreen({
                     <span className="w-5 h-5 rounded-full bg-purple-600 text-white text-[10px] font-black flex items-center justify-center font-mono">٢</span>
                     <span className="text-xs font-extrabold text-slate-900">مدراء قطاعات الفروع</span>
                   </div>
-                  {user?.username.toLowerCase() === 'moataz' && (
+                  {(user?.username || '').toLowerCase() === 'moataz' && (
                     <button
                       onClick={() => {
                         setIsEditingAdmin(false);
@@ -1215,7 +1215,7 @@ export default function SiteSelectionScreen({
                             </div>
                             
                             {/* Quick edit/delete controls */}
-                            {user?.username.toLowerCase() === 'moataz' && (
+                            {(user?.username || '').toLowerCase() === 'moataz' && (
                               <div className="flex items-center gap-1 no-print opacity-0 group-hover/admin:opacity-100 transition-opacity">
                                 <button
                                   onClick={(e) => {
@@ -1742,9 +1742,9 @@ export default function SiteSelectionScreen({
         {showAddSiteModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/45 backdrop-blur-xs">
             <motion.div
-              initial={{ scale: 0.96, opacity: 0 }}
+              initial={{ scale: 0.96, opacity: 1 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.96, opacity: 0 }}
+              exit={{ scale: 0.96, opacity: 1 }}
               className="bg-white border border-slate-250 rounded-3xl p-6 w-full max-w-md relative font-sans text-right shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
@@ -1825,7 +1825,7 @@ export default function SiteSelectionScreen({
                 </div>
 
                 {/* Branch Administrator Assignment (Only visible for Program Director moataz) */}
-                {user?.username.toLowerCase() === 'moataz' && (
+                {(user?.username || '').toLowerCase() === 'moataz' && (
                   <div className="space-y-1.5 text-right font-sans">
                     <label className="text-xs font-bold text-slate-700 font-bold">المدير المسؤول عن هذا الموقع (الطبقة الثانية):</label>
                     <select
@@ -1874,9 +1874,9 @@ export default function SiteSelectionScreen({
         {showAddAdminModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
             <motion.div
-              initial={{ scale: 0.96, opacity: 0 }}
+              initial={{ scale: 0.96, opacity: 1 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.96, opacity: 0 }}
+              exit={{ scale: 0.96, opacity: 1 }}
               className="bg-white border border-slate-200 rounded-3xl p-6 w-full max-w-sm relative font-sans text-right shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
@@ -1961,9 +1961,9 @@ export default function SiteSelectionScreen({
         {showReorgControlCenter && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-md overflow-y-auto">
             <motion.div
-              initial={{ scale: 0.96, opacity: 0 }}
+              initial={{ scale: 0.96, opacity: 1 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.96, opacity: 0 }}
+              exit={{ scale: 0.96, opacity: 1 }}
               className="bg-white border border-slate-250 rounded-3xl p-6 w-full max-w-2xl relative font-sans text-right shadow-2xl my-8"
               onClick={(e) => e.stopPropagation()}
             >
@@ -2115,9 +2115,9 @@ export default function SiteSelectionScreen({
         {showRestoreModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
             <motion.div
-              initial={{ scale: 0.96, opacity: 0 }}
+              initial={{ scale: 0.96, opacity: 1 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.96, opacity: 0 }}
+              exit={{ scale: 0.96, opacity: 1 }}
               className="bg-white border border-slate-250 rounded-3xl p-6 w-full max-w-lg relative font-sans text-right shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
@@ -2231,9 +2231,9 @@ export default function SiteSelectionScreen({
         {showDeleteConfirmModal && siteToDelete && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/45 backdrop-blur-xs">
             <motion.div
-              initial={{ scale: 0.96, opacity: 0 }}
+              initial={{ scale: 0.96, opacity: 1 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.96, opacity: 0 }}
+              exit={{ scale: 0.96, opacity: 1 }}
               className="bg-white border border-slate-200 rounded-3xl p-6 w-full max-w-md relative font-sans text-right shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >

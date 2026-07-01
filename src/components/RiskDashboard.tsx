@@ -75,12 +75,12 @@ export default function RiskDashboard({
     setShowAddModal(false);
   };
 
-  const handleDeleteRisk = (id: string) => {
+  const handleDeleteRisk = async (id: string) => {
     if (userRole === 'viewer') {
       alert('عذراً، لا تملك الصلاحية لحذف السجلات.');
       return;
     }
-    if (confirmWithRandomCode('هل أنت متأكد من حذف هذا الخطر من السجل نهائياً؟')) {
+    if (await confirmWithRandomCode('هل أنت متأكد من حذف هذا الخطر من السجل نهائياً؟')) {
       const target = risks.find(r => r.id === id);
       setRisks(prev => prev.filter(r => r.id !== id));
       if (addAuditLog && target) {

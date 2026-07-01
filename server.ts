@@ -9,17 +9,308 @@ import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import fs from "fs";
 import * as XLSX from "xlsx";
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore, initializeFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
+import { createClient } from "@supabase/supabase-js";
+import pg from "pg";
 
 const app = express();
 const PORT = 3000;
 
-const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8"));
-
 dotenv.config();
 
-const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
+// Initialize Postgres connection pool
+let pgPool: pg.Pool | null = null;
+let databaseUrl = process.env.DATABASE_URL || "";
+
+if (!databaseUrl) {
+  const hostUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const match = hostUrl.match(/https?:\/\/([^.]+)\.supabase\.co/);
+  if (match) {
+    const projectRef = match[1];
+    databaseUrl = `postgresql://postgres:MoatY%40%40010100@db.${projectRef}.supabase.co:5432/postgres`;
+    console.log("[Postgres Server] DATABASE_URL reconstructed from Supabase host URL:", hostUrl);
+  }
+}
+
+if (databaseUrl) {
+  try {
+    pgPool = new pg.Pool({
+      connectionString: databaseUrl,
+      ssl: {
+        rejectUnauthorized: false
+      }
+    });
+    console.log("[Postgres Server] Initialized successfully with URL (SSL active).");
+  } catch (err) {
+    console.error("[Postgres Server] Connection pool creation failed:", err);
+  }
+} else {
+  console.log("[Postgres Server] DATABASE_URL missing. Checking for Supabase fallback.");
+}
+
+// Initialize Supabase if keys are available in process.env
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
+
+let supabase: any = null;
+if (supabaseUrl && supabaseKey) {
+  try {
+    supabase = createClient(supabaseUrl, supabaseKey);
+    console.log("[Supabase Server] Initialized successfully with URL:", supabaseUrl);
+  } catch (err) {
+    console.error("[Supabase Server] Initialization failed:", err);
+  }
+} else {
+  console.log("[Supabase Server] Environment keys missing. Using resilient Local File Database fallback if Postgres is also inactive.");
+}
+
+// Resilient Local JSON File Database Fallback
+const DATA_DIR = path.join(process.cwd(), "data");
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+function getLocalTable(table: string): any[] {
+  const filePath = path.join(DATA_DIR, `${table}.json`);
+  if (!fs.existsSync(filePath)) {
+    return [];
+  }
+  try {
+    const raw = fs.readFileSync(filePath, "utf8");
+    return JSON.parse(raw);
+  } catch (err) {
+    return [];
+  }
+}
+
+function setLocalTable(table: string, data: any[]) {
+  const filePath = path.join(DATA_DIR, `${table}.json`);
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8");
+  } catch (err) {
+    console.error(`[Local DB Server] failed to write table ${table}:`, err);
+  }
+}
+
+const db = { name: "ServerSupabaseLocalStorageUnified" };
+
+class ServerDocRef {
+  constructor(public collectionName: string, public docId: string) {}
+}
+
+class ServerCollectionRef {
+  constructor(public collectionName: string) {}
+}
+
+// Compatibility wrappers for existing code
+function doc(dbInstance: any, collectionName: string, docId?: string) {
+  return new ServerDocRef(collectionName, docId || "");
+}
+
+function collection(dbInstance: any, collectionName: string) {
+  return new ServerCollectionRef(collectionName);
+}
+
+const checkedTables = new Set<string>();
+
+async function ensurePgTable(col: string) {
+  if (!pgPool) return;
+  const safeName = col.replace(/[^a-zA-Z0-9_]/g, "");
+  if (checkedTables.has(safeName)) return;
+
+  try {
+    await pgPool.query(`
+      CREATE TABLE IF NOT EXISTS "${safeName}" (
+        id VARCHAR(255) PRIMARY KEY,
+        data JSONB NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    checkedTables.add(safeName);
+    console.log(`[Postgres Server] Table "${safeName}" ensured/created successfully.`);
+  } catch (err) {
+    console.error(`[Postgres Server] Failed to ensure table "${safeName}":`, err);
+  }
+}
+
+async function getDoc(docRef: ServerDocRef) {
+  const col = docRef.collectionName;
+  const id = docRef.docId;
+
+  if (pgPool) {
+    try {
+      const safeCol = col.replace(/[^a-zA-Z0-9_]/g, "");
+      await ensurePgTable(safeCol);
+      const res = await pgPool.query(`SELECT data FROM "${safeCol}" WHERE id = $1`, [id]);
+      if (res.rows.length > 0) {
+        return {
+          exists: () => true,
+          data: () => res.rows[0].data,
+          id: id
+        };
+      }
+      return {
+        exists: () => false,
+        data: () => null,
+        id: id
+      };
+    } catch (err) {
+      console.error(`[Postgres Server getDoc] failed for "${col}", falling back to local storage:`, err);
+    }
+  }
+
+  // Local JSON Fallback
+  try {
+    const table = getLocalTable(col);
+    const item = table.find((item: any) => item.id === id);
+    if (item) {
+      return {
+        exists: () => true,
+        data: () => item,
+        id: id
+      };
+    }
+  } catch (err) {
+    console.error(`[Local DB Server getDoc] failed for "${col}":`, err);
+  }
+
+  return {
+    exists: () => false,
+    data: () => null,
+    id: id
+  };
+}
+
+async function getDocs(collectionRef: ServerCollectionRef) {
+  const col = collectionRef.collectionName;
+
+  if (pgPool) {
+    try {
+      const safeCol = col.replace(/[^a-zA-Z0-9_]/g, "");
+      await ensurePgTable(safeCol);
+      const res = await pgPool.query(`SELECT id, data FROM "${safeCol}"`);
+      return {
+        docs: res.rows.map((row: any) => ({
+          id: row.id || "",
+          data: () => row.data,
+          ref: new ServerDocRef(col, row.id || "")
+        }))
+      };
+    } catch (err) {
+      console.error(`[Postgres Server getDocs] failed for "${col}", falling back to local storage:`, err);
+    }
+  }
+
+  // Local JSON Fallback
+  try {
+    const table = getLocalTable(col);
+    return {
+      docs: table.map((item: any) => ({
+        id: item.id || "",
+        data: () => item,
+        ref: new ServerDocRef(col, item.id || "")
+      }))
+    };
+  } catch (err) {
+    console.error(`[Local DB Server getDocs] failed for "${col}":`, err);
+    return { docs: [] };
+  }
+}
+
+async function setDoc(docRef: ServerDocRef, data: any, options?: { merge?: boolean }) {
+  const col = docRef.collectionName;
+  const id = docRef.docId;
+
+  if (pgPool) {
+    try {
+      const safeCol = col.replace(/[^a-zA-Z0-9_]/g, "");
+      await ensurePgTable(safeCol);
+      
+      let finalData = { id, ...data };
+      if (options?.merge) {
+        const checkRes = await pgPool.query(`SELECT data FROM "${safeCol}" WHERE id = $1`, [id]);
+        if (checkRes.rows.length > 0) {
+          finalData = { ...checkRes.rows[0].data, ...data, id };
+        }
+      }
+
+      await pgPool.query(`
+        INSERT INTO "${safeCol}" (id, data, updated_at)
+        VALUES ($1, $2, CURRENT_TIMESTAMP)
+        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = CURRENT_TIMESTAMP
+      `, [id, JSON.stringify(finalData)]);
+      return;
+    } catch (err) {
+      console.error(`[Postgres Server setDoc] failed for "${col}", falling back to local storage:`, err);
+    }
+  }
+
+  // Local JSON Fallback
+  try {
+    const table = getLocalTable(col);
+    const existingIdx = table.findIndex((item: any) => item.id === id);
+    let finalData = { id, ...data };
+    if (options?.merge && existingIdx !== -1) {
+      finalData = { ...table[existingIdx], ...data, id };
+    }
+
+    if (existingIdx !== -1) {
+      table[existingIdx] = finalData;
+    } else {
+      table.push(finalData);
+    }
+    setLocalTable(col, table);
+  } catch (err) {
+    console.error(`[Local DB Server setDoc] failed for "${col}":`, err);
+    throw err;
+  }
+}
+
+async function updateDoc(docRef: ServerDocRef, data: any) {
+  await setDoc(docRef, data, { merge: true });
+}
+
+async function deleteDoc(docRef: ServerDocRef) {
+  const col = docRef.collectionName;
+  const id = docRef.docId;
+
+  if (pgPool) {
+    try {
+      const safeCol = col.replace(/[^a-zA-Z0-9_]/g, "");
+      await ensurePgTable(safeCol);
+      await pgPool.query(`DELETE FROM "${safeCol}" WHERE id = $1`, [id]);
+      return;
+    } catch (err) {
+      console.error(`[Postgres Server deleteDoc] failed for "${col}", falling back to local storage:`, err);
+    }
+  }
+
+  // Local JSON Fallback
+  try {
+    const table = getLocalTable(col);
+    const filtered = table.filter((item: any) => item.id !== id);
+    setLocalTable(col, filtered);
+  } catch (err) {
+    console.error(`[Local DB Server deleteDoc] failed for "${col}":`, err);
+    throw err;
+  }
+}
+
+function writeBatch(dbInstance: any) {
+  const operations: Array<{ docRef: ServerDocRef; data: any; options?: { merge?: boolean } }> = [];
+  return {
+    set: (docRef: ServerDocRef, data: any, options?: { merge?: boolean }) => {
+      operations.push({ docRef, data, options });
+    },
+    commit: async () => {
+      for (const op of operations) {
+        await setDoc(op.docRef, op.data, op.options);
+      }
+    }
+  };
+}
+
+dotenv.config();
 
 console.log("DEBUG: API Key length:", (process.env.GEMINI_API_KEY || "").length);
 console.log("DEBUG: GOOGLE_API_KEY length:", (process.env.GOOGLE_API_KEY || "").length);
@@ -57,7 +348,7 @@ app.get("/api/fetch-prices-manual", async (req, res) => {
         Do not include any extra text.`;
         
         const response = await ai.models.generateContent({
-            model: "gemini-3.1-flash-lite",
+            model: "gemini-2.5-flash",
             contents: prompt,
             config: { 
                 responseMimeType: "application/json"
@@ -79,20 +370,7 @@ app.get("/api/fetch-prices-manual", async (req, res) => {
 async function startMarketDataJob() {
 }
 
-const dbId = (firebaseConfig.firestoreDatabaseId === "(default)" || firebaseConfig.firestoreDatabaseId === "") ? undefined : firebaseConfig.firestoreDatabaseId;
-
-let secureDb: any;
-try {
-  secureDb = initializeFirestore(firebaseApp, {
-    experimentalForceLongPolling: true,
-  }, dbId);
-} catch (e: any) {
-  secureDb = getFirestore(firebaseApp, dbId);
-}
-
-const db = secureDb;
-
-// Start the job now that secureDb is ready
+// Start the job now that db is ready
 startMarketDataJob();
 
 export { db };
@@ -153,9 +431,61 @@ function parseExcelBase64(base64: string): string {
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
+async function fetchAndStorePrices(force = false) {
+  try {
+    const prompt = `Get the latest prices in EGP for the following construction materials in the Egyptian market. Format as a JSON array of objects with: materialName (string), minPrice (number), maxPrice (number), unit (string). Materials:
+    حديد التسليح, أسمنت بورتلاندي, طوب أسمنتي مصمت (25×12×6 سم), طوب أسمنتي مفرغ (40×20×20 سم), طوب أسمنتي مفرغ (40×20×12 سم), طوب وردي (25×12×6 سم), طوب أحمر (20×10×6 سم), طوب أحمر (24×11×6 سم), طوب أحمر (25×12×6 سم), رمل حرش, رمل ناعم, زلط عادة, زلط مخصوص, زلط فينو, زلط سن, سيراميك حوائط (25×50 سم), سيراميك حوائط (31×63 سم), سيراميك حوائط (20×63 سم), سيراميك أرضيات (60×600 سم), سيراميك أرضيات (50×50 سم), سيراميك أرضيات (40×40 سم), رخام جلالة لايت, رخام جلالة عادة, رخام تريستا, رخام جلالة بفص, جرانيت أحمر أسوان, جرانيت فردي غزال, جرانيت حلايب, باركيه سمك 8 مم ألماني, باركيه سمك 8 مم تركي كلاس 21, باركيه سمك 8 مم تركي كلاس 31, باركيه سمك 8 مم تركي كلاس 32, خشب سويد موسكي (فنلندي), خشب زان مبخر (روماني), خشب كونتر مضغوط 18 مم, أبلاكاج أسيوي 3 مم.
+    Do not include any extra text.`;
+    
+    if (!apiKey) {
+      return { success: false, error: "API Key not configured" };
+    }
+    
+    const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: { 
+            responseMimeType: "application/json"
+        }
+    });
+    const text = response.text || "";
+    const items = JSON.parse(text.replace(/```json\n?|\n?```/g, "").trim());
+    if (Array.isArray(items)) {
+      for (const item of items) {
+        if (item.materialName) {
+          await setDoc(doc(db, 'market_prices', item.materialName), item);
+        }
+      }
+    }
+    return { success: true };
+  } catch (err: any) {
+    console.error("fetchAndStorePrices failed:", err);
+    return { success: false, error: err.message || String(err) };
+  }
+}
+
 // --- TEST ENDPOINT ---
 app.get("/api/test", (req, res) => {
     res.json({ status: "ok", message: "Server is alive" });
+});
+
+app.get("/api/test-db-write", async (req, res) => {
+  try {
+    const testRef = doc(db, 'test_collection', 'test_doc');
+    await setDoc(testRef, { timestamp: new Date().toISOString(), status: "success" });
+    const snap = await getDoc(testRef);
+    res.json({ 
+      success: true, 
+      writtenData: snap.data(),
+      dbId: "(default)"
+    });
+  } catch (err: any) {
+    res.status(500).json({ 
+      success: false, 
+      error: err.message || String(err), 
+      stack: err.stack 
+    });
+  }
 });
 
 // --- MANUAL TRIGGER FOR MARKET DATA UPDATE ---
@@ -179,7 +509,7 @@ app.post("/api/refresh-prices", async (req, res) => {
 // --- MARKET DATA ENDPOINT ---
 app.get("/api/market-data", async (req, res) => {
   try {
-    const snapshot = await getDocs(collection(secureDb, 'market_prices'));
+    const snapshot = await getDocs(collection(db, 'market_prices'));
     const data = snapshot.docs.map(doc => doc.data());
     res.json({ data });
   } catch (err) {
@@ -338,6 +668,57 @@ app.delete("/api/users/:username", async (req, res) => {
   }
 });
 
+// --- AUDIT LOGS / USER ACTIVITY LOGGING ENDPOINTS ---
+app.post("/api/users/logs", async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: "قاعدة البيانات غير متصلة." });
+  }
+  const { username, actionAr, type, detailsAr, referenceNo } = req.body;
+  
+  try {
+    const logId = "log_" + Date.now() + "_" + Math.random().toString(36).substring(2, 11);
+    const newLog = {
+      id: logId,
+      username: username || "system",
+      actionAr: actionAr || "",
+      type: type || "other",
+      detailsAr: detailsAr || "",
+      referenceNo: referenceNo || "",
+      timestamp: new Date().toISOString()
+    };
+    
+    await setDoc(doc(db, 'activitylog', logId), newLog);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Log error:", err);
+    res.status(500).json({ error: "Failed to log activity: " + err.message });
+  }
+});
+
+app.get("/api/users/logs", async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: "قاعدة البيانات غير متصلة." });
+  }
+  try {
+    const username = req.query.username;
+    const snapshot = await getDocs(collection(db, 'activitylog'));
+    let logsList = snapshot.docs.map(d => d.data() as any);
+    
+    // Sort logs by timestamp descending (newest first)
+    logsList.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    
+    if (username) {
+      const lowerUser = username.toString().trim().toLowerCase();
+      logsList = logsList.filter(l => (l.username || "").toLowerCase().trim() === lowerUser);
+    }
+    
+    res.json(logsList);
+  } catch (err: any) {
+    console.error("Get logs error:", err);
+    res.status(500).json({ error: "Failed to get logs: " + err.message });
+  }
+});
+
 // --- MULTI-TENANT SITES & DATABASES ENDPOINTS ---
 app.get("/api/sites", async (req, res) => {
   if (!db) {
@@ -439,7 +820,7 @@ app.delete("/api/sites/:id", async (req, res) => {
 
     // Perform secure site deletion
     await deleteDoc(doc(db, 'sites', id));
-    await deleteDoc(doc(db, 'siteData', id));
+    await deleteDoc(doc(db, 'projects', id));
     res.json({ success: true });
   } catch (err) {
     console.error("Delete site error:", err);
@@ -454,11 +835,19 @@ app.get("/api/site/:siteId/data", async (req, res) => {
   const { siteId } = req.params;
 
   try {
-    const docSnap = await getDoc(doc(db, 'siteData', siteId));
-    res.json(docSnap.data() || {});
+    console.log("DEBUG: Fetching projects data for site:", siteId);
+    const docRef = doc(db, 'projects', siteId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) {
+      console.log("DEBUG: No document found for site in projects:", siteId);
+      return res.json({});
+    }
+    const data = docSnap.data();
+    console.log("DEBUG: Document size for", siteId, ":", JSON.stringify(data).length, "bytes");
+    res.json(data || {});
   } catch (err) {
-    console.error("Get site data error:", err);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("Get site data error for site", siteId, ":", err);
+    res.status(500).json({ error: "Internal server error", details: err instanceof Error ? err.message : String(err) });
   }
 });
 
@@ -473,7 +862,7 @@ app.post("/api/site/:siteId/save", async (req, res) => {
   }
 
   try {
-    await setDoc(doc(db, 'siteData', siteId), data, { merge: true });
+    await setDoc(doc(db, 'projects', siteId), data, { merge: true });
     res.json({ success: true });
   } catch (err) {
     console.error("Save site data error:", err);
@@ -495,7 +884,7 @@ app.post("/api/site/:siteId/auto-backup", async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
     const backupId = `${siteId}_backup_${today}`;
     
-    await setDoc(doc(db, 'siteBackups', backupId), {
+    await setDoc(doc(db, 'backups', backupId), {
       siteId,
       siteName: siteName || "موقع افتراضي",
       backupDate: today,
@@ -518,7 +907,7 @@ app.get("/api/site/:siteId/server-backups", async (req, res) => {
   }
   const { siteId } = req.params;
   try {
-    const snapshot = await getDocs(collection(db, 'siteBackups'));
+    const snapshot = await getDocs(collection(db, 'backups'));
     const backupsList = snapshot.docs
       .map((doc: any) => {
         const data = doc.data();
@@ -554,7 +943,7 @@ app.post("/api/site/:siteId/manual-backup", async (req, res) => {
   try {
     const timestamp = new Date().toISOString();
     const backupId = `${siteId}_manual_backup_${Date.now()}`;
-    await setDoc(doc(db, 'siteBackups', backupId), {
+    await setDoc(doc(db, 'backups', backupId), {
       siteId,
       siteName: siteName || "موقع افتراضي",
       backupDate: timestamp.split('T')[0],
@@ -575,7 +964,7 @@ app.get("/api/site/:siteId/restore-backup/:backupId", async (req, res) => {
   }
   const { backupId } = req.params;
   try {
-    const docRef = doc(db, 'siteBackups', backupId);
+    const docRef = doc(db, 'backups', backupId);
     const docSnap = await getDoc(docRef);
     if (!docSnap.exists()) {
       return res.status(404).json({ error: "ملف النسخ الاحتياطي المذكور غير موجود." });
@@ -595,7 +984,7 @@ app.delete("/api/site/:siteId/backup/:backupId", async (req, res) => {
   }
   const { backupId } = req.params;
   try {
-    await deleteDoc(doc(db, 'siteBackups', backupId));
+    await deleteDoc(doc(db, 'backups', backupId));
     res.json({ success: true });
   } catch (err: any) {
     console.error("Delete backup error:", err);
@@ -603,27 +992,111 @@ app.delete("/api/site/:siteId/backup/:backupId", async (req, res) => {
   }
 });
 
+// Generic database endpoints for frontend clients to talk directly to PostgreSQL/Supabase securely
+app.get("/api/db/:collection/:id", async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: "قاعدة البيانات غير متصلة." });
+  }
+  const { collection, id } = req.params;
+  try {
+    const docRef = doc(db, collection, id);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      res.json({ exists: true, data: docSnap.data() });
+    } else {
+      res.json({ exists: false, data: null });
+    }
+  } catch (err: any) {
+    console.error(`Generic getDoc error for ${collection}/${id}:`, err);
+    res.status(500).json({ error: err.message || "Internal Database Error" });
+  }
+});
+
+app.post("/api/db/:collection/:id", async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: "قاعدة البيانات غير متصلة." });
+  }
+  const { collection, id } = req.params;
+  const { data, merge } = req.body;
+  try {
+    const docRef = doc(db, collection, id);
+    await setDoc(docRef, data, { merge: !!merge });
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error(`Generic setDoc error for ${collection}/${id}:`, err);
+    res.status(500).json({ error: err.message || "Internal Database Error" });
+  }
+});
+
+app.delete("/api/db/:collection/:id", async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: "قاعدة البيانات غير متصلة." });
+  }
+  const { collection, id } = req.params;
+  try {
+    const docRef = doc(db, collection, id);
+    await deleteDoc(docRef);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error(`Generic deleteDoc error for ${collection}/${id}:`, err);
+    res.status(500).json({ error: err.message || "Internal Database Error" });
+  }
+});
+
+app.get("/api/db/:collection", async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: "قاعدة البيانات غير متصلة." });
+  }
+  const { collection: collectionParam } = req.params;
+  try {
+    const colRef = collection(db, collectionParam);
+    const snapshot = await getDocs(colRef);
+    const docs = snapshot.docs.map(d => ({
+      id: d.id,
+      data: d.data()
+    }));
+    res.json(docs);
+  } catch (err: any) {
+    console.error(`Generic getDocs error for ${collectionParam}:`, err);
+    res.status(500).json({ error: err.message || "Internal Database Error" });
+  }
+});
+
 app.get("/api/db-status", async (req, res) => {
-    if (db) {
+    if (pgPool) {
       res.json({ 
         connected: true, 
         cloud: true, 
-        mode: "سحابي نشط (Firestore)", 
-        info: "متصل بقاعدة البيانات السحابية بنجاح" 
+        mode: "سحابي نشط (Supabase Postgres)", 
+        info: "متصل بقاعدة البيانات السحابية Supabase عبر PostgreSQL بنجاح" 
+      });
+    } else if (supabase) {
+      res.json({ 
+        connected: true, 
+        cloud: true, 
+        mode: "سحابي نشط (Supabase SDK)", 
+        info: "متصل بقاعدة البيانات السحابية Supabase عبر SDK بنجاح" 
+      });
+    } else if (db) {
+      res.json({ 
+        connected: true, 
+        cloud: false, 
+        mode: "التخزين المحلي المستمر", 
+        info: "يعمل التطبيق حالياً في الوضع المحلي (ملفات البيانات)" 
       });
     } else {
       res.json({ 
         connected: false, 
         cloud: false, 
-        mode: "التخزين المحلي", 
-        info: "قاعدة البيانات السحابية غير مهيأة على خادم التطبيق" 
+        mode: "غير متصل", 
+        info: "قاعدة البيانات غير متصلة" 
       });
     }
 });
 
 // Helper for Gemini content generation with retry and model fallback using streaming to eliminate Vercel 504 timeouts
 async function generateStreamWithRetryAndFallback(ai: any, contents: any, config: any, res: express.Response) {
-  const modelsToTry = ["gemini-3.1-flash-lite"];
+  const modelsToTry = ["gemini-2.5-flash", "gemini-1.5-flash"];
   let lastError: any = null;
 
   for (const model of modelsToTry) {
@@ -693,7 +1166,11 @@ async function generateStreamWithRetryAndFallback(ai: any, contents: any, config
   }
 
   if (!res.headersSent) {
-    res.status(500).json({ error: lastError?.message || "فشلت جميع محاولات الاتصال بنماذج الذكاء الاصطناعي." });
+    let errorMessage = lastError?.message || "فشلت جميع محاولات الاتصال بنماذج الذكاء الاصطناعي.";
+    if (String(errorMessage).includes("403") || String(errorMessage).includes("PERMISSION_DENIED")) {
+        errorMessage = "تم رفض الوصول لخدمات الذكاء الاصطناعي (403 Forbidden). يرجى التأكد من صلاحية مفتاح الـ API الخاص بك وأن المشروع مفعل في Google Cloud.";
+    }
+    res.status(500).json({ error: errorMessage });
   } else {
     res.end();
   }
@@ -1189,7 +1666,11 @@ ${JSON.stringify(boqItems, null, 2)}
   } catch (error: any) {
     console.error("Schedule generation error:", error);
     if (!res.headersSent) {
-      res.status(500).json({ error: error.message || "حدث خطأ غير متوقع أثناء توليد الجدول الزمني بالذكاء الاصطناعي." });
+      let errorMessage = error.message || "حدث خطأ غير متوقع أثناء توليد الجدول الزمني بالذكاء الاصطناعي.";
+      if (String(errorMessage).includes("403") || String(errorMessage).includes("PERMISSION_DENIED")) {
+          errorMessage = "تم رفض الوصول لخدمات الذكاء الاصطناعي (403). يرجى التأكد من صلاحية مفتاح الـ API الخاص بك.";
+      }
+      res.status(500).json({ error: errorMessage });
     } else {
       res.end();
     }

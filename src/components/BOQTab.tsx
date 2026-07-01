@@ -359,16 +359,16 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
   };
 
   const activeProject = useMemo(() => projects.find(p => p.id === selectedProjectId), [projects, selectedProjectId]);
-  const activeBoqItems = useMemo(() => boqItems.filter(item => item.projectId === selectedProjectId), [boqItems, selectedProjectId]);
+  const activeBoqItems = useMemo(() => boqItems.filter(item => item.projectId === selectedProjectId || item.projectId === projectId), [boqItems, selectedProjectId, projectId]);
   
   const filteredItems = useMemo(() => activeBoqItems.filter(item => 
-    item.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    item.code.toLowerCase().includes(searchTerm.toLowerCase())
+    (item.description || '').toLowerCase().includes((searchTerm || '').toLowerCase()) || 
+    (item.code || '').toLowerCase().includes((searchTerm || '').toLowerCase())
   ), [activeBoqItems, searchTerm]);
 
   const ensureDefaultProject = (): string => {
     if (projects.length > 0) {
-      return selectedProjectId || projects[0].id;
+      return projectId || projects[0].id;
     }
     
     // Ensure default project if projects list is empty
@@ -508,12 +508,12 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
     setCustomUnitText('');
   };
 
-  const handleDeleteItem = (id: string) => {
+  const handleDeleteItem = async (id: string) => {
     if (userRole === 'viewer') {
       alert('عذراً، لا تملك صلاحية الحذف');
       return;
     }
-    if (confirmWithRandomCode('هل أنت متأكد من حذف هذا البند من المقايسة؟ قد يؤثر ذلك على المستخلصات المرتبطة.')) {
+    if (await confirmWithRandomCode('هل أنت متأكد من حذف هذا البند من المقايسة؟ قد يؤثر ذلك على المستخلصات المرتبطة.')) {
       setBoqItems(boqItems.filter(item => item.id !== id));
     }
   };
@@ -945,7 +945,7 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
                 <th className="p-4 text-slate-500 font-black">رقم البند</th>
-                <th className="p-4 text-slate-500 w-[45%] font-black">بيان الأعمال والمواصفات الفنية المعتمدة</th>
+                <th className="p-4 text-slate-500 min-w-[450px] w-[55%] font-black">بيان الأعمال والمواصفات الفنية المعتمدة</th>
                 <th className="p-4 text-center text-slate-500 font-black">الوحدة</th>
                 <th className="p-4 text-center text-slate-500 font-black">الكمية التعاقدية</th>
                 <th className="p-4 text-center text-slate-500 font-black">سعر الفئة</th>
@@ -959,7 +959,7 @@ export default function BOQTab({ projectId, projects, setProjects, boqItems, set
                   <td className="p-4 font-black text-purple-700">
                     {item.code}
                   </td>
-                  <td className="p-4">
+                  <td className="p-4 min-w-[450px]">
                     <div className="font-bold text-slate-800 leading-relaxed">{item.description}</div>
                   </td>
                   <td className="p-4 text-center">

@@ -403,7 +403,7 @@ export default function ProjectsTab({
                 <tr className="border-b border-slate-800">
                   <th className="py-4 px-4 text-center w-12">م</th>
                   <th className="py-4 px-4 text-right">الرقم المرجعي</th>
-                  <th className="py-4 px-4 text-right">اسم المشروع والعملية</th>
+                  <th className="py-4 px-4 text-right min-w-[420px]">اسم المشروع والعملية</th>
                   <th className="py-4 px-4 text-right">رقم الإسناد</th>
                   <th className="py-4 px-4 text-center">تاريخ الإسناد</th>
                   <th className="py-4 px-4 text-center">تاريخ الاستلام</th>
@@ -423,7 +423,7 @@ export default function ProjectsTab({
                     <tr key={project.id} className="hover:bg-slate-50/50 transition">
                       <td className="py-4 px-4 text-center text-slate-400 font-black">{index + 1}</td>
                       <td className="py-4 px-4 font-mono text-purple-700 font-black">{project.referenceNo || 'REF-N/A'}</td>
-                      <td className="py-4 px-4 text-slate-950 font-black text-sm">{project.name}</td>
+                      <td className="py-4 px-4 text-slate-950 font-black text-sm min-w-[420px] whitespace-normal break-words">{project.name}</td>
                       <td className="py-4 px-4 text-slate-600 font-mono">{project.assignmentNumber}</td>
                       <td className="py-4 px-4 text-center font-mono">
                         {project.assignmentDate ? new Date(project.assignmentDate).toLocaleDateString('ar-EG') : 'غير محدد'}

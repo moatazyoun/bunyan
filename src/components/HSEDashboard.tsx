@@ -4,8 +4,7 @@ import {
   Plus, Printer, Search, Filter, HardHat, Flame, 
   CheckCircle, Trash2, ShieldAlert
 } from 'lucide-react';
-import { db } from '../lib/firebase';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, Timestamp, where } from 'firebase/firestore';
+import { db, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, Timestamp, where } from '../lib/firebase';
 import { UserItem, Project } from '../types';
 
 interface HSEDashboardProps {

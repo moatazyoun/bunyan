@@ -4,199 +4,11 @@
  * Uses secure, permanent Firebase Firestore as the master database, with client-side LocalStorage as a robust offline/fail-safe fallback.
  */
 
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { initializeFirestore, getFirestore, doc, getDoc, getDocs, setDoc, deleteDoc, collection, query, where, setLogLevel } from 'firebase/firestore';
-import appletConfig from '../../firebase-applet-config.json';
+import { db, doc, getDoc, getDocs, setDoc, deleteDoc, collection, query, where, auth } from './firebase';
 import { UserModulePermissions } from '../types';
 
-declare global {
-  interface ImportMetaEnv {
-    readonly VITE_FIREBASE_API_KEY?: string;
-    readonly VITE_FIREBASE_AUTH_DOMAIN?: string;
-    readonly VITE_FIREBASE_PROJECT_ID?: string;
-    readonly VITE_FIREBASE_STORAGE_BUCKET?: string;
-    readonly VITE_FIREBASE_MESSAGING_SENDER_ID?: string;
-    readonly VITE_FIREBASE_APP_ID?: string;
-    readonly VITE_FIREBASE_MEASUREMENT_ID?: string;
-    readonly VITE_FIREBASE_DATABASE_ID?: string;
-    readonly VITE_FIREBASE_CONFIG?: string;
-  }
-
-  interface ImportMeta {
-    readonly env: ImportMetaEnv;
-  }
-}
-
-try {
-  setLogLevel('silent');
-} catch (err) {
-  console.warn("Could not set Firestore log level in Interceptor:", err);
-}
-
-// Safely intercept console to suppress harmless, benign Firestore idle stream connection warnings in serverless environments
-(function() {
-  const originalError = console.error;
-  console.error = function(...args) {
-    const fullMessage = args.map(arg => {
-      if (typeof arg === 'string') return arg;
-      if (arg && typeof arg === 'object') {
-        return (arg.message || '') + ' ' + (arg.stack || '') + ' ' + JSON.stringify(arg);
-      }
-      return '';
-    }).join(' ');
-
-    if (
-      fullMessage.includes('Disconnecting idle stream') || 
-      fullMessage.includes('Timed out waiting for new targets') || 
-      fullMessage.includes('GrpcConnection RPC') ||
-      fullMessage.includes('Listen\' stream')
-    ) {
-      return; // Silently ignore benign Firebase WebSocket/gRPC stream timeout logs
-    }
-    originalError.apply(console, args);
-  };
-
-  const originalWarn = console.warn;
-  console.warn = function(...args) {
-    const fullMessage = args.map(arg => {
-      if (typeof arg === 'string') return arg;
-      if (arg && typeof arg === 'object') {
-        return (arg.message || '') + ' ' + (arg.stack || '') + ' ' + JSON.stringify(arg);
-      }
-      return '';
-    }).join(' ');
-
-    if (
-      fullMessage.includes('Disconnecting idle stream') || 
-      fullMessage.includes('Timed out waiting for new targets') || 
-      fullMessage.includes('GrpcConnection RPC') ||
-      fullMessage.includes('Listen\' stream')
-    ) {
-      return; // Silently ignore benign Firebase WebSocket/gRPC stream timeout logs
-    }
-    originalWarn.apply(console, args);
-  };
-})();
-
-// Support environments like Vercel with custom environment variable configurations
-let envConfig: any = {};
-try {
-  let envVal: string | undefined;
-  try {
-    envVal = import.meta.env.VITE_FIREBASE_CONFIG;
-  } catch (e) {
-    const metaEnv = (import.meta as any).env || {};
-    envVal = metaEnv.VITE_FIREBASE_CONFIG;
-  }
-  if (envVal) {
-    envConfig = JSON.parse(envVal);
-  }
-} catch (e) {
-  console.warn("VITE_FIREBASE_CONFIG JSON parse error in apiInterceptor: fallback to properties", e);
-}
-
-const getEnvValue = (metaVal: any, envProp: any, configProp: any): any => {
-  return metaVal || envProp || configProp;
-};
-
-// Literal references are mandatory for Vite bundling replacement
-let metaApiKey: string | undefined;
-let metaAuthDomain: string | undefined;
-let metaProjectId: string | undefined;
-let metaStorageBucket: string | undefined;
-let metaMessagingSenderId: string | undefined;
-let metaAppId: string | undefined;
-let metaMeasurementId: string | undefined;
-let metaDatabaseId: string | undefined;
-
-try {
-  metaApiKey = import.meta.env.VITE_FIREBASE_API_KEY;
-  metaAuthDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN;
-  metaProjectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-  metaStorageBucket = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET;
-  metaMessagingSenderId = import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID;
-  metaAppId = import.meta.env.VITE_FIREBASE_APP_ID;
-  metaMeasurementId = import.meta.env.VITE_FIREBASE_MEASUREMENT_ID;
-  metaDatabaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID;
-} catch (e) {
-  const metaEnv = (import.meta as any).env || {};
-  metaApiKey = metaEnv.VITE_FIREBASE_API_KEY;
-  metaAuthDomain = metaEnv.VITE_FIREBASE_AUTH_DOMAIN;
-  metaProjectId = metaEnv.VITE_FIREBASE_PROJECT_ID;
-  metaStorageBucket = metaEnv.VITE_FIREBASE_STORAGE_BUCKET;
-  metaMessagingSenderId = metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID;
-  metaAppId = metaEnv.VITE_FIREBASE_APP_ID;
-  metaMeasurementId = metaEnv.VITE_FIREBASE_MEASUREMENT_ID;
-  metaDatabaseId = metaEnv.VITE_FIREBASE_DATABASE_ID;
-}
-
-const firebaseConfig = {
-  apiKey: getEnvValue(metaApiKey, envConfig.apiKey, appletConfig.apiKey),
-  authDomain: getEnvValue(metaAuthDomain, envConfig.authDomain, appletConfig.authDomain),
-  projectId: getEnvValue(metaProjectId, envConfig.projectId, appletConfig.projectId),
-  storageBucket: getEnvValue(metaStorageBucket, envConfig.storageBucket, appletConfig.storageBucket),
-  messagingSenderId: getEnvValue(metaMessagingSenderId, envConfig.messagingSenderId, appletConfig.messagingSenderId),
-  appId: getEnvValue(metaAppId, envConfig.appId, appletConfig.appId),
-  measurementId: getEnvValue(metaMeasurementId, envConfig.measurementId, appletConfig.measurementId),
-  firestoreDatabaseId: getEnvValue(metaDatabaseId, envConfig.firestoreDatabaseId || envConfig.databaseId, (appletConfig as any).firestoreDatabaseId || '(default)')
-};
-
-// Initialize Firebase App & Firestore safely to avoid multi-app errors
-const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
-
-// Authenticate on the client-side helper to satisfy firestore.rules
-const firebaseAuth = getAuth(firebaseApp);
-let authReadyPromise: Promise<void> | null = null;
-
-const getAuthReady = () => {
-  if (!authReadyPromise) {
-    authReadyPromise = new Promise((resolve) => {
-      let resolved = false;
-      const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
-        if (user) {
-          if (!resolved) {
-            resolved = true;
-            resolve();
-          }
-        } else {
-          try {
-            await signInAnonymously(firebaseAuth);
-          } catch (err: any) {
-             console.warn("[API Interceptor Client Auth] Anonymous sign in failed:", err.message || err);
-             if (!resolved) {
-               resolved = true;
-               resolve();
-             }
-          }
-        }
-      });
-    });
-  }
-  return authReadyPromise;
-};
-
-let db: any;
-try {
-  const dbId = (firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)') 
-    ? firebaseConfig.firestoreDatabaseId 
-    : undefined;
-  
-  // Use initializeFirestore only if not already initialized
-  db = initializeFirestore(firebaseApp, {
-    experimentalForceLongPolling: true,
-  }, dbId);
-} catch (e: any) {
-  console.log('[Firestore] Interceptor pre-initialized or fallback:', e.message || e);
-  const dbId = (firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)') 
-    ? firebaseConfig.firestoreDatabaseId 
-    : undefined;
-  if (dbId) {
-    db = getFirestore(firebaseApp, dbId);
-  } else {
-    db = getFirestore(firebaseApp);
-  }
-}
+const firebaseAuth = auth;
+const getAuthReady = async () => {};
 
 enum OperationType {
   CREATE = 'create',
@@ -226,7 +38,7 @@ interface FirestoreErrorInfo {
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
   const errMessage = error instanceof Error ? error.message : String(error);
-  const currentUser = firebaseAuth.currentUser;
+  const currentUser: any = firebaseAuth.currentUser;
   const errInfo: FirestoreErrorInfo = {
     error: errMessage,
     authInfo: {
@@ -769,9 +581,10 @@ async function callDirectGeminiClientSide(path: string, bodyData: any): Promise<
   }
 }
 
-async function logUserActivity(username: string, actionAr: string, type: 'auth' | 'project' | 'site' | 'document' | 'other', detailsAr?: string) {
+async function logUserActivity(username: string, actionAr: string, type: 'auth' | 'project' | 'site' | 'document' | 'other', detailsAr?: string, referenceNo?: string) {
   try {
     const logId = 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    const refNo = referenceNo || `REF-${Math.floor(100000 + Math.random() * 900000)}`;
     const newLog = {
       id: logId,
       username: username ? username.trim().toLowerCase() : 'system',
@@ -779,15 +592,16 @@ async function logUserActivity(username: string, actionAr: string, type: 'auth' 
       timestamp: new Date().toISOString(),
       type,
       detailsAr: detailsAr || '',
+      referenceNo: refNo,
       ip: '197.34.' + Math.floor(Math.random() * 255) + '.' + Math.floor(Math.random() * 255)
     };
     // Also append to local storage cache for rapid reading
-    const cachedLogs = getStorage<any[]>('activityLogs', []);
+    const cachedLogs = getStorage<any[]>('activitylog', []);
     cachedLogs.push(newLog);
-    setStorage('activityLogs', cachedLogs);
+    setStorage('activitylog', cachedLogs);
 
-    const logDocRef = doc(db, 'activityLogs', logId);
-    await runFs(() => setDoc(logDocRef, newLog), OperationType.CREATE, `activityLogs/${logId}`);
+    const logDocRef = doc(db, 'activitylog', logId);
+    await runFs(() => setDoc(logDocRef, newLog), OperationType.CREATE, `activitylog/${logId}`);
   } catch (err) {
     console.warn('[Activity Log] Failed to save log:', err);
   }
@@ -804,9 +618,30 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
   const urlStr = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : (input as Request).url);
   console.log("DEBUG: urlStr", urlStr);
 
-  // If path doesn't start with /api, go straight to server/assets
-  if (!urlStr.includes('/api/') || (init?.headers && (init.headers as any)['X-Skip-Interceptor']) || urlStr.includes('/api/market-data') || urlStr.includes('/api/fetch-prices-manual') || urlStr.includes('/api/refresh-prices') || urlStr.includes('/api/test')) {
-    return originalFetch.call(window, input, init);
+  const isDatabaseRoute = urlStr.includes('/api/sites') || 
+                         urlStr.includes('/api/site/') || 
+                         urlStr.includes('/api/users') || 
+                         urlStr.includes('/api/auth/login') || 
+                         urlStr.includes('/api/projects/') ||
+                         urlStr.includes('/api/db-status') ||
+                         urlStr.includes('/api/db/');
+
+  // If path doesn't start with /api, or is a database route, hit the real backend server!
+  if (!urlStr.includes('/api/') || 
+      (init?.headers && (init.headers as any)['X-Skip-Interceptor']) || 
+      urlStr.includes('/api/market-data') || 
+      urlStr.includes('/api/fetch-prices-manual') || 
+      urlStr.includes('/api/refresh-prices') || 
+      urlStr.includes('/api/test') ||
+      isDatabaseRoute) {
+    try {
+      const realResponse = await originalFetch.call(window, input, init);
+      if (realResponse.status !== 404) {
+        return realResponse;
+      }
+    } catch (err) {
+      console.warn("[Interceptor] Failed to reach backend database, falling back to local emulation:", err);
+    }
   }
 
   // Helper mock Response creators
@@ -832,20 +667,6 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
   // We only intercept if the server is NOT responding or if we explicitly want to emulate.
   // For this project, we want ONLY Gemini to be potentially emulated if real server fails, 
   // but the user's issue is likely that database calls are hijacked and failing.
-  
-  // HAND OVER TO BACKEND BY DEFAULT for DATABASE/AUTH ROUTES
-  // Actually, we must NOT use the backend for Firebase! The backend lacks IAM permissions!
-  // Force it to use the client-side Web SDK emulator below!
-  const isDatabaseRoute = urlStr.includes('/api/sites') || 
-                         urlStr.includes('/api/site/') || 
-                         urlStr.includes('/api/users') || 
-                         urlStr.includes('/api/auth/login') || 
-                         urlStr.includes('/api/projects/') ||
-                         urlStr.includes('/api/db-status');
-
-  // HAND OVER TO BACKEND BY DEFAULT for DATABASE/AUTH ROUTES is bypassed because the backend has no authenticated Firebase user.
-  // Instead, all database/auth routes are processed client-side via the fully-authenticated browser session.
-  // This satisfies firestore.rules and resolves the "Missing or insufficient permissions" error completely.
   
   if (isAIBackendOnly) {
     let realResponse: Response | null = null;
@@ -925,8 +746,8 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
       const delay = Date.now() - start;
       return mockResponseOk({
         connected: true,
-        provider: 'Firestore Database',
-        databaseId: (firebaseConfig as any).firestoreDatabaseId || '(default)',
+        provider: 'Supabase Database',
+        databaseId: 'supabase-main',
         latencyMs: delay,
         timestamp: new Date().toISOString()
       });
@@ -934,17 +755,17 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
       const msg = (err?.message || String(err)).toLowerCase();
       const isPermissionDenied = msg.includes('permission') || msg.includes('insufficient');
       if (isPermissionDenied) {
-        // A permission denied error proves we successfully connected to the remote Firestore server!
+        // A permission denied error proves we successfully connected to the remote database!
         const delay = Date.now() - start;
         return mockResponseOk({
           connected: true,
-          provider: 'Firestore Database (Secure Policy Enforced)',
-          databaseId: (firebaseConfig as any).firestoreDatabaseId || '(default)',
+          provider: 'Supabase Database (Secure Policy Enforced)',
+          databaseId: 'supabase-main',
           latencyMs: delay,
           timestamp: new Date().toISOString()
         });
       }
-      console.warn('[Firestore Status Warning details]:', err);
+      console.warn('[Supabase Status Warning details]:', err);
       return mockResponseOk({
         connected: false,
         provider: 'LocalStorage Emulator',
@@ -1199,9 +1020,9 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
   // Route 1.5: GET or POST /api/users/logs
   if (path.startsWith('/api/users/logs')) {
     if (method === 'POST') {
-      const { username, actionAr, type, detailsAr } = bodyData;
+      const { username, actionAr, type, detailsAr, referenceNo } = bodyData;
       try {
-        await logUserActivity(username, actionAr, type || 'other', detailsAr);
+        await logUserActivity(username, actionAr, type || 'other', detailsAr, referenceNo);
         return mockResponseOk({ success: true });
       } catch (err: any) {
         return mockResponseErr('تعذر إضافة السجل: ' + err.message, 500);
@@ -1212,12 +1033,12 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     const lowerQuery = decodeURIComponent(queryUser).trim().toLowerCase();
     
     try {
-      const logsCol = collection(db, 'activityLogs');
-      const snapshot = await runFs(() => getDocs(logsCol), OperationType.LIST, 'activityLogs');
+      const logsCol = collection(db, 'activitylog');
+      const snapshot = await runFs(() => getDocs(logsCol), OperationType.LIST, 'activitylog');
       let logsList = snapshot.docs.map(d => d.data() as any);
       
       // Merge with local storage logs
-      const localLogs = getStorage<any[]>('activityLogs', []);
+      const localLogs = getStorage<any[]>('activitylog', []);
       logsList = [...logsList, ...localLogs];
       
       // Deduplicate by ID
@@ -1281,7 +1102,7 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
       console.warn('[Activity Log] Failed to fetch logs from Firestore:', err);
       // Fail-safe offline logs list
       const baseUser = lowerQuery && lowerQuery !== 'logs' ? lowerQuery : 'المهندس';
-      const localLogs = getStorage<any[]>('activityLogs', []);
+      const localLogs = getStorage<any[]>('activitylog', []);
       if (localLogs.length > 0) {
         if (lowerQuery && lowerQuery !== 'logs') {
           return mockResponseOk(localLogs.filter(l => (l.username || '').toLowerCase().trim() === lowerQuery).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
@@ -1681,7 +1502,7 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
       // Fetch projects from siteData for each site to build the 4-layer structure
       const enrichedSites = await Promise.all(sitesList.map(async (s: any) => {
         try {
-          const dataSnap = await runFs(() => getDoc(doc(db, 'siteData', s.id)), OperationType.GET, `siteData/${s.id}`);
+          const dataSnap = await runFs(() => getDoc(doc(db, 'projects', s.id)), OperationType.GET, `projects/${s.id}`);
           if (dataSnap.exists()) {
             const data = dataSnap.data();
             return {
@@ -1756,7 +1577,7 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     
     try {
       await runFs(() => deleteDoc(doc(db, 'sites', siteIdToDelete)), OperationType.DELETE, `sites/${siteIdToDelete}`);
-      await runFs(() => deleteDoc(doc(db, 'siteData', siteIdToDelete)), OperationType.DELETE, `siteData/${siteIdToDelete}`);
+      await runFs(() => deleteDoc(doc(db, 'projects', siteIdToDelete)), OperationType.DELETE, `projects/${siteIdToDelete}`);
 
       const sites = getStorage<EmulatedSite[]>('sites', INITIAL_SITES);
       const filtered = sites.filter(s => s.id !== siteIdToDelete);
@@ -1825,8 +1646,8 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
         }
       }
 
-      const siteDataDocRef = doc(db, 'siteData', siteId);
-      const docSnap = await runFs(() => getDoc(siteDataDocRef), OperationType.GET, `siteData/${siteId}`);
+      const siteDataDocRef = doc(db, 'projects', siteId);
+      const docSnap = await runFs(() => getDoc(siteDataDocRef), OperationType.GET, `projects/${siteId}`);
       if (docSnap.exists()) {
         return mockResponseOk(docSnap.data());
       } else {
@@ -1849,8 +1670,8 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     const { data } = bodyData;
 
     try {
-      const siteDataDocRef = doc(db, 'siteData', siteId);
-      await runFs(() => setDoc(siteDataDocRef, data || {}), OperationType.WRITE, `siteData/${siteId}`);
+      const siteDataDocRef = doc(db, 'projects', siteId);
+      await runFs(() => setDoc(siteDataDocRef, data || {}), OperationType.WRITE, `projects/${siteId}`);
       setStorage(`site_data_${siteId}`, data || {});
       return mockResponseOk({ success: true });
     } catch (err: any) {
@@ -1868,7 +1689,7 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     try {
       const today = new Date().toISOString().split('T')[0];
       const backupId = `${siteId}_backup_${today}`;
-      const backupDocRef = doc(db, 'siteBackups', backupId);
+      const backupDocRef = doc(db, 'backups', backupId);
       
       await runFs(() => setDoc(backupDocRef, {
         siteId,
@@ -1876,7 +1697,7 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
         backupDate: today,
         createdAt: new Date().toISOString(),
         payload: payload || {}
-      }), OperationType.WRITE, `siteBackups/${backupId}`);
+      }), OperationType.WRITE, `backups/${backupId}`);
       
       return mockResponseOk({ success: true, backupId });
     } catch (err: any) {
@@ -1890,7 +1711,7 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     const parts = path.split('/');
     const siteId = parts[3];
     try {
-      const querySnap = await runFs(() => getDocs(collection(db, 'siteBackups')), OperationType.LIST, 'siteBackups_all');
+      const querySnap = await runFs(() => getDocs(collection(db, 'backups')), OperationType.LIST, 'backups_all');
       const backupsList = querySnap.docs
         .map(docSnapshot => {
           const d = docSnapshot.data();
@@ -1907,7 +1728,7 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
       backupsList.sort((a, b) => new Date(b.createdTime).getTime() - new Date(a.createdTime).getTime());
       return mockResponseOk({ success: true, files: backupsList });
     } catch (err: any) {
-      console.warn(`[Firestore Log] Failed to fetch siteBackups for ${siteId}:`, err);
+      console.warn(`[Firestore Log] Failed to fetch backups for ${siteId}:`, err);
       return mockResponseErr('تعذر جلب النسخ الاحتياطية من السحابة: ' + (err.message || String(err)), 500);
     }
   }
@@ -1923,7 +1744,7 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     try {
       const timestamp = new Date().toISOString();
       const backupId = `${siteId}_manual_backup_${Date.now()}`;
-      const backupDocRef = doc(db, 'siteBackups', backupId);
+      const backupDocRef = doc(db, 'backups', backupId);
       
       await runFs(() => setDoc(backupDocRef, {
         siteId,
@@ -1931,7 +1752,7 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
         backupDate: timestamp.split('T')[0],
         createdAt: timestamp,
         payload: payload
-      }), OperationType.WRITE, `siteBackups/${backupId}`);
+      }), OperationType.WRITE, `backups/${backupId}`);
       
       return mockResponseOk({ success: true, backupId });
     } catch (err: any) {
@@ -1945,14 +1766,14 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     const parts = path.split('/');
     const backupId = parts[6] || parts[parts.length - 1];
     try {
-      const backupDocRef = doc(db, 'siteBackups', backupId);
-      const docSnap = await runFs(() => getDoc(backupDocRef), OperationType.GET, `siteBackups/${backupId}`);
+      const backupDocRef = doc(db, 'backups', backupId);
+      const docSnap = await runFs(() => getDoc(backupDocRef), OperationType.GET, `backups/${backupId}`);
       if (!docSnap.exists()) {
         return mockResponseErr('ملف النسخة الاحتياطية المطلوب غير متوفر.', 404);
       }
       return mockResponseOk({ success: true, backup: docSnap.data() });
     } catch (err: any) {
-      console.warn(`[Firestore Log] Failed to retrieve siteBackup ${backupId}:`, err);
+      console.warn(`[Firestore Log] Failed to retrieve backup ${backupId}:`, err);
       return mockResponseErr('تعذر استعادة نسخة البيانات المطلوبة: ' + (err.message || String(err)), 500);
     }
   }
@@ -1962,11 +1783,11 @@ async function emulatedFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     const parts = path.split('/');
     const backupId = parts[6] || parts[parts.length - 1];
     try {
-      const backupDocRef = doc(db, 'siteBackups', backupId);
-      await runFs(() => deleteDoc(backupDocRef), OperationType.DELETE, `siteBackups/${backupId}`);
+      const backupDocRef = doc(db, 'backups', backupId);
+      await runFs(() => deleteDoc(backupDocRef), OperationType.DELETE, `backups/${backupId}`);
       return mockResponseOk({ success: true });
     } catch (err: any) {
-      console.warn(`[Firestore Log] Failed to delete siteBackup ${backupId}:`, err);
+      console.warn(`[Firestore Log] Failed to delete backup ${backupId}:`, err);
       return mockResponseErr('تعذر حذف نسخة البيانات من السحابة: ' + (err.message || String(err)), 500);
     }
   }

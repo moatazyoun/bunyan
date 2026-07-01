@@ -193,9 +193,9 @@ export default function ContractsDashboard({
     setShowModal(true);
   };
 
-  const deleteContract = (id: string) => {
+  const deleteContract = async (id: string) => {
     if (userRole === 'viewer') return;
-    if (confirmWithRandomCode('هل أنت متأكد من حذف هذا العقد نهائياً؟')) {
+    if (await confirmWithRandomCode('هل أنت متأكد من حذف هذا العقد نهائياً؟')) {
       setContracts(prev => prev.filter(c => c.id !== id));
       addAuditLog('حذف عقد', 'إدارة العقود', `تم حذف العقد ذو الرقم المرجعي: ${id}`);
     }
@@ -465,9 +465,9 @@ export default function ContractsDashboard({
           {showModal && (
             <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto" dir="rtl">
               <motion.div 
-                initial={{ opacity: 0, scale: 0.96, y: 20 }}
+                initial={{ opacity: 1, scale: 0.96, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.96, y: 20 }}
+                exit={{ opacity: 1, scale: 0.96, y: 20 }}
                 transition={{ type: 'spring', damping: 25, stiffness: 220 }}
                 className="bg-white border border-slate-200 rounded-[2.5rem] w-full max-w-5xl shadow-2xl flex flex-col md:flex-row max-h-[92vh] overflow-hidden text-right"
               >
@@ -641,7 +641,7 @@ export default function ContractsDashboard({
                               {/* Manual Text Input triggers only when choosing manual option or if custom input selected */}
                               {isManualCounterparty && (
                                 <motion.div 
-                                  initial={{ opacity: 0, y: -5 }}
+                                  initial={{ opacity: 1, y: -5 }}
                                   animate={{ opacity: 1, y: 0 }}
                                   className="space-y-1.5 bg-indigo-50/20 border border-indigo-100 p-4 rounded-xl"
                                 >

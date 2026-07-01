@@ -1,0 +1,28 @@
+[
+  {
+    "id": "site-101",
+    "transactions": [],
+    "custodies": [],
+    "contractors": [],
+    "equipment": [],
+    "maintenanceOrders": [],
+    "srsDocuments": [],
+    "srsItems": [],
+    "weatherLogs": [],
+    "attendanceLogs": [],
+    "materials": []
+  },
+  {
+    "id": "site-102",
+    "transactions": [],
+    "custodies": [],
+    "contractors": [],
+    "equipment": [],
+    "maintenanceOrders": [],
+    "srsDocuments": [],
+    "srsItems": [],
+    "weatherLogs": [],
+    "attendanceLogs": [],
+    "materials": []
+  }
+]

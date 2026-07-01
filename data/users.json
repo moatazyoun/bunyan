@@ -1,0 +1,23 @@
+[
+  {
+    "id": "moataz",
+    "username": "moataz",
+    "nameAr": "م. معتز يونس",
+    "password": "123",
+    "role": "admin"
+  },
+  {
+    "id": "ahmed",
+    "username": "ahmed",
+    "nameAr": "أحمد سيد",
+    "password": "123",
+    "role": "user"
+  },
+  {
+    "id": "omar",
+    "username": "omar",
+    "nameAr": "عمر فاروق",
+    "password": "123",
+    "role": "user"
+  }
+]

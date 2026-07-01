@@ -83,7 +83,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, dbConnected, dbLaten
 
       <div className="w-full max-w-[440px] relative z-10">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 1, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
           className="bg-white/80 rounded-3xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] p-8 md:p-10 border border-white backdrop-blur-xl"
@@ -131,7 +131,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, dbConnected, dbLaten
 
             {error && (
               <motion.div 
-                initial={{ opacity: 0, height: 0 }}
+                initial={{ opacity: 1, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 className="flex items-start gap-3 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-700 text-xs font-semibold leading-relaxed"
               >

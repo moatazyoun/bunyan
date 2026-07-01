@@ -151,6 +151,7 @@ export interface HseIncidentRecord {
 
 export interface WbsTaskRecord {
   id: string;
+  projectId?: string;
   wbsCode: string;
   name: string;
   phase: 'preparatory' | 'excavation' | 'subbase' | 'asphalt' | 'curbstone' | 'lighting' | 'signage';

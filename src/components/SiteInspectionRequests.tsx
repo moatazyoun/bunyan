@@ -22,6 +22,7 @@ import {
   X
 } from 'lucide-react';
 import { 
+  db,
   collection, 
   query, 
   where, 
@@ -32,8 +33,7 @@ import {
   deleteDoc, 
   serverTimestamp,
   getFirestore
-} from 'firebase/firestore';
-import { db } from '../lib/firebase'; // Assuming setup is in lib/firebase
+} from '../lib/firebase';
 import { confirmWithRandomCode } from '../utils/confirmHelper';
 
 interface ActivityLogItem {
@@ -365,7 +365,7 @@ export default function SiteInspectionRequests({
   };
 
   const handleDeleteIR = async (id: string, refNo: string) => {
-    if (confirmWithRandomCode(`هل أنت متأكد من حذف طلب فحص الموقع ذو الرقم المرجعي ${refNo} نهائياً؟`)) {
+    if (await confirmWithRandomCode(`هل أنت متأكد من حذف طلب فحص الموقع ذو الرقم المرجعي ${refNo} نهائياً؟`)) {
       try {
         await deleteDoc(doc(db, 'inspectionRequests', id));
         console.log('Inspection request deleted successfully.');

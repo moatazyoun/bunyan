@@ -150,7 +150,7 @@ export default function LoadingScreen({ siteName, primaryColor }: LoadingScreenP
 
       {/* 2. Main Luxury Card Container */}
       <motion.div 
-        initial={{ opacity: 0, y: 35, scale: 0.97 }}
+        initial={{ opacity: 1, y: 35, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
         className="w-full max-w-2xl bg-white/90 backdrop-blur-xl border border-slate-200/90 rounded-[40px] p-8 md:p-12 shadow-[0_32px_64px_-16px_rgba(15,23,42,0.06)] relative overflow-hidden flex flex-col md:flex-row gap-8 md:gap-10 items-center z-10"
@@ -205,7 +205,7 @@ export default function LoadingScreen({ siteName, primaryColor }: LoadingScreenP
                 style={{ 
                   borderTopColor: primaryColor,
                   borderRightColor: primaryColor,
-                  opacity: 0.65
+                  opacity: 1.65
                 }}
               />
             </motion.div>
@@ -260,7 +260,7 @@ export default function LoadingScreen({ siteName, primaryColor }: LoadingScreenP
             <div className="inline-flex items-baseline gap-1">
               <motion.span 
                 key={progress}
-                initial={{ opacity: 0.5, scale: 0.95 }}
+                initial={{ opacity: 1.5, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 className="text-4xl font-black text-slate-900 font-mono tracking-tight"
               >
@@ -326,7 +326,7 @@ export default function LoadingScreen({ siteName, primaryColor }: LoadingScreenP
                   <div className="shrink-0 mt-0.5">
                     {isChecked ? (
                       <motion.span
-                        initial={{ scale: 0.7, opacity: 0 }}
+                        initial={{ scale: 0.7, opacity: 1 }}
                         animate={{ scale: 1, opacity: 1 }}
                         className="text-emerald-600 block"
                       >

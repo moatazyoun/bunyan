@@ -520,9 +520,9 @@ export default function DocumentControlDashboard({
       <AnimatePresence>
         {selectedDocForWorkflow && (
           <motion.div 
-            initial={{ opacity: 0, y: 15 }}
+            initial={{ opacity: 1, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 15 }}
+            exit={{ opacity: 1, y: 15 }}
             className="bg-slate-900 border border-slate-800 rounded-3xl p-6 text-white space-y-6 shadow-2xl relative"
           >
             <div className="absolute top-4 left-4">
@@ -753,9 +753,9 @@ export default function DocumentControlDashboard({
       <AnimatePresence>
         {isAddingDoc && (
           <motion.div 
-            initial={{ opacity: 0 }} 
+            initial={{ opacity: 1 }} 
             animate={{ opacity: 1 }} 
-            exit={{ opacity: 0 }}
+            exit={{ opacity: 1 }}
             className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto"
           >
             <motion.div 
@@ -1013,16 +1013,16 @@ export default function DocumentControlDashboard({
       <AnimatePresence>
         {docToDelete && (
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            exit={{ opacity: 1 }}
             className="fixed inset-0 z-[70] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
             dir="rtl"
           >
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 1 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
+              exit={{ scale: 0.95, opacity: 1 }}
               className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-rose-100"
             >
               <div className="bg-rose-50 p-6 flex flex-col items-center justify-center border-b border-rose-100">

@@ -20,8 +20,7 @@ import {
   FileText 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, deleteDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, deleteDoc } from '../lib/firebase';
 import { UserItem } from '../types';
 import { confirmWithRandomCode } from '../utils/confirmHelper';
 
@@ -150,7 +149,7 @@ export default function NotificationsTab({ currentUser, selectedSite, dbConnecte
   };
 
   const handleDeleteNotification = async (id: string) => {
-    if (!confirmWithRandomCode('هل أنت متأكد من حذف هذا التعميم نهائياً من قاعدة البيانات السحابية؟')) return;
+    if (!await confirmWithRandomCode('هل أنت متأكد من حذف هذا التعميم نهائياً من قاعدة البيانات السحابية؟')) return;
     try {
       await deleteDoc(doc(db, 'notifications', id));
       setSuccessMsg('تم حذف التعميم الإداري نهائياً وبنجاح.');
@@ -246,9 +245,9 @@ export default function NotificationsTab({ currentUser, selectedSite, dbConnecte
       <AnimatePresence>
         {successMsg && (
           <motion.div 
-            initial={{ opacity: 0, y: -10 }}
+            initial={{ opacity: 1, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
+            exit={{ opacity: 1 }}
             className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-bold flex items-center gap-2 shadow-sm"
           >
             <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
@@ -257,9 +256,9 @@ export default function NotificationsTab({ currentUser, selectedSite, dbConnecte
         )}
         {errorMsg && (
           <motion.div 
-            initial={{ opacity: 0, y: -10 }}
+            initial={{ opacity: 1, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
+            exit={{ opacity: 1 }}
             className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-bold flex items-center gap-2 shadow-sm"
           >
             <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />

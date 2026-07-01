@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { X, User, Phone, Mail, UserCheck, AlertCircle } from 'lucide-react';
 import { CustomerRecord } from '../types';
-import { db } from '../lib/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { db, doc, setDoc } from '../lib/firebase';
 
 interface AddCustomerModalProps {
   onClose: () => void;

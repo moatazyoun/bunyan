@@ -569,9 +569,9 @@ export default function FuelDashboard({
       <AnimatePresence>
         {showAiIngest && (
           <motion.div
-            initial={{ opacity: 0, y: -15 }}
+            initial={{ opacity: 1, y: -15 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
+            exit={{ opacity: 1, y: -15 }}
             className="bg-white border border-indigo-100 text-slate-900 p-6 rounded-3xl shadow-sm space-y-5 no-print bg-gradient-to-br from-white via-white to-indigo-50/10 font-sans text-right"
           >
             <div className="flex items-center gap-3">
@@ -1298,9 +1298,9 @@ export default function FuelDashboard({
         {showAddModal && (
           <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn" dir="rtl">
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 1 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
+              exit={{ scale: 0.95, opacity: 1 }}
               className="bg-white border border-slate-200 rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col md:flex-row max-h-[90vh] overflow-hidden text-right font-sans"
             >
               {/* Sidebar */}
@@ -1649,9 +1649,9 @@ export default function FuelDashboard({
         {showStationModal && (
           <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm no-print" dir="rtl">
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              initial={{ opacity: 1, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              exit={{ opacity: 1, scale: 0.95, y: 15 }}
               className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden font-sans text-right"
             >
               {/* Header */}
@@ -1775,9 +1775,9 @@ export default function FuelDashboard({
         {stationToDelete && (
           <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm no-print" dir="rtl">
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 1, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              exit={{ opacity: 1, scale: 0.95 }}
               className="bg-white rounded-3xl border border-slate-200 shadow-2xl p-6 max-w-md w-full text-right space-y-4 font-sans"
             >
               <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-row-reverse">

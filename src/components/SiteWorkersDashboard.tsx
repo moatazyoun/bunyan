@@ -49,9 +49,9 @@ const CustomSelect = ({
           <>
             <div className="fixed inset-0 z-[60]" onClick={() => setIsOpen(false)} />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: -5 }}
+              initial={{ opacity: 1, scale: 0.95, y: -5 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: -5 }}
+              exit={{ opacity: 1, scale: 0.95, y: -5 }}
               className="absolute z-[70] mt-1 w-full min-w-[120px] bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden py-1"
             >
               {options.map((opt) => (
@@ -474,12 +474,12 @@ export default function SiteWorkersDashboard({
     });
   };
 
-  const handleDeletePayment = (id: string) => {
+  const handleDeletePayment = async (id: string) => {
     if (userRole === 'viewer') {
       alert('عذراً، لا تملك صلاحية حذف الدفعات');
       return;
     }
-    if (confirmWithRandomCode(`هل أنت متأكد من حذف هذه الدفعة [${id}] من السجل؟`)) {
+    if (await confirmWithRandomCode(`هل أنت متأكد من حذف هذه الدفعة [${id}] من السجل؟`)) {
       const payment = salaryPayments.find(p => p.id === id);
       setSalaryPayments(prev => prev.filter(p => p.id !== id));
       addAuditLog?.(
@@ -569,7 +569,7 @@ export default function SiteWorkersDashboard({
       {/* Views */}
       <AnimatePresence mode="wait">
         {activeTab === 'settlements' && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+          <motion.div initial={{ opacity: 1, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 1 }} className="space-y-4">
              <div className="bg-gradient-to-l from-indigo-50 to-white border border-indigo-100/60 p-4 rounded-xl text-xs font-bold text-indigo-900 flex items-start gap-3 shadow-sm">
                <AlertCircle className="shrink-0 text-indigo-600" />
                <p className="leading-relaxed">يمكنك تصفية حسابات العاملين بصورة مستقلة لكل عامل. بالضغط على "تصفية وترحيل"، سيتم إنشاء قيد صرف آلي بصافي المستحقات عن الأيام المدرجة وتوجيهها للمنصرف الأسبوعي.</p>
@@ -649,7 +649,7 @@ export default function SiteWorkersDashboard({
         )}
 
         {activeTab === 'workers' && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+          <motion.div initial={{ opacity: 1, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 1 }} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="md:col-span-2 relative">
                 <Search className="absolute right-3 top-2.5 text-slate-400" size={18} />
@@ -743,7 +743,7 @@ export default function SiteWorkersDashboard({
         )}
 
         {activeTab === 'hr-strategy' && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+          <motion.div initial={{ opacity: 1, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 1 }}>
             <HrStrategyTab
               workers={workers}
               attendanceLogs={attendanceLogs}
@@ -759,7 +759,7 @@ export default function SiteWorkersDashboard({
       {/* Worker Details Modal */}
       {showDetailsModal && selectedWorker && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-slate-50 rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden my-auto">
+           <motion.div initial={{ opacity: 1, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-slate-50 rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden my-auto">
               <div className="bg-white p-6 border-b border-slate-200">
                 <div className="flex justify-between items-start">
                   <div className="flex gap-4">
@@ -843,9 +843,9 @@ export default function SiteWorkersDashboard({
                 <AnimatePresence>
                   {showBasicInfo && (
                     <motion.div 
-                      initial={{ height: 0, opacity: 0 }} 
+                      initial={{ height: 0, opacity: 1 }} 
                       animate={{ height: 'auto', opacity: 1 }} 
-                      exit={{ height: 0, opacity: 0 }}
+                      exit={{ height: 0, opacity: 1 }}
                       className="overflow-hidden"
                     >
                       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-6 border-t border-slate-100 pt-6">
@@ -975,7 +975,7 @@ export default function SiteWorkersDashboard({
 
               <div className="p-6">
                 {detailsSubTab === 'attendance' && (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                  <motion.div initial={{ opacity: 1, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                     <div className="flex justify-between items-center mb-6">
                       <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                         <Calendar size={18} className="text-indigo-600" />
@@ -1111,7 +1111,7 @@ export default function SiteWorkersDashboard({
                 )}
 
                 {detailsSubTab === 'payments' && (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                  <motion.div initial={{ opacity: 1, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                     {/* Add Payment Form */}
                     <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
                       <h5 className="text-[11px] font-black text-slate-400 mb-4 uppercase tracking-wider">تسجيل دفعة استلام راتب جديدة</h5>
@@ -1238,7 +1238,7 @@ export default function SiteWorkersDashboard({
                 )}
 
                 {detailsSubTab === 'history' && (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                  <motion.div initial={{ opacity: 1, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                     <div className="flex justify-between items-center mb-4">
                       <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
                         <Wallet size={18} className="text-rose-600" />
@@ -1289,7 +1289,7 @@ export default function SiteWorkersDashboard({
       {/* Add Worker Modal */}
       {showWorkerModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-slate-900 border border-slate-800 w-full max-w-4xl rounded-[2.5rem] shadow-2xl overflow-hidden relative text-right flex flex-col md:flex-row">
+          <motion.div initial={{ scale: 0.95, opacity: 1 }} animate={{ scale: 1, opacity: 1 }} className="bg-slate-900 border border-slate-800 w-full max-w-4xl rounded-[2.5rem] shadow-2xl overflow-hidden relative text-right flex flex-col md:flex-row">
             
             {/* Sidebar Branding / Decorative for Modal */}
             <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 md:w-1/3 p-10 flex flex-col justify-between relative overflow-hidden shrink-0">
@@ -1595,7 +1595,7 @@ export default function SiteWorkersDashboard({
       {confirmDelete && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <motion.div 
-            initial={{ scale: 0.9, opacity: 0 }}
+            initial={{ scale: 0.9, opacity: 1 }}
             animate={{ scale: 1, opacity: 1 }}
             className="bg-white rounded-2xl border border-rose-100 shadow-2xl p-6 max-w-sm w-full text-right"
           >

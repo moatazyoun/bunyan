@@ -72,9 +72,9 @@ export default function EquipmentModals({
         {showAddEqModal && (
           <div dir="rtl" className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 text-right font-sans">
             <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              initial={{ scale: 0.9, opacity: 1, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              exit={{ scale: 0.9, opacity: 1, y: 20 }}
               className="bg-slate-900 rounded-3xl border border-slate-700 shadow-2xl max-w-4xl w-full overflow-hidden flex flex-row"
             >
               {/* Sidebar Side */}
@@ -234,9 +234,9 @@ export default function EquipmentModals({
         {editingEqId && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 text-right font-sans">
              <motion.div
-               initial={{ scale: 0.9, opacity: 0, y: 20 }}
+               initial={{ scale: 0.9, opacity: 1, y: 20 }}
                animate={{ scale: 1, opacity: 1, y: 0 }}
-               exit={{ scale: 0.9, opacity: 0, y: 20 }}
+               exit={{ scale: 0.9, opacity: 1, y: 20 }}
                className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden"
              >
                <div className="bg-slate-900 text-white p-5 flex items-center justify-between flex-row-reverse">

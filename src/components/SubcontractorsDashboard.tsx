@@ -771,10 +771,10 @@ export default function SubcontractorsDashboard({
     setShowModal(true);
   };
 
-   const handleDelete = (id: string) => {
+   const handleDelete = async (id: string) => {
     if (userRole === 'viewer') return;
     const subToDelete = subcontractors.find(c => c.id === id);
-    if (confirmWithRandomCode('هل أنت متأكد من حذف حساب هذا المقاول وجميع البنود؟')) {
+    if (await confirmWithRandomCode('هل أنت متأكد من حذف حساب هذا المقاول وجميع البنود؟')) {
       setSubcontractors(prev => prev.filter(c => c.id !== id));
       if (subToDelete) {
         addAuditLog('حذف مقاول', 'بيانات مقاولي الباطن', `تم حذف المقاول: ${subToDelete.name}`);
@@ -1177,7 +1177,7 @@ export default function SubcontractorsDashboard({
       {showModal && (
         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto" dir="rtl">
           <motion.div 
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            initial={{ opacity: 1, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             className="bg-white border border-slate-200 rounded-[2.5rem] w-full max-w-5xl shadow-2xl flex flex-col md:flex-row max-h-[90vh] overflow-hidden text-right"
             id="subcontractor-modal-inner"
