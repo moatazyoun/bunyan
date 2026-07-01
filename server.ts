@@ -19,13 +19,22 @@ dotenv.config();
 
 // Initialize Postgres connection pool
 let pgPool: pg.Pool | null = null;
+let isPgPoolHealthy = true;
 let databaseUrl = process.env.DATABASE_URL || "";
+
+// Log database and Supabase keys status on startup
+console.log("[Database Config Info] Loaded keys status:");
+console.log(" - SUPABASE_URL:", process.env.SUPABASE_URL ? "Present" : "Missing");
+console.log(" - SUPABASE_PUBLISHABLE_KEY:", process.env.SUPABASE_PUBLISHABLE_KEY ? "Present" : "Missing");
+console.log(" - SUPABASE_SECRET_KEY:", process.env.SUPABASE_SECRET_KEY ? "Present" : "Missing");
+console.log(" - SUPABASE_JWKS_URL:", process.env.SUPABASE_JWKS_URL ? "Present" : "Missing");
 
 if (!databaseUrl) {
   const hostUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const match = hostUrl.match(/https?:\/\/([^.]+)\.supabase\.co/);
   if (match) {
     const projectRef = match[1];
+    // Default to reconstructed database URL with robust fallback, but prioritize process.env.DATABASE_URL if provided
     databaseUrl = `postgresql://postgres:MoatY%40%40010100@db.${projectRef}.supabase.co:5432/postgres`;
     console.log("[Postgres Server] DATABASE_URL reconstructed from Supabase host URL:", hostUrl);
   }
@@ -37,19 +46,30 @@ if (databaseUrl) {
       connectionString: databaseUrl,
       ssl: {
         rejectUnauthorized: false
-      }
+      },
+      connectionTimeoutMillis: 3000, // Fail fast if blocked (3 seconds)
+      query_timeout: 3000 // Fail fast if query blocked (3 seconds)
     });
+    
+    // Catch pool background connection errors to prevent unhandled node errors or loud crashes
+    pgPool.on("error", (err) => {
+      console.warn("[Postgres Server Pool Error] Caught pool client connection error:", err.message);
+      isPgPoolHealthy = false;
+    });
+
     console.log("[Postgres Server] Initialized successfully with URL (SSL active).");
   } catch (err) {
-    console.error("[Postgres Server] Connection pool creation failed:", err);
+    console.warn("[Postgres Server] Connection pool creation failed:", err);
+    isPgPoolHealthy = false;
   }
 } else {
   console.log("[Postgres Server] DATABASE_URL missing. Checking for Supabase fallback.");
+  isPgPoolHealthy = false;
 }
 
 // Initialize Supabase if keys are available in process.env
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
+const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
 
 let supabase: any = null;
 if (supabaseUrl && supabaseKey) {
@@ -112,8 +132,28 @@ function collection(dbInstance: any, collectionName: string) {
 
 const checkedTables = new Set<string>();
 
+function handlePgError(err: any) {
+  const errMsg = String(err).toLowerCase();
+  if (
+    errMsg.includes("timeout") || 
+    errMsg.includes("etimedout") || 
+    errMsg.includes("econnrefused") || 
+    errMsg.includes("enotfound") || 
+    errMsg.includes("connection") ||
+    errMsg.includes("handshake") ||
+    errMsg.includes("terminate") ||
+    errMsg.includes("aggregateerror")
+  ) {
+    if (isPgPoolHealthy) {
+      console.warn("[Postgres Server] Connection or timeout error detected:", err);
+      console.warn("[Postgres Server] Disabling Postgres pool permanently and falling back to Resilient Local JSON File Database.");
+      isPgPoolHealthy = false;
+    }
+  }
+}
+
 async function ensurePgTable(col: string) {
-  if (!pgPool) return;
+  if (!pgPool || !isPgPoolHealthy) return;
   const safeName = col.replace(/[^a-zA-Z0-9_]/g, "");
   if (checkedTables.has(safeName)) return;
 
@@ -129,7 +169,8 @@ async function ensurePgTable(col: string) {
     checkedTables.add(safeName);
     console.log(`[Postgres Server] Table "${safeName}" ensured/created successfully.`);
   } catch (err) {
-    console.error(`[Postgres Server] Failed to ensure table "${safeName}":`, err);
+    console.warn(`[Postgres Server] Failed to ensure table "${safeName}":`, err instanceof Error ? err.message : err);
+    handlePgError(err);
   }
 }
 
@@ -137,25 +178,58 @@ async function getDoc(docRef: ServerDocRef) {
   const col = docRef.collectionName;
   const id = docRef.docId;
 
-  if (pgPool) {
+  if (pgPool && isPgPoolHealthy) {
     try {
       const safeCol = col.replace(/[^a-zA-Z0-9_]/g, "");
       await ensurePgTable(safeCol);
-      const res = await pgPool.query(`SELECT data FROM "${safeCol}" WHERE id = $1`, [id]);
-      if (res.rows.length > 0) {
+      
+      // Secondary health check guard in case ensurePgTable turned it off
+      if (isPgPoolHealthy) {
+        const res = await pgPool.query(`SELECT data FROM "${safeCol}" WHERE id = $1`, [id]);
+        if (res.rows.length > 0) {
+          return {
+            exists: () => true,
+            data: () => res.rows[0].data,
+            id: id
+          };
+        }
         return {
-          exists: () => true,
-          data: () => res.rows[0].data,
+          exists: () => false,
+          data: () => null,
           id: id
         };
       }
-      return {
-        exists: () => false,
-        data: () => null,
-        id: id
-      };
     } catch (err) {
-      console.error(`[Postgres Server getDoc] failed for "${col}", falling back to local storage:`, err);
+      console.warn(`[Postgres Server getDoc] failed for "${col}", trying Supabase SDK fallback:`, err instanceof Error ? err.message : err);
+      handlePgError(err);
+    }
+  }
+
+  // Supabase SDK API Fallback
+  if (supabase) {
+    try {
+      const safeCol = col.replace(/[^a-zA-Z0-9_]/g, "");
+      const { data: row, error } = await supabase
+        .from(safeCol)
+        .select("data")
+        .eq("id", id)
+        .maybeSingle();
+      if (!error && row) {
+        return {
+          exists: () => true,
+          data: () => row.data,
+          id: id
+        };
+      } else if (!error) {
+        return {
+          exists: () => false,
+          data: () => null,
+          id: id
+        };
+      }
+      console.warn(`[Supabase SDK getDoc fallback] query error for "${safeCol}":`, error.message);
+    } catch (err) {
+      console.warn(`[Supabase SDK getDoc exception] failed for "${col}":`, err);
     }
   }
 
@@ -184,20 +258,46 @@ async function getDoc(docRef: ServerDocRef) {
 async function getDocs(collectionRef: ServerCollectionRef) {
   const col = collectionRef.collectionName;
 
-  if (pgPool) {
+  if (pgPool && isPgPoolHealthy) {
     try {
       const safeCol = col.replace(/[^a-zA-Z0-9_]/g, "");
       await ensurePgTable(safeCol);
-      const res = await pgPool.query(`SELECT id, data FROM "${safeCol}"`);
-      return {
-        docs: res.rows.map((row: any) => ({
-          id: row.id || "",
-          data: () => row.data,
-          ref: new ServerDocRef(col, row.id || "")
-        }))
-      };
+      
+      if (isPgPoolHealthy) {
+        const res = await pgPool.query(`SELECT id, data FROM "${safeCol}"`);
+        return {
+          docs: res.rows.map((row: any) => ({
+            id: row.id || "",
+            data: () => row.data,
+            ref: new ServerDocRef(col, row.id || "")
+          }))
+        };
+      }
     } catch (err) {
-      console.error(`[Postgres Server getDocs] failed for "${col}", falling back to local storage:`, err);
+      console.warn(`[Postgres Server getDocs] failed for "${col}", trying Supabase SDK fallback:`, err instanceof Error ? err.message : err);
+      handlePgError(err);
+    }
+  }
+
+  // Supabase SDK API Fallback
+  if (supabase) {
+    try {
+      const safeCol = col.replace(/[^a-zA-Z0-9_]/g, "");
+      const { data: rows, error } = await supabase
+        .from(safeCol)
+        .select("id, data");
+      if (!error && rows) {
+        return {
+          docs: rows.map((row: any) => ({
+            id: row.id || "",
+            data: () => row.data,
+            ref: new ServerDocRef(col, row.id || "")
+          }))
+        };
+      }
+      console.warn(`[Supabase SDK getDocs fallback] query error for "${safeCol}":`, error?.message);
+    } catch (err) {
+      console.warn(`[Supabase SDK getDocs exception] failed for "${col}":`, err);
     }
   }
 
@@ -221,27 +321,58 @@ async function setDoc(docRef: ServerDocRef, data: any, options?: { merge?: boole
   const col = docRef.collectionName;
   const id = docRef.docId;
 
-  if (pgPool) {
+  if (pgPool && isPgPoolHealthy) {
     try {
       const safeCol = col.replace(/[^a-zA-Z0-9_]/g, "");
       await ensurePgTable(safeCol);
       
+      if (isPgPoolHealthy) {
+        let finalData = { id, ...data };
+        if (options?.merge) {
+          const checkRes = await pgPool.query(`SELECT data FROM "${safeCol}" WHERE id = $1`, [id]);
+          if (checkRes.rows.length > 0) {
+            finalData = { ...checkRes.rows[0].data, ...data, id };
+          }
+        }
+
+        await pgPool.query(`
+          INSERT INTO "${safeCol}" (id, data, updated_at)
+          VALUES ($1, $2, CURRENT_TIMESTAMP)
+          ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = CURRENT_TIMESTAMP
+        `, [id, JSON.stringify(finalData)]);
+        return;
+      }
+    } catch (err) {
+      console.warn(`[Postgres Server setDoc] failed for "${col}", trying Supabase SDK fallback:`, err instanceof Error ? err.message : err);
+      handlePgError(err);
+    }
+  }
+
+  // Supabase SDK API Fallback
+  if (supabase) {
+    try {
+      const safeCol = col.replace(/[^a-zA-Z0-9_]/g, "");
       let finalData = { id, ...data };
       if (options?.merge) {
-        const checkRes = await pgPool.query(`SELECT data FROM "${safeCol}" WHERE id = $1`, [id]);
-        if (checkRes.rows.length > 0) {
-          finalData = { ...checkRes.rows[0].data, ...data, id };
+        const { data: row } = await supabase
+          .from(safeCol)
+          .select("data")
+          .eq("id", id)
+          .maybeSingle();
+        if (row && row.data) {
+          finalData = { ...row.data, ...data, id };
         }
       }
 
-      await pgPool.query(`
-        INSERT INTO "${safeCol}" (id, data, updated_at)
-        VALUES ($1, $2, CURRENT_TIMESTAMP)
-        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = CURRENT_TIMESTAMP
-      `, [id, JSON.stringify(finalData)]);
-      return;
+      const { error } = await supabase
+        .from(safeCol)
+        .upsert({ id, data: finalData, updated_at: new Date().toISOString() });
+      if (!error) {
+        return;
+      }
+      console.warn(`[Supabase SDK setDoc fallback] query error for "${safeCol}":`, error.message);
     } catch (err) {
-      console.error(`[Postgres Server setDoc] failed for "${col}", falling back to local storage:`, err);
+      console.warn(`[Supabase SDK setDoc exception] failed for "${col}":`, err);
     }
   }
 
@@ -274,14 +405,35 @@ async function deleteDoc(docRef: ServerDocRef) {
   const col = docRef.collectionName;
   const id = docRef.docId;
 
-  if (pgPool) {
+  if (pgPool && isPgPoolHealthy) {
     try {
       const safeCol = col.replace(/[^a-zA-Z0-9_]/g, "");
       await ensurePgTable(safeCol);
-      await pgPool.query(`DELETE FROM "${safeCol}" WHERE id = $1`, [id]);
-      return;
+      
+      if (isPgPoolHealthy) {
+        await pgPool.query(`DELETE FROM "${safeCol}" WHERE id = $1`, [id]);
+        return;
+      }
     } catch (err) {
-      console.error(`[Postgres Server deleteDoc] failed for "${col}", falling back to local storage:`, err);
+      console.warn(`[Postgres Server deleteDoc] failed for "${col}", trying Supabase SDK fallback:`, err instanceof Error ? err.message : err);
+      handlePgError(err);
+    }
+  }
+
+  // Supabase SDK API Fallback
+  if (supabase) {
+    try {
+      const safeCol = col.replace(/[^a-zA-Z0-9_]/g, "");
+      const { error } = await supabase
+        .from(safeCol)
+        .delete()
+        .eq("id", id);
+      if (!error) {
+        return;
+      }
+      console.warn(`[Supabase SDK deleteDoc fallback] query error for "${safeCol}":`, error.message);
+    } catch (err) {
+      console.warn(`[Supabase SDK deleteDoc exception] failed for "${col}":`, err);
     }
   }
 
@@ -1063,7 +1215,7 @@ app.get("/api/db/:collection", async (req, res) => {
 });
 
 app.get("/api/db-status", async (req, res) => {
-    if (pgPool) {
+    if (pgPool && isPgPoolHealthy) {
       res.json({ 
         connected: true, 
         cloud: true, 
@@ -1075,7 +1227,7 @@ app.get("/api/db-status", async (req, res) => {
         connected: true, 
         cloud: true, 
         mode: "سحابي نشط (Supabase SDK)", 
-        info: "متصل بقاعدة البيانات السحابية Supabase عبر SDK بنجاح" 
+        info: "متصل بقاعدة البيانات السحابية Supabase عبر API بنجاح" 
       });
     } else if (db) {
       res.json({ 

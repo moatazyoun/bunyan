@@ -10,8 +10,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Load Supabase environment variables
-const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || (import.meta as any).env?.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || (import.meta as any).env?.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '';
+const supabaseUrl = (import.meta as any).env?.SUPABASE_URL || (import.meta as any).env?.VITE_SUPABASE_URL || (import.meta as any).env?.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = (import.meta as any).env?.SUPABASE_PUBLISHABLE_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || (import.meta as any).env?.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '';
 
 export let supabase: SupabaseClient | null = null;
 

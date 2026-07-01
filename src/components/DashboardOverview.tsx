@@ -492,12 +492,6 @@ export default function DashboardOverview({
         
         <div className="text-right w-full relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
           <div className="space-y-2.5">
-            <div className="flex items-center gap-2 justify-end">
-              <span className="p-1 px-3 bg-purple-50 text-purple-700 border border-purple-100 text-[10px] font-extrabold rounded-lg tracking-wider font-mono">
-                BUNYAN CONTROL ENGINE v3.5
-              </span>
-              <div className="h-2 w-2 rounded-full bg-purple-600 animate-pulse"></div>
-            </div>
             <h2 className="text-3xl lg:text-4xl font-black text-gray-900 tracking-tight leading-tight">
               لوحة التحكم
             </h2>
