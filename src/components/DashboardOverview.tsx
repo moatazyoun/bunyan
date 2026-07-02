@@ -557,7 +557,10 @@ export default function DashboardOverview({
       {/* NEW: CRITICAL QUICK ACTIONS & ALERTS SUMMARY */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 no-print">
         <div className="bg-white border border-gray-100 p-5 rounded-2xl shadow-sm">
-          <h4 className="text-sm font-black text-gray-900 mb-4 flex items-center justify-end gap-2">إجراءات سريعة <CheckCircle2 className="text-emerald-600" size={16} /></h4>
+          <h4 className="text-sm font-black text-gray-900 mb-4 flex items-center justify-start gap-2">
+            <CheckCircle2 className="text-emerald-600" size={16} />
+            <span>إجراءات سريعة</span>
+          </h4>
           <div className="grid grid-cols-2 gap-3">
              <button onClick={() => setActiveTab('transactions')} className="text-xs font-bold bg-gray-50 hover:bg-gray-100 p-3 rounded-lg text-gray-700 transition">تسجيل حركة مالية</button>
              <button onClick={() => setActiveTab('supplies')} className="text-xs font-bold bg-gray-50 hover:bg-gray-100 p-3 rounded-lg text-gray-700 transition">إضافة توريد جديد</button>
@@ -566,19 +569,19 @@ export default function DashboardOverview({
           </div>
         </div>
         <div className="bg-white border border-gray-100 p-5 rounded-2xl shadow-sm flex flex-col justify-between">
-          <h4 className="text-sm font-black text-gray-900 mb-4 flex items-center justify-end gap-2">
-            <span>المدد المتبقية للمشروعات</span>
+          <h4 className="text-sm font-black text-gray-900 mb-4 flex items-center justify-start gap-2">
             <Clock className="text-purple-600" size={16} />
+            <span>المدد المتبقية للمشروعات</span>
           </h4>
           <div className="space-y-4">
             {projectDurations.slice(0, 3).map((proj) => (
               <div key={proj.id} className="space-y-1.5 text-right">
                 <div className="flex justify-between items-center text-xs font-bold">
-                  <span className="text-purple-700 font-mono bg-purple-50 px-2 py-0.5 rounded">
-                    {proj.remainingDays > 0 ? `${proj.remainingDays} يوم متبقي` : 'منتهي أو متأخر'}
-                  </span>
                   <span className="text-gray-900 truncate max-w-[180px]" title={proj.name}>
                     {proj.name}
+                  </span>
+                  <span className="text-purple-700 font-mono bg-purple-50 px-2 py-0.5 rounded">
+                    {proj.remainingDays > 0 ? `${proj.remainingDays} يوم متبقي` : 'منتهي أو متأخر'}
                   </span>
                 </div>
                 <div className="relative w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
@@ -602,7 +605,7 @@ export default function DashboardOverview({
         
         {/* CARD 1: BUDGET */}
         <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-purple-100 transition-all duration-300 relative group">
-          <div className="absolute top-0 left-0 w-2 h-full bg-purple-600 rounded-l-2xl"></div>
+          <div className="absolute top-0 right-0 w-2 h-full bg-purple-600 rounded-r-2xl"></div>
           <div className="flex items-center justify-between mb-4">
             <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest text-right block">القيمة التقديرية للمشاريع</span>
             <div className="p-2.5 bg-purple-50 rounded-xl border border-purple-100 text-purple-600 group-hover:scale-110 transition-transform duration-300">
@@ -620,7 +623,7 @@ export default function DashboardOverview({
 
         {/* CARD 2: REAL OUTFLOW */}
         <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-rose-100 transition-all duration-300 relative group">
-          <div className="absolute top-0 left-0 w-2 h-full bg-rose-600 rounded-l-2xl"></div>
+          <div className="absolute top-0 right-0 w-2 h-full bg-rose-600 rounded-r-2xl"></div>
           <div className="flex items-center justify-between mb-4">
             <span className="text-[10px] font-extrabold text-rose-600 uppercase tracking-widest text-right block">المنصرف الفعلي (البنود)</span>
             <div className="p-2.5 bg-rose-50 rounded-xl border border-rose-100 text-rose-600 group-hover:scale-110 transition-transform duration-300">
@@ -638,7 +641,7 @@ export default function DashboardOverview({
 
         {/* CARD 3: EXECUTED PROGRESS */}
         <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-emerald-100 transition-all duration-300 relative group">
-          <div className="absolute top-0 left-0 w-2 h-full bg-emerald-600 rounded-l-2xl"></div>
+          <div className="absolute top-0 right-0 w-2 h-full bg-emerald-600 rounded-r-2xl"></div>
           <div className="flex items-center justify-between mb-4">
             <span className="text-[10px] font-extrabold text-emerald-600 uppercase tracking-widest text-right block">قيمة المستخلصات المنصرفة</span>
             <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-100 text-emerald-600 group-hover:scale-110 transition-transform duration-300">
@@ -656,7 +659,7 @@ export default function DashboardOverview({
 
         {/* CARD 4: OVERALL HEALTH SUMMARY */}
         <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-amber-100 transition-all duration-300 relative group">
-          <div className="absolute top-0 left-0 w-2 h-full bg-amber-600 rounded-l-2xl"></div>
+          <div className="absolute top-0 right-0 w-2 h-full bg-amber-600 rounded-r-2xl"></div>
           <div className="flex items-center justify-between mb-4">
             <span className="text-[10px] font-extrabold text-amber-600 uppercase tracking-widest text-right block">معدل الربح</span>
             <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-100 text-amber-600 group-hover:scale-110 transition-transform duration-300">
@@ -686,6 +689,10 @@ export default function DashboardOverview({
             <div className="lg:col-span-7 bg-white border border-gray-100 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
               <div>
                 <div className="flex justify-between items-center mb-6">
+                  <div className="text-right">
+                    <h3 className="text-sm font-black text-gray-900">الميزانيات والمنصرفات وتكلفة البنود</h3>
+                    <p className="text-[10px] text-gray-400 font-bold">مقارنة بصرية دقيقة بين موازنات الفئات المالية والقيمة المنجزة هندسياً لكل تصنيف</p>
+                  </div>
                   <button 
                     onClick={() => setActiveTab('transactions')}
                     className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1 font-sans cursor-pointer no-print"
@@ -693,10 +700,6 @@ export default function DashboardOverview({
                     <span>كشف الحركات التفصيلي</span>
                     <ChevronLeft size={14} />
                   </button>
-                  <div className="text-right">
-                    <h3 className="text-sm font-black text-gray-900">الميزانيات والمنصرفات وتكلفة البنود</h3>
-                    <p className="text-[10px] text-gray-400 font-bold">مقارنة بصرية دقيقة بين موازنات الفئات المالية والقيمة المنجزة هندسياً لكل تصنيف</p>
-                  </div>
                 </div>
 
                 <div className="h-80 w-full text-xs font-sans">
@@ -734,13 +737,13 @@ export default function DashboardOverview({
             <div className="lg:col-span-5 bg-white border border-gray-100 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
               <div>
                 <div className="flex justify-between items-center mb-6">
-                  <div className="flex gap-1.5 bg-purple-50 text-purple-700 text-[10px] font-bold px-3 py-1 rounded-lg border border-purple-100">
-                    <Activity size={12} />
-                    <span>سلسلة زمنية</span>
-                  </div>
                   <div className="text-right">
                     <h3 className="text-sm font-black text-gray-900">الاتجاه المتراكم للسيولة والأعمال</h3>
                     <p className="text-[10px] text-gray-400 font-bold">متابعة تراكم الدفعات وصافي الفوائض المالية الإجمالية</p>
+                  </div>
+                  <div className="flex gap-1.5 bg-purple-50 text-purple-700 text-[10px] font-bold px-3 py-1 rounded-lg border border-purple-100">
+                    <Activity size={12} />
+                    <span>سلسلة زمنية</span>
                   </div>
                 </div>
 
@@ -787,9 +790,9 @@ export default function DashboardOverview({
             <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-3 gap-6 bg-purple-50/20 border border-purple-100 p-6 rounded-3xl shadow-sm">
               <div className="space-y-3.5 text-right flex flex-col justify-between">
                 <div>
-                  <h4 className="font-black text-gray-900 text-base flex items-center justify-end gap-2">
-                    <span>تحليل وإدارة السيولة والمستخلصات</span>
+                  <h4 className="font-black text-gray-900 text-base flex items-center gap-2">
                     <Coins className="text-purple-600" size={18} />
+                    <span>تحليل وإدارة السيولة والمستخلصات</span>
                   </h4>
                   <p className="text-xs text-gray-500 leading-relaxed mt-1">
                     مزامنة وتدقيق العهد النقدية النشطة مع الإدارة المالية. يظهر المسحوبات والمدفوعات المسجلة تحت بند تصفية حسابات الموقع.
@@ -842,6 +845,10 @@ export default function DashboardOverview({
         {(selectedSector === 'all' || selectedSector === 'supplies') && (
           <div className="lg:col-span-12 bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
             <div className="flex justify-between items-center mb-6">
+              <div className="text-right">
+                <h3 className="text-sm font-black text-gray-900">حركة التوريد وجرد المخزون الفرعي</h3>
+                <p className="text-[10px] text-gray-400 font-bold">الربط المتزامن لحساب كميات الخامات الموردة (م³) وحالة السقوف والحد الأدنى للسلامة بالمخازن</p>
+              </div>
               <button 
                 onClick={() => setActiveTab('supplies')}
                 className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1 cursor-pointer font-sans no-print"
@@ -849,10 +856,6 @@ export default function DashboardOverview({
                 <span>التحكم ومكعبات التوريد</span>
                 <ChevronLeft size={14} />
               </button>
-              <div className="text-right">
-                <h3 className="text-sm font-black text-gray-900">حركة التوريد وجرد المخزون الفرعي</h3>
-                <p className="text-[10px] text-gray-400 font-bold">الربط المتزامن لحساب كميات الخامات الموردة (م³) وحالة السقوف والحد الأدنى للسلامة بالمخازن</p>
-              </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -888,7 +891,7 @@ export default function DashboardOverview({
                             <span>{mat.name}</span>
                             <span className="font-mono text-purple-700">{mat.value.toLocaleString('ar-EG', {maximumFractionDigits:0})} م³ ({ratio.toFixed(0)}%)</span>
                           </div>
-                          <div className="w-full bg-gray-200/80 h-2 rounded-full overflow-hidden flex justify-end">
+                          <div className="w-full bg-gray-200/80 h-2 rounded-full overflow-hidden flex justify-start">
                             <div className="bg-purple-600 h-full rounded-full" style={{ width: `${ratio}%` }}></div>
                           </div>
                         </div>
@@ -936,6 +939,10 @@ export default function DashboardOverview({
             <div className="lg:col-span-6 bg-white border border-gray-100 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
               <div>
                 <div className="flex justify-between items-center mb-6">
+                  <div className="text-right">
+                    <h3 className="text-sm font-black text-gray-900">ضبط الجودة وتسليم الأعمال للاستشاري</h3>
+                    <p className="text-[10px] text-gray-400 font-bold">نسب مخرجات الفحص الفني للخرسانات والتربة والاعتمادات الإنشائية</p>
+                  </div>
                   <button 
                     onClick={() => setActiveTab('deliveries')}
                     className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1 cursor-pointer font-sans no-print"
@@ -943,10 +950,6 @@ export default function DashboardOverview({
                     <span>سجلات تسليم البنود</span>
                     <ChevronLeft size={14} />
                   </button>
-                  <div className="text-right">
-                    <h3 className="text-sm font-black text-gray-900">ضبط الجودة وتسليم الأعمال للاستشاري</h3>
-                    <p className="text-[10px] text-gray-400 font-bold">نسب مخرجات الفحص الفني للخرسانات والتربة والاعتمادات الإنشائية</p>
-                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
@@ -986,15 +989,15 @@ export default function DashboardOverview({
                   <div className="space-y-4 text-right">
                     <div className="bg-[#FAF9FF] p-4 rounded-xl border border-purple-100">
                       <div className="flex items-center justify-between">
-                        <span className="text-2xl font-black font-mono text-purple-700">{stats.qaPassRate.toFixed(0)}%</span>
                         <span className="text-[11px] font-bold text-gray-700">قبول عينات الدمك والخرسانة</span>
+                        <span className="text-2xl font-black font-mono text-purple-700">{stats.qaPassRate.toFixed(0)}%</span>
                       </div>
                       <div className="w-full bg-purple-100 h-2 rounded-full overflow-hidden mt-2">
                         <div className="bg-purple-600 h-full rounded-full" style={{ width: `${stats.qaPassRate}%` }}></div>
                       </div>
                     </div>
 
-                    <div className="flex gap-3 justify-end">
+                    <div className="flex gap-3 justify-start">
                       <div className="flex-1 bg-gray-50 p-3 rounded-xl border border-gray-200 text-center">
                         <p className="text-lg font-black text-gray-900 font-mono">{stats.passedTestsCount}</p>
                         <p className="text-[10px] text-gray-500 font-bold">مقبول هندسياً</p>
@@ -1013,6 +1016,10 @@ export default function DashboardOverview({
             <div className="lg:col-span-6 bg-white border border-gray-100 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
               <div>
                 <div className="flex justify-between items-center mb-6">
+                  <div className="text-right">
+                    <h3 className="text-sm font-black text-gray-900">متابعة بنود وجدول المهام (WBS)</h3>
+                    <p className="text-[10px] text-gray-400 font-bold">مراقبة تقدم الفقرات الحرجة ومحطات التسليم الإنشائي الفعلي</p>
+                  </div>
                   <button 
                     onClick={() => setActiveTab('planning')}
                     className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1 cursor-pointer font-sans no-print"
@@ -1020,10 +1027,6 @@ export default function DashboardOverview({
                     <span>الجدول الزمني للفقرات</span>
                     <ChevronLeft size={14} />
                   </button>
-                  <div className="text-right">
-                    <h3 className="text-sm font-black text-gray-900">متابعة بنود وجدول المهام (WBS)</h3>
-                    <p className="text-[10px] text-gray-400 font-bold">مراقبة تقدم الفقرات الحرجة ومحطات التسليم الإنشائي الفعلي</p>
-                  </div>
                 </div>
 
                 <div className="space-y-5 text-right">
@@ -1051,12 +1054,12 @@ export default function DashboardOverview({
                     {wbsTasks.slice(0, 3).map(task => (
                       <div key={task.id} className="p-3 bg-[#FCFBFF] border border-gray-100 rounded-xl">
                         <div className="flex items-center justify-between text-xs mb-1.5 font-bold">
-                          <span className="font-mono text-purple-700 text-[9px] bg-purple-100 px-2 py-0.5 rounded-md">{task.wbsCode}</span>
                           <span className="text-gray-900">{task.name}</span>
+                          <span className="font-mono text-purple-700 text-[9px] bg-purple-100 px-2 py-0.5 rounded-md">{task.wbsCode}</span>
                         </div>
                         <div className="flex items-center gap-3">
                           <span className="text-[10px] font-black font-mono text-purple-600 shrink-0">{task.actualProgress || 0}%</span>
-                          <div className="w-full bg-gray-200/60 h-1.5 rounded-full overflow-hidden flex justify-end">
+                          <div className="w-full bg-gray-200/60 h-1.5 rounded-full overflow-hidden flex justify-start">
                             <div className="bg-purple-600 h-full rounded-full" style={{ width: `${task.actualProgress || 0}%` }}></div>
                           </div>
                         </div>
@@ -1078,6 +1081,10 @@ export default function DashboardOverview({
         {(selectedSector === 'all' || selectedSector === 'hr') && (
           <div className="lg:col-span-12 bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
             <div className="flex justify-between items-center mb-6">
+              <div className="text-right">
+                <h3 className="text-sm font-black text-gray-900">سجل اليوميات والرواتب لعمالة الميدان والمهندسين</h3>
+                <p className="text-[10px] text-gray-400 font-bold">الربط التلقائي لقوة العمالة اليومية الحاضرة والتصفية الأسبوعية لأجور الحسابات الفرعية</p>
+              </div>
               <button 
                 onClick={() => setActiveTab('site-workers')}
                 className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1 cursor-pointer font-sans no-print"
@@ -1085,10 +1092,6 @@ export default function DashboardOverview({
                 <span>يوميات وسراكي العمالة</span>
                 <ChevronLeft size={14} />
               </button>
-              <div className="text-right">
-                <h3 className="text-sm font-black text-gray-900">سجل اليوميات والرواتب لعمالة الميدان والمهندسين</h3>
-                <p className="text-[10px] text-gray-400 font-bold">الربط التلقائي لقوة العمالة اليومية الحاضرة والتصفية الأسبوعية لأجور الحسابات الفرعية</p>
-              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-right">
@@ -1141,6 +1144,10 @@ export default function DashboardOverview({
         {(selectedSector === 'all' || selectedSector === 'safety') && (
           <div className="lg:col-span-12 bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
             <div className="flex justify-between items-center mb-6">
+              <div className="text-right">
+                <h3 className="text-sm font-black text-gray-900">إدارة السلامة والصحة المهنية ومكافحة المخاطر</h3>
+                <p className="text-[10px] text-gray-400 font-bold">متابعة بلاغات المخاطر المفتوحة والإجراءات الاحترازية المتخذة من مهندسي السلامة</p>
+              </div>
               <button 
                 onClick={() => setActiveTab('hse')}
                 className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1 cursor-pointer font-sans no-print"
@@ -1148,10 +1155,6 @@ export default function DashboardOverview({
                 <span>شؤون البيئة والسلامة والوقاية</span>
                 <ChevronLeft size={14} />
               </button>
-              <div className="text-right">
-                <h3 className="text-sm font-black text-gray-900">إدارة السلامة والصحة المهنية ومكافحة المخاطر</h3>
-                <p className="text-[10px] text-gray-400 font-bold">متابعة بلاغات المخاطر المفتوحة والإجراءات الاحترازية المتخذة من مهندسي السلامة</p>
-              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-right">
@@ -1225,7 +1228,11 @@ export default function DashboardOverview({
           <div className="lg:col-span-7 bg-white border border-gray-100 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
             <div>
               <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-6">
-                
+                <div className="text-right">
+                  <h3 className="text-sm font-black text-gray-900">جدول الحركات والاعتمادات اللحظية</h3>
+                  <p className="text-[10px] text-gray-400 font-bold">بث مباشر للعمليات المالية والفنية المسجلة بالموقع مع مرجع REF فريد لكل حركة</p>
+                </div>
+
                 {/* Search query inside activity */}
                 <div className="relative w-full sm:w-64 no-print">
                   <input
@@ -1236,11 +1243,6 @@ export default function DashboardOverview({
                     className="w-full pl-8 pr-3 py-2 border border-gray-200 text-xs rounded-xl focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none text-right font-bold"
                   />
                   <Search size={14} className="absolute left-2.5 top-3 text-gray-400" />
-                </div>
-
-                <div className="text-right">
-                  <h3 className="text-sm font-black text-gray-900">جدول الحركات والاعتمادات اللحظية</h3>
-                  <p className="text-[10px] text-gray-400 font-bold">بث مباشر للعمليات المالية والفنية المسجلة بالموقع مع مرجع REF فريد لكل حركة</p>
                 </div>
               </div>
 

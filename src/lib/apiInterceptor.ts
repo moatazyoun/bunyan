@@ -608,9 +608,6 @@ async function logUserActivity(username: string, actionAr: string, type: 'auth' 
 }
 
 async function checkRealOnlineStatus(): Promise<boolean> {
-  if (typeof window !== 'undefined' && window.navigator && window.navigator.onLine === false) {
-    return false;
-  }
   return true;
 }
 

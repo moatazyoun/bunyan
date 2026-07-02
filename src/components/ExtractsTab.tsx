@@ -258,17 +258,12 @@ export default function ExtractsTab({
     };
   }, [activeProjectId, extractType, activeProject]);
 
-  const saveSettings = async (updates: any) => {
+  const saveSettings = (updates: any) => {
     if (!activeProjectId) return;
-    try {
-      await setDoc(
-        doc(db, "extractSettings", activeProjectId),
-        { ...settings, ...updates },
-        { merge: true },
-      );
-    } catch (err) {
-      console.error("Error saving cloud settings:", err);
-    }
+    setSettings((current: any) => ({
+      ...current,
+      ...updates,
+    }));
   };
 
   // UI Helpers matching Arabic accounting norms
@@ -489,7 +484,7 @@ export default function ExtractsTab({
     }
   };
 
-  const handleAddNewExtract = async () => {
+  const handleAddNewExtract = () => {
     // Check for duplicate number
     if (projectExtracts.some((e) => e.extractNumber === newExtForm.number)) {
       alert("رقم المستخلص هذا موجود مسبقاً لهذا المشروع. يرجى اختيار رقم آخر.");
@@ -523,24 +518,19 @@ export default function ExtractsTab({
         extractType === "Subcontractor" ? selectedSubcontractorId : undefined,
     };
 
-    const success = await saveExtracts(
-      [...extracts, newExt],
-      `إضافة مستخلص جديد رقم ${newExt.extractNumber} للمشروع ${activeProjectId}`,
-    );
-    if (success) {
-      setSelectedExtract(newExt);
-      setIsCreatingNewExtract(false);
-      // Reset form for next time
-      setNewExtForm({
-        number: newExtForm.number + 1,
-        date: new Date().toISOString().split("T")[0],
-        type: "current",
-        showZeroItems: true,
-      });
-    }
+    setExtracts([...extracts, newExt]);
+    setSelectedExtract(newExt);
+    setIsCreatingNewExtract(false);
+    // Reset form for next time
+    setNewExtForm({
+      number: newExtForm.number + 1,
+      date: new Date().toISOString().split("T")[0],
+      type: "current",
+      showZeroItems: true,
+    });
   };
 
-  const handleUpdateItemQuantity = async (
+  const handleUpdateItemQuantity = (
     boqItemId: string,
     currentQty: number,
   ) => {
@@ -550,13 +540,9 @@ export default function ExtractsTab({
     );
     const updatedExt = { ...selectedExtract, items: updatedItems };
     setSelectedExtract(updatedExt);
-    await saveExtracts(
-      extracts.map((e) => (e.id === selectedExtract.id ? updatedExt : e)),
-      `تحديث كمية بند رقم ${boqItemId} في مستخلص رقم ${selectedExtract.extractNumber}`,
-    );
   };
 
-  const handleUpdateItemRetention = async (
+  const handleUpdateItemRetention = (
     boqItemId: string,
     retPct: number,
   ) => {
@@ -566,36 +552,50 @@ export default function ExtractsTab({
     );
     const updatedExt = { ...selectedExtract, items: updatedItems };
     setSelectedExtract(updatedExt);
-    await saveExtracts(
-      extracts.map((e) => (e.id === selectedExtract.id ? updatedExt : e)),
-      `تحديث نسبة الخصم للبند رقم ${boqItemId} في مستخلص رقم ${selectedExtract.extractNumber}`,
-    );
   };
 
-  const handleUpdateExtractParams = async (params: Partial<CustomExtract>) => {
+  const handleUpdateItemBookNumber = (
+    boqItemId: string,
+    bookNum: string,
+  ) => {
+    if (!selectedExtract) return;
+    const updatedItems = (selectedExtract.items || []).map((it) =>
+      it.boqItemId === boqItemId ? { ...it, bookNumber: bookNum } : it,
+    );
+    const updatedExt = { ...selectedExtract, items: updatedItems };
+    setSelectedExtract(updatedExt);
+  };
+
+  const handleUpdateItemPageNumber = (
+    boqItemId: string,
+    pageNum: string,
+  ) => {
+    if (!selectedExtract) return;
+    const updatedItems = (selectedExtract.items || []).map((it) =>
+      it.boqItemId === boqItemId ? { ...it, pageNumber: pageNum } : it,
+    );
+    const updatedExt = { ...selectedExtract, items: updatedItems };
+    setSelectedExtract(updatedExt);
+  };
+
+  const handleUpdateExtractParams = (params: Partial<CustomExtract>) => {
     if (!selectedExtract) return;
     const updatedExt = { ...selectedExtract, ...params };
     setSelectedExtract(updatedExt);
-    await saveExtracts(
-      extracts.map((e) => (e.id === selectedExtract.id ? updatedExt : e)),
-      `تحديث بيانات المستخلص رقم ${selectedExtract.extractNumber}`,
-    );
   };
 
   const handleDeleteExtract = (id: string) => {
     const extToDelete = extracts.find((e) => e.id === id);
     triggerConfirmation(
       "حذف المستخلص",
-      "هل أنت متأكد؟ لا يمكن تراجع عن الحذف السحابي.",
+      "هل أنت متأكد؟ يرجى الضغط على حفظ لتأكيد الحذف بشكل دائم.",
       "danger",
-      async () => {
+      () => {
         const filtered = extracts.filter((e) => e.id !== id);
-        const success = await saveExtracts(
-          filtered,
-          `حذف المستخلص رقم ${extToDelete?.extractNumber}`,
-        );
-        if (success && selectedExtract?.id === id)
+        setExtracts(filtered);
+        if (selectedExtract?.id === id) {
           setSelectedExtract(filtered[0] || null);
+        }
       },
     );
   };
@@ -758,6 +758,8 @@ export default function ExtractsTab({
           <td class="p-1 border border-slate-950 font-mono">${item.boqQty}</td>
           <td class="p-1 border border-slate-950 font-mono">${piastres}</td>
           <td class="p-1 border border-slate-950 font-mono">${pounds}</td>
+          <td class="p-1 border border-slate-950 font-mono">${item.bookNumber !== undefined ? item.bookNumber : item.code}</td>
+          <td class="p-1 border border-slate-950 font-mono">${item.pageNumber || "-"}</td>
           <td class="p-1 border border-slate-950 font-mono text-slate-550">${formatQty(item.previousQuantity)}</td>
           <td class="p-1 border border-slate-950 font-mono font-black ${isExceeded ? "text-rose-700 bg-amber-100/50" : "bg-emerald-50/20"}">${formatQty(item.currentQuantity)}</td>
           <td class="p-1 border border-slate-950 font-mono font-black ${isExceeded ? "text-rose-700" : ""}">${formatQty(item.totalQty)}</td>
@@ -905,6 +907,7 @@ export default function ExtractsTab({
                     <th rowspan="2" class="w-[3%] border border-slate-950 p-1">الوحدة</th>
                     <th rowspan="2" class="w-[5%] border border-slate-950 p-1">الكمية بالمناقصة</th>
                     <th colspan="2" class="w-[8%] border border-slate-950 p-1 border-b-[0.5px]">سعر الوحدة</th>
+                    <th colspan="2" class="w-[8%] border border-slate-950 p-1 border-b-[0.5px]">دفتر الحصر</th>
                     <th colspan="3" class="w-[18%] border border-slate-950 p-1">كميات الأعمال المنجزة</th>
                     <th rowspan="2" class="w-[8%] border border-slate-950 p-1 bg-slate-50/50">قيمة الاعمال الحالية</th>
                     <th rowspan="2" class="w-[4%] border border-slate-950 p-1 text-rose-600">الخصم</th>
@@ -916,6 +919,8 @@ export default function ExtractsTab({
                   <tr>
                     <td class="w-[4%] border border-slate-950 p-1 font-semibold">قرش</td>
                     <td class="w-[4%] border border-slate-950 p-1 font-semibold">جنيه</td>
+                    <td class="w-[4%] border border-slate-950 p-1">رقم الدفتر</td>
+                    <td class="w-[4%] border border-slate-950 p-1">رقم الصفحة</td>
                     <td class="w-[6%] border border-slate-950 p-1">السابق</td>
                     <td class="w-[6%] border border-slate-950 p-1 bg-indigo-50/20">الحالي</td>
                     <td class="w-[6%] border border-slate-950 p-1">الإجمالي</td>
@@ -925,7 +930,7 @@ export default function ExtractsTab({
                   ${rows}
                   <!-- Totals Row -->
                   <tr class="bg-slate-100 font-black h-12 border-t-2 border-slate-950 text-[10px]">
-                    <td colspan="9" class="border border-slate-950 px-4 text-center text-slate-900">الاجمالى العام</td>
+                    <td colspan="11" class="border border-slate-950 px-4 text-center text-slate-900">الاجمالى العام</td>
                     <td class="border border-slate-950 font-mono">${formatVal(extractCalculations.grossValue)}</td>
                     <td class="border border-slate-950"></td>
                     <td class="border border-slate-950 font-mono text-rose-700">${formatVal(extractCalculations.totalDiscount)}</td>
@@ -985,9 +990,23 @@ export default function ExtractsTab({
         e.id === selectedExtract.id ? selectedExtract : e,
       );
     }
+
+    // Save settings to database
+    if (activeProjectId && settings) {
+      try {
+        await setDoc(
+          doc(db, "extractSettings", activeProjectId),
+          settings,
+          { merge: true },
+        );
+      } catch (err) {
+        console.error("Error saving settings on manual save:", err);
+      }
+    }
+
     const success = await saveExtracts(
       dataToSave,
-      `حفظ جميع المستخلصات في المشروع ${activeProjectId}`,
+      `حفظ وتحديث المستخلصات وإعداداتها في المشروع ${activeProjectId}`,
     );
     if (success) {
       const refNo = `REF-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -1001,6 +1020,29 @@ export default function ExtractsTab({
     } else {
       alert("الرجاء اختيار مستخلص أولاً للطباعة");
     }
+  };
+
+  const getProjectExtractsStats = (pId: string) => {
+    const projectExts = extracts.filter((e) => {
+      if (extractType === "Subcontractor") {
+        return e.projectId === pId && e.subcontractorId;
+      }
+      return e.projectId === pId && !e.subcontractorId;
+    });
+
+    const count = projectExts.length;
+    const totalDisbursed = projectExts.reduce((sum, ext) => {
+      const extVal = (ext.items || []).reduce((itemSum, item) => {
+        const boqItem = boqItems.find((b) => b.id === item.boqItemId);
+        const rate = boqItem?.price || 0;
+        const val = (item.currentQuantity || 0) * rate;
+        const discount = val * ((item.retentionPercent || 0) / 100);
+        return itemSum + (val - discount);
+      }, 0);
+      return sum + extVal;
+    }, 0);
+
+    return { count, totalDisbursed };
   };
 
   if (!isSettingsLoaded) {
@@ -1079,39 +1121,64 @@ export default function ExtractsTab({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-6xl px-4">
-            {projects.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setSelectedProjectId(p.id)}
-                className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-2xl hover:border-indigo-200 transition-all group flex flex-col items-start text-right"
-              >
-                <div className="flex justify-between w-full mb-6">
-                  <div className="p-3 bg-slate-50 rounded-2xl group-hover:bg-indigo-50 transition-colors">
-                    <FileSpreadsheet className="w-6 h-6 text-slate-400 group-hover:text-indigo-600" />
+            {projects.map((p) => {
+              const stats = getProjectExtractsStats(p.id);
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => setSelectedProjectId(p.id)}
+                  className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-2xl hover:border-indigo-200 transition-all group flex flex-col items-start text-right w-full"
+                >
+                  <div className="flex justify-between w-full mb-6">
+                    <div className="p-3 bg-slate-50 rounded-2xl group-hover:bg-indigo-50 transition-colors">
+                      <FileSpreadsheet className="w-6 h-6 text-slate-400 group-hover:text-indigo-600" />
+                    </div>
+                    <span className="text-[10px] font-black uppercase text-slate-300 tracking-widest">
+                      Active Ops
+                    </span>
                   </div>
-                  <span className="text-[10px] font-black uppercase text-slate-300 tracking-widest">
-                    Active Ops
-                  </span>
-                </div>
-                <h4 className="text-lg font-black text-slate-900 mb-2">
-                  {p.name}
-                </h4>
-                <div className="space-y-2 w-full">
-                  <p className="text-xs font-bold text-slate-400 flex items-center gap-2">
-                    <FileCheck className="w-3.5 h-3.5" /> أمر إسناد:{" "}
-                    {p.assignmentNumber}
-                  </p>
-                  <p className="text-xs font-bold text-slate-400 flex items-center gap-2">
-                    <Calendar className="w-3.5 h-3.5" />{" "}
-                    {new Date(p.assignmentDate).toLocaleDateString("ar-EG")}
-                  </p>
-                </div>
-                <div className="mt-8 pt-4 border-t border-slate-50 w-full flex justify-between items-center text-[11px] font-black text-indigo-600">
-                  <span>فتح السجل الفني</span>
-                  <ArrowUp className="w-4 h-4 rotate-90" />
-                </div>
-              </button>
-            ))}
+                  <h4 className="text-lg font-black text-slate-900 mb-2">
+                    {p.name}
+                  </h4>
+                  <div className="space-y-2.5 w-full">
+                    <p className="text-xs font-bold text-slate-400 flex items-center gap-2">
+                      <FileCheck className="w-3.5 h-3.5 text-slate-400" /> أمر إسناد:{" "}
+                      {p.assignmentNumber}
+                    </p>
+                    <p className="text-xs font-bold text-slate-400 flex items-center gap-2">
+                      <Calendar className="w-3.5 h-3.5 text-slate-400" />{" "}
+                      {new Date(p.assignmentDate).toLocaleDateString("ar-EG")}
+                    </p>
+
+                    {/* Stats details section */}
+                    <div className="border-t border-slate-100 pt-3.5 mt-3.5 space-y-2 w-full">
+                      <div className="text-xs font-bold text-slate-700 flex items-center justify-between gap-2 w-full">
+                        <span className="flex items-center gap-2 text-slate-500">
+                          <FileText className="w-3.5 h-3.5 text-purple-600" />
+                          <span>عدد المستخلصات:</span>
+                        </span>
+                        <span className="font-mono font-black text-purple-700 bg-purple-50 px-2 py-0.5 rounded text-[11px]">
+                          {stats.count} {stats.count === 1 ? 'مستخلص' : stats.count === 2 ? 'مستخلصين' : 'مستخلصات'}
+                        </span>
+                      </div>
+                      <div className="text-xs font-bold text-slate-700 flex items-center justify-between gap-2 w-full">
+                        <span className="flex items-center gap-2 text-slate-500">
+                          <Coins className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>إجمالي المنصرف:</span>
+                        </span>
+                        <span className="font-mono font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[11px]">
+                          {stats.totalDisbursed.toLocaleString('ar-EG', { maximumFractionDigits: 0 })} ج.م
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-6 pt-4 border-t border-slate-50 w-full flex justify-between items-center text-[11px] font-black text-indigo-600">
+                    <span>فتح السجل الفني</span>
+                    <ArrowUp className="w-4 h-4 rotate-90" />
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
       ) : (
@@ -1875,10 +1942,16 @@ export default function ExtractsTab({
                 )}
 
                 {/* Official View (Interactive / In-Place Editing) */}
-                <div className="flex justify-end mb-4 non-printable">
+                <div className="flex justify-end items-center gap-3 mb-4 non-printable">
+                  <button
+                    onClick={handlePrint}
+                    className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-[20px] text-[13px] font-black shadow-lg hover:shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Printer className="w-5 h-5" /> طباعة التقارير
+                  </button>
                   <button
                     onClick={handleSaveAll}
-                    className="flex items-center gap-2 px-8 py-3 bg-emerald-600 text-white rounded-[20px] text-[13px] font-black shadow-lg hover:shadow-emerald-200 hover:bg-emerald-700 transition-all active:scale-95"
+                    className="flex items-center gap-2 px-8 py-3 bg-emerald-600 text-white rounded-[20px] text-[13px] font-black shadow-lg hover:shadow-emerald-200 hover:bg-emerald-700 transition-all active:scale-95 cursor-pointer"
                   >
                     <Save className="w-5 h-5" /> حفظ المستخلص
                   </button>
@@ -2158,6 +2231,12 @@ export default function ExtractsTab({
                                 سعر الوحدة
                               </th>
                               <th
+                                colSpan={2}
+                                className="w-[10%] border border-slate-950 p-1 border-b-[0.5px] bg-[#fdfcff]"
+                              >
+                                دفتر الحصر
+                              </th>
+                              <th
                                 colSpan={3}
                                 className="w-[18%] border border-slate-950 p-1"
                               >
@@ -2207,6 +2286,12 @@ export default function ExtractsTab({
                               <td className="w-[4%] border border-slate-950 p-1">
                                 جنيه
                               </td>
+                              <td className="w-[5%] border border-slate-950 p-1 bg-[#fdfcff]">
+                                رقم الدفتر
+                              </td>
+                              <td className="w-[5%] border border-slate-950 p-1 bg-[#fdfcff]">
+                                رقم الصفحة
+                              </td>
                               <td className="w-[6%] border border-slate-950 p-1">
                                 السابق
                               </td>
@@ -2255,6 +2340,37 @@ export default function ExtractsTab({
                                     </td>
                                     <td className="border border-slate-950 p-1 font-mono">
                                       {pounds}
+                                    </td>
+                                    {/* NEW: Measurement Book columns */}
+                                    <td className="border border-slate-950 p-0 overflow-hidden bg-[#faf9ff]">
+                                      <input
+                                        type="text"
+                                        value={item.bookNumber !== undefined ? item.bookNumber : item.code}
+                                        onChange={(e) =>
+                                          handleUpdateItemBookNumber(
+                                            item.boqItemId,
+                                            e.target.value,
+                                          )
+                                        }
+                                        disabled={userRole === "viewer"}
+                                        className={`w-full h-full text-center font-mono font-black border-none focus:outline-none bg-transparent focus:bg-purple-100 print:bg-transparent transition-all placeholder:text-slate-300 text-[10px] ${userRole === "viewer" ? "cursor-not-allowed opacity-70" : ""}`}
+                                        placeholder={item.code}
+                                      />
+                                    </td>
+                                    <td className="border border-slate-950 p-0 overflow-hidden bg-[#faf9ff]">
+                                      <input
+                                        type="text"
+                                        value={item.pageNumber || ""}
+                                        onChange={(e) =>
+                                          handleUpdateItemPageNumber(
+                                            item.boqItemId,
+                                            e.target.value,
+                                          )
+                                        }
+                                        disabled={userRole === "viewer"}
+                                        className={`w-full h-full text-center font-mono font-black border-none focus:outline-none bg-transparent focus:bg-purple-100 print:bg-transparent transition-all placeholder:text-slate-300 text-[10px] ${userRole === "viewer" ? "cursor-not-allowed opacity-70" : ""}`}
+                                        placeholder="-"
+                                      />
                                     </td>
                                     <td className="border border-slate-950 p-1 font-mono text-slate-400">
                                       {formatQty(item.previousQuantity)}
@@ -2335,7 +2451,7 @@ export default function ExtractsTab({
                             {/* Totals Row */}
                             <tr className="bg-slate-100 font-black h-12 border-t-2 border-slate-950">
                               <td
-                                colSpan={9}
+                                colSpan={11}
                                 className="border border-slate-950 px-4 text-sm text-center"
                               >
                                 الاجمالى العام
