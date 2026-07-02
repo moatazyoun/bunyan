@@ -863,10 +863,65 @@ export default function ExtractsTab({
           .border-double-custom {
             border-style: double;
           }
+          .page-frame {
+            position: fixed;
+            pointer-events: none;
+            box-sizing: border-box;
+            border: 4px double #000000;
+            border-radius: 24px;
+            z-index: 9999;
+            ${
+              orientation === "landscape"
+                ? `
+              top: -6mm;
+              bottom: -6mm;
+              left: -9mm;
+              right: -9mm;
+            `
+                : `
+              top: -9mm;
+              bottom: -9mm;
+              left: -6mm;
+              right: -6mm;
+            `
+            }
+          }
+          .page-number-container {
+            position: fixed;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 10px;
+            font-weight: bold;
+            font-family: 'Tajawal', sans-serif;
+            color: #000000;
+            z-index: 10000;
+            direction: rtl;
+            pointer-events: none;
+            ${
+              orientation === "landscape"
+                ? "bottom: -4mm;"
+                : "bottom: -7mm;"
+            }
+          }
+          .page-num::after {
+            content: counter(page);
+          }
+          .page-total::after {
+            content: counter(pages);
+          }
         </style>
       </head>
       <body class="p-4 bg-white text-slate-950">
-        <div class="border-[4px] border-double-custom border-slate-950 p-6 rounded-[32px]" dir="rtl" style="min-height: ${targetMinHeight}; max-width: 100%;">
+        <!-- Page frame repeated on every page -->
+        <div class="page-frame"></div>
+        
+        <!-- Page number repeated on every page -->
+        <div class="page-number-container">
+          صفحة <span class="page-num"></span> من <span class="page-total"></span>
+        </div>
+
+        <div dir="rtl" style="min-height: ${targetMinHeight}; max-width: 100%;">
           <table class="w-full border-none">
             <thead>
               <tr>
