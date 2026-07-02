@@ -865,108 +865,126 @@ export default function ExtractsTab({
           }
         </style>
       </head>
-      <body class="p-1 bg-white text-slate-950">
-        <div class="border-[4px] border-double-custom border-slate-950 p-5 flex flex-col justify-between box-border text-right rounded-3xl" dir="rtl" style="min-height: ${targetMinHeight}; max-width: 100%;">
-          <div>
-            <!-- Header section with 3 columns -->
-            <div class="grid grid-cols-3 items-start mb-6 text-[10px] font-bold leading-relaxed border-b-2 border-slate-950 pb-4">
-              <div class="space-y-1 text-center font-bold">
-                ${
-                  settings?.headerTexts?.ownerLogo
-                    ? `
-                  <div class="flex flex-col items-center mb-1">
-                    <img src="${settings.headerTexts.ownerLogo}" class="h-14 w-auto object-contain" />
+      <body class="p-4 bg-white text-slate-950">
+        <div class="border-[4px] border-double-custom border-slate-950 p-6 rounded-[32px]" dir="rtl" style="min-height: ${targetMinHeight}; max-width: 100%;">
+          <table class="w-full border-none">
+            <thead>
+              <tr>
+                <td class="border-none">
+                  <!-- Header section with 3 columns -->
+                  <div class="grid grid-cols-3 items-start mb-6 text-[10px] font-bold leading-relaxed border-b-2 border-slate-950 pb-4">
+                    <div class="space-y-1 text-center font-bold">
+                      ${
+                        settings?.headerTexts?.ownerLogo
+                          ? `
+                        <div class="flex flex-col items-center mb-1">
+                          <img src="${settings.headerTexts.ownerLogo}" class="h-14 w-auto object-contain" />
+                        </div>
+                      `
+                          : ""
+                      }
+                      <div>${settings?.headerTexts?.ministry || ""}</div>
+                      <div>${settings?.headerTexts?.authority || ""}</div>
+                      <div>${settings?.headerTexts?.device || ""}</div>
+                    </div>
+
+                    <div class="text-center space-y-2">
+                      <h1 class="text-xl font-black border-b-[2.5px] border-slate-950 inline-block px-6 pb-1">
+                        ${ext.extractType === "final" ? "مستخلص ختامي" : ext.extractType === "no_works" ? "مستخلص صفري" : "مستخلص جاري"} (${ext.extractNumber})
+                      </h1>
+                      <p class="text-xs font-black text-slate-900">${linkedProject?.name || ""}</p>
+                      <div class="text-[9px] space-y-0.5 font-bold">
+                        <p>بأمر إسناد رقم: ${activeProject?.assignmentNumber || "......."} بتاريخ: ${assignmentDateStr}</p>
+                        <p class="text-slate-600">من بداية الأعمال وحتى ${dateStr}</p>
+                      </div>
+                    </div>
+
+                    <div class="space-y-1 text-center font-bold">
+                      ${
+                        settings?.headerTexts?.contractorLogo
+                          ? `
+                        <div class="flex flex-col items-center mb-1">
+                          <img src="${settings.headerTexts.contractorLogo}" class="h-14 w-auto object-contain" />
+                        </div>
+                      `
+                          : ""
+                      }
+                      <div class="font-black">${settings?.headerTexts?.contractor || ""}</div>
+                      <div>${settings?.headerTexts?.contractorDetails || ""}</div>
+                      <div>${settings?.headerTexts?.contractorDetails2 || ""}</div>
+                    </div>
                   </div>
-                `
-                    : ""
-                }
-                <div>${settings?.headerTexts?.ministry || ""}</div>
-                <div>${settings?.headerTexts?.authority || ""}</div>
-                <div>${settings?.headerTexts?.device || ""}</div>
-              </div>
+                </td>
+              </tr>
+            </thead>
 
-              <div class="text-center space-y-2">
-                <h1 class="text-xl font-black border-b-[2.5px] border-slate-950 inline-block px-6 pb-1">
-                  ${ext.extractType === "final" ? "مستخلص ختامي" : ext.extractType === "no_works" ? "مستخلص صفري" : "مستخلص جاري"} (${ext.extractNumber})
-                </h1>
-                <p class="text-xs font-black text-slate-900">${linkedProject?.name || ""}</p>
-                <div class="text-[9px] space-y-0.5 font-bold">
-                  <p>بأمر إسناد رقم: ${activeProject?.assignmentNumber || "......."} بتاريخ: ${assignmentDateStr}</p>
-                  <p class="text-slate-600">من بداية الأعمال وحتى ${dateStr}</p>
-                </div>
-              </div>
-
-              <div class="space-y-1 text-center font-bold">
-                ${
-                  settings?.headerTexts?.contractorLogo
-                    ? `
-                  <div class="flex flex-col items-center mb-1">
-                    <img src="${settings.headerTexts.contractorLogo}" class="h-14 w-auto object-contain" />
+            <tbody>
+              <tr>
+                <td class="border-none py-2">
+                  <!-- Table of works -->
+                  <div class="overflow-x-auto">
+                    <table class="w-full border-collapse border-[1.2px] border-slate-950 text-[9px] text-center font-bold">
+                      <thead class="bg-slate-100">
+                        <tr>
+                          <th rowspan="2" class="w-[4%] border border-slate-950 p-1">رقم</th>
+                          <th rowspan="2" class="w-[21%] border border-slate-950 p-1.5">بيان الأعمال بالتفصيل ومواصفة البند</th>
+                          <th rowspan="2" class="w-[3%] border border-slate-950 p-1">الوحدة</th>
+                          <th rowspan="2" class="w-[5%] border border-slate-950 p-1">الكمية بالمناقصة</th>
+                          <th colspan="2" class="w-[8%] border border-slate-950 p-1 border-b-[0.5px]">سعر الوحدة</th>
+                          <th colspan="2" class="w-[8%] border border-slate-950 p-1 border-b-[0.5px]">دفتر الحصر</th>
+                          <th colspan="3" class="w-[18%] border border-slate-950 p-1">كميات الأعمال المنجزة</th>
+                          <th rowspan="2" class="w-[8%] border border-slate-950 p-1 bg-slate-50/50">قيمة الاعمال الحالية</th>
+                          <th rowspan="2" class="w-[4%] border border-slate-950 p-1 text-rose-600">الخصم</th>
+                          <th rowspan="2" class="w-[6%] border border-slate-950 p-1 text-rose-600">قيمة الخصم</th>
+                          <th rowspan="2" class="w-[8%] border border-slate-950 p-1 bg-slate-100">صافى المستحق صرفه</th>
+                          <th rowspan="2" class="w-[8%] border border-slate-950 p-1">السابق صرفه</th>
+                          <th rowspan="2" class="w-[8%] border border-slate-950 p-1 bg-indigo-50/30">الإجمالى</th>
+                        </tr>
+                        <tr>
+                          <td class="w-[4%] border border-slate-950 p-1 font-semibold">قرش</td>
+                          <td class="w-[4%] border border-slate-950 p-1 font-semibold">جنيه</td>
+                          <td class="w-[4%] border border-slate-950 p-1">رقم الدفتر</td>
+                          <td class="w-[4%] border border-slate-950 p-1">رقم الصفحة</td>
+                          <td class="w-[6%] border border-slate-950 p-1">السابق</td>
+                          <td class="w-[6%] border border-slate-950 p-1 bg-indigo-50/20">الحالي</td>
+                          <td class="w-[6%] border border-slate-950 p-1">الإجمالي</td>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${rows}
+                        <!-- Totals Row -->
+                        <tr class="bg-slate-100 font-black h-12 border-t-2 border-slate-950 text-[10px]" style="page-break-inside: avoid; break-inside: avoid;">
+                          <td colspan="11" class="border border-slate-950 px-4 text-center text-slate-900">الاجمالى العام</td>
+                          <td class="border border-slate-950 font-mono">${formatVal(extractCalculations.grossValue)}</td>
+                          <td class="border border-slate-950"></td>
+                          <td class="border border-slate-950 font-mono text-rose-700">${formatVal(extractCalculations.totalDiscount)}</td>
+                          <td class="border border-slate-950 font-mono bg-slate-200">${formatVal(extractCalculations.netValue)}</td>
+                          <td class="border border-slate-950 font-mono text-slate-600">${formatVal(extractCalculations.prevPaidTotal)}</td>
+                          <td class="border border-slate-950 font-mono text-[11px] bg-slate-300 text-indigo-950 underline">${formatVal(extractCalculations.finalItemTotal)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
-                `
-                    : ""
-                }
-                <div class="font-black">${settings?.headerTexts?.contractor || ""}</div>
-                <div>${settings?.headerTexts?.contractorDetails || ""}</div>
-                <div>${settings?.headerTexts?.contractorDetails2 || ""}</div>
-              </div>
-            </div>
+                </td>
+              </tr>
+            </tbody>
 
-            <!-- Table of works -->
-            <div class="mt-4 overflow-x-auto">
-              <table class="w-full border-collapse border-[1.2px] border-slate-950 text-[9px] text-center font-bold">
-                <thead class="bg-slate-100">
-                  <tr>
-                    <th rowspan="2" class="w-[4%] border border-slate-950 p-1">رقم</th>
-                    <th rowspan="2" class="w-[21%] border border-slate-950 p-1.5">بيان الأعمال بالتفصيل ومواصفة البند</th>
-                    <th rowspan="2" class="w-[3%] border border-slate-950 p-1">الوحدة</th>
-                    <th rowspan="2" class="w-[5%] border border-slate-950 p-1">الكمية بالمناقصة</th>
-                    <th colspan="2" class="w-[8%] border border-slate-950 p-1 border-b-[0.5px]">سعر الوحدة</th>
-                    <th colspan="2" class="w-[8%] border border-slate-950 p-1 border-b-[0.5px]">دفتر الحصر</th>
-                    <th colspan="3" class="w-[18%] border border-slate-950 p-1">كميات الأعمال المنجزة</th>
-                    <th rowspan="2" class="w-[8%] border border-slate-950 p-1 bg-slate-50/50">قيمة الاعمال الحالية</th>
-                    <th rowspan="2" class="w-[4%] border border-slate-950 p-1 text-rose-600">الخصم</th>
-                    <th rowspan="2" class="w-[6%] border border-slate-950 p-1 text-rose-600">قيمة الخصم</th>
-                    <th rowspan="2" class="w-[8%] border border-slate-950 p-1 bg-slate-100">صافى المستحق صرفه</th>
-                    <th rowspan="2" class="w-[8%] border border-slate-950 p-1">السابق صرفه</th>
-                    <th rowspan="2" class="w-[8%] border border-slate-950 p-1 bg-indigo-50/30">الإجمالى</th>
-                  </tr>
-                  <tr>
-                    <td class="w-[4%] border border-slate-950 p-1 font-semibold">قرش</td>
-                    <td class="w-[4%] border border-slate-950 p-1 font-semibold">جنيه</td>
-                    <td class="w-[4%] border border-slate-950 p-1">رقم الدفتر</td>
-                    <td class="w-[4%] border border-slate-950 p-1">رقم الصفحة</td>
-                    <td class="w-[6%] border border-slate-950 p-1">السابق</td>
-                    <td class="w-[6%] border border-slate-950 p-1 bg-indigo-50/20">الحالي</td>
-                    <td class="w-[6%] border border-slate-950 p-1">الإجمالي</td>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${rows}
-                  <!-- Totals Row -->
-                  <tr class="bg-slate-100 font-black h-12 border-t-2 border-slate-950 text-[10px]">
-                    <td colspan="11" class="border border-slate-950 px-4 text-center text-slate-900">الاجمالى العام</td>
-                    <td class="border border-slate-950 font-mono">${formatVal(extractCalculations.grossValue)}</td>
-                    <td class="border border-slate-950"></td>
-                    <td class="border border-slate-950 font-mono text-rose-700">${formatVal(extractCalculations.totalDiscount)}</td>
-                    <td class="border border-slate-950 font-mono bg-slate-200">${formatVal(extractCalculations.netValue)}</td>
-                    <td class="border border-slate-950 font-mono text-slate-600">${formatVal(extractCalculations.prevPaidTotal)}</td>
-                    <td class="border border-slate-950 font-mono text-[11px] bg-slate-300 text-indigo-950 underline">${formatVal(extractCalculations.finalItemTotal)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Signature block -->
-          <div class="mt-8 pt-4 border-t border-slate-300">
-            <div class="grid grid-cols-4 gap-4">
-              ${sigsHtmlRow1}
-            </div>
-            <div class="grid grid-cols-4 gap-4 mt-4">
-              ${sigsHtmlRow2}
-            </div>
-          </div>
+            <tfoot>
+              <tr>
+                <td class="border-none">
+                  <!-- Signature block -->
+                  <div class="mt-8 pt-4 border-t border-slate-300">
+                    <div class="grid grid-cols-4 gap-4">
+                      ${sigsHtmlRow1}
+                    </div>
+                    <div class="grid grid-cols-4 gap-4 mt-4">
+                      ${sigsHtmlRow2}
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
 
         <script>
