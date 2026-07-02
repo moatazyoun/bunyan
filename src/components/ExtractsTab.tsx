@@ -805,15 +805,15 @@ export default function ExtractsTab({
     ];
 
     const renderSigCol = (sig: any) => `
-      <div class="flex flex-col items-center justify-start min-h-[80px] w-full p-1 mx-1">
-        <div class="text-[9px] font-black text-slate-800 text-center w-full pb-0.5">${sig.role}</div>
+      <div class="print-sig-col">
+        <div class="print-sig-role">${sig.role}</div>
         ${
           sig.id !== "notes" && sig.id !== "tech_office" && sig.name
             ? `
-          <div class="text-[10px] font-bold text-slate-950 text-center mt-1">${sig.name}</div>
-          <div class="h-8 w-full"></div>
+          <div class="print-sig-name">${sig.name}</div>
+          <div class="print-sig-space"></div>
         `
-            : `<div class="h-12 w-full"></div>`
+            : `<div class="print-sig-space"></div>`
         }
       </div>
     `;
@@ -827,23 +827,11 @@ export default function ExtractsTab({
       <head>
         <meta charset="UTF-8">
         <title>طباعة مستخلص فني - رقم ${ext.extractNumber}</title>
-        <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
-        <script>
-          tailwind.config = {
-            theme: {
-              extend: {
-                fontFamily: {
-                  sans: ['Tajawal', 'sans-serif'],
-                }
-              }
-            }
-          }
-        </script>
         <style>
           @page {
             size: ${paperSize} ${orientation};
-            margin: ${orientation === "landscape" ? "12mm 15mm 12mm 15mm" : "15mm 12mm 15mm 12mm"};
+            margin: 12mm;
           }
           @media print {
             body {
@@ -860,31 +848,20 @@ export default function ExtractsTab({
             background-color: white;
             box-sizing: border-box;
           }
-          .border-double-custom {
-            border-style: double;
+          body {
+            padding: 16px;
           }
           .page-frame {
             position: fixed;
             pointer-events: none;
             box-sizing: border-box;
             border: 4px double #000000;
-            border-radius: 24px;
+            border-radius: 20px;
             z-index: 9999;
-            ${
-              orientation === "landscape"
-                ? `
-              top: -6mm;
-              bottom: -6mm;
-              left: -9mm;
-              right: -9mm;
-            `
-                : `
-              top: -9mm;
-              bottom: -9mm;
-              left: -6mm;
-              right: -6mm;
-            `
-            }
+            top: 0;
+            bottom: 0;
+            left: 0;
+            right: 0;
           }
           .page-number-container {
             position: fixed;
@@ -898,11 +875,7 @@ export default function ExtractsTab({
             z-index: 10000;
             direction: rtl;
             pointer-events: none;
-            ${
-              orientation === "landscape"
-                ? "bottom: -4mm;"
-                : "bottom: -7mm;"
-            }
+            bottom: 4px;
           }
           .page-num::after {
             content: counter(page);
@@ -910,9 +883,115 @@ export default function ExtractsTab({
           .page-total::after {
             content: counter(pages);
           }
+
+          /* Native robust styles for print template */
+          .print-header-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.5fr 1fr;
+            align-items: start;
+            border-bottom: 2px solid #000000;
+            padding-bottom: 12px;
+            margin-bottom: 16px;
+            width: 100%;
+            direction: rtl;
+          }
+          .print-header-col {
+            text-align: center;
+            font-size: 10px;
+            font-weight: bold;
+            line-height: 1.5;
+            color: #000000;
+          }
+          .print-title-badge {
+            font-size: 18px;
+            font-weight: 900;
+            border-bottom: 2.5px solid #000000;
+            display: inline-block;
+            padding: 0 16px 4px 16px;
+            margin-bottom: 6px;
+          }
+          .print-project-name {
+            font-size: 12px;
+            font-weight: 900;
+            color: #111827;
+            margin-bottom: 4px;
+          }
+          
+          .print-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1.5px solid #000000;
+            font-size: 9px;
+            text-align: center;
+            font-weight: bold;
+            direction: rtl;
+          }
+          .print-table th, .print-table td {
+            border: 1.2px solid #000000 !important;
+            padding: 5px 3px;
+            font-weight: bold;
+          }
+          .print-table thead {
+            background-color: #f1f5f9 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .print-table tr {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+          
+          .print-totals-row {
+            background-color: #f1f5f9 !important;
+            font-weight: 900;
+            font-size: 10px;
+            height: 48px;
+          }
+          .print-totals-row td {
+            border: 1.5px solid #000000 !important;
+          }
+
+          .print-sig-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            width: 100%;
+            margin-top: 12px;
+            direction: rtl;
+          }
+          .print-sig-col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 70px;
+            text-align: center;
+            padding: 4px;
+            box-sizing: border-box;
+          }
+          .print-sig-role {
+            font-size: 9.5px;
+            font-weight: 900;
+            color: #111827;
+            text-align: center;
+            width: 100%;
+            border-bottom: 1px dashed #cccccc;
+            padding-bottom: 4px;
+            margin-bottom: 6px;
+          }
+          .print-sig-name {
+            font-size: 10px;
+            font-weight: bold;
+            color: #000000;
+            text-align: center;
+            margin-top: 4px;
+          }
+          .print-sig-space {
+            height: 35px;
+          }
         </style>
       </head>
-      <body class="p-4 bg-white text-slate-950">
+      <body class="bg-white text-slate-950">
         <!-- Page frame repeated on every page -->
         <div class="page-frame"></div>
         
@@ -921,19 +1000,19 @@ export default function ExtractsTab({
           صفحة <span class="page-num"></span> من <span class="page-total"></span>
         </div>
 
-        <div dir="rtl" style="min-height: ${targetMinHeight}; max-width: 100%;">
-          <table class="w-full border-none">
+        <div dir="rtl" style="min-height: ${targetMinHeight}; max-width: 100%; box-sizing: border-box;">
+          <table style="width: 100%; border-collapse: collapse; border: none;">
             <thead>
               <tr>
-                <td class="border-none">
+                <td style="border: none;">
                   <!-- Header section with 3 columns -->
-                  <div class="grid grid-cols-3 items-start mb-6 text-[10px] font-bold leading-relaxed border-b-2 border-slate-950 pb-4">
-                    <div class="space-y-1 text-center font-bold">
+                  <div class="print-header-grid">
+                    <div class="print-header-col">
                       ${
                         settings?.headerTexts?.ownerLogo
                           ? `
-                        <div class="flex flex-col items-center mb-1">
-                          <img src="${settings.headerTexts.ownerLogo}" class="h-14 w-auto object-contain" />
+                        <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 4px;">
+                          <img src="${settings.headerTexts.ownerLogo}" style="height: 56px; width: auto; object-fit: contain;" />
                         </div>
                       `
                           : ""
@@ -943,28 +1022,28 @@ export default function ExtractsTab({
                       <div>${settings?.headerTexts?.device || ""}</div>
                     </div>
 
-                    <div class="text-center space-y-2">
-                      <h1 class="text-xl font-black border-b-[2.5px] border-slate-950 inline-block px-6 pb-1">
+                    <div class="print-header-col">
+                      <h1 class="print-title-badge">
                         ${ext.extractType === "final" ? "مستخلص ختامي" : ext.extractType === "no_works" ? "مستخلص صفري" : "مستخلص جاري"} (${ext.extractNumber})
                       </h1>
-                      <p class="text-xs font-black text-slate-900">${linkedProject?.name || ""}</p>
-                      <div class="text-[9px] space-y-0.5 font-bold">
+                      <p class="print-project-name">${linkedProject?.name || ""}</p>
+                      <div style="font-size: 9px; line-height: 1.4;">
                         <p>بأمر إسناد رقم: ${activeProject?.assignmentNumber || "......."} بتاريخ: ${assignmentDateStr}</p>
-                        <p class="text-slate-600">من بداية الأعمال وحتى ${dateStr}</p>
+                        <p style="color: #4b5563;">من بداية الأعمال وحتى ${dateStr}</p>
                       </div>
                     </div>
 
-                    <div class="space-y-1 text-center font-bold">
+                    <div class="print-header-col">
                       ${
                         settings?.headerTexts?.contractorLogo
                           ? `
-                        <div class="flex flex-col items-center mb-1">
-                          <img src="${settings.headerTexts.contractorLogo}" class="h-14 w-auto object-contain" />
+                        <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 4px;">
+                          <img src="${settings.headerTexts.contractorLogo}" style="height: 56px; width: auto; object-fit: contain;" />
                         </div>
                       `
                           : ""
                       }
-                      <div class="font-black">${settings?.headerTexts?.contractor || ""}</div>
+                      <div style="font-weight: 900;">${settings?.headerTexts?.contractor || ""}</div>
                       <div>${settings?.headerTexts?.contractorDetails || ""}</div>
                       <div>${settings?.headerTexts?.contractorDetails2 || ""}</div>
                     </div>
@@ -975,64 +1054,62 @@ export default function ExtractsTab({
 
             <tbody>
               <tr>
-                <td class="border-none py-2">
+                <td style="border: none; padding: 8px 0;">
                   <!-- Table of works -->
-                  <div class="overflow-x-auto">
-                    <table class="w-full border-collapse border-[1.2px] border-slate-950 text-[9px] text-center font-bold">
-                      <thead class="bg-slate-100">
-                        <tr>
-                          <th rowspan="2" class="w-[4%] border border-slate-950 p-1">رقم</th>
-                          <th rowspan="2" class="w-[21%] border border-slate-950 p-1.5">بيان الأعمال بالتفصيل ومواصفة البند</th>
-                          <th rowspan="2" class="w-[3%] border border-slate-950 p-1">الوحدة</th>
-                          <th rowspan="2" class="w-[5%] border border-slate-950 p-1">الكمية بالمناقصة</th>
-                          <th colspan="2" class="w-[8%] border border-slate-950 p-1 border-b-[0.5px]">سعر الوحدة</th>
-                          <th colspan="2" class="w-[8%] border border-slate-950 p-1 border-b-[0.5px]">دفتر الحصر</th>
-                          <th colspan="3" class="w-[18%] border border-slate-950 p-1">كميات الأعمال المنجزة</th>
-                          <th rowspan="2" class="w-[8%] border border-slate-950 p-1 bg-slate-50/50">قيمة الاعمال الحالية</th>
-                          <th rowspan="2" class="w-[4%] border border-slate-950 p-1 text-rose-600">الخصم</th>
-                          <th rowspan="2" class="w-[6%] border border-slate-950 p-1 text-rose-600">قيمة الخصم</th>
-                          <th rowspan="2" class="w-[8%] border border-slate-950 p-1 bg-slate-100">صافى المستحق صرفه</th>
-                          <th rowspan="2" class="w-[8%] border border-slate-950 p-1">السابق صرفه</th>
-                          <th rowspan="2" class="w-[8%] border border-slate-950 p-1 bg-indigo-50/30">الإجمالى</th>
-                        </tr>
-                        <tr>
-                          <td class="w-[4%] border border-slate-950 p-1 font-semibold">قرش</td>
-                          <td class="w-[4%] border border-slate-950 p-1 font-semibold">جنيه</td>
-                          <td class="w-[4%] border border-slate-950 p-1">رقم الدفتر</td>
-                          <td class="w-[4%] border border-slate-950 p-1">رقم الصفحة</td>
-                          <td class="w-[6%] border border-slate-950 p-1">السابق</td>
-                          <td class="w-[6%] border border-slate-950 p-1 bg-indigo-50/20">الحالي</td>
-                          <td class="w-[6%] border border-slate-950 p-1">الإجمالي</td>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        ${rows}
-                        <!-- Totals Row -->
-                        <tr class="bg-slate-100 font-black h-12 border-t-2 border-slate-950 text-[10px]" style="page-break-inside: avoid; break-inside: avoid;">
-                          <td colspan="11" class="border border-slate-950 px-4 text-center text-slate-900">الاجمالى العام</td>
-                          <td class="border border-slate-950 font-mono">${formatVal(extractCalculations.grossValue)}</td>
-                          <td class="border border-slate-950"></td>
-                          <td class="border border-slate-950 font-mono text-rose-700">${formatVal(extractCalculations.totalDiscount)}</td>
-                          <td class="border border-slate-950 font-mono bg-slate-200">${formatVal(extractCalculations.netValue)}</td>
-                          <td class="border border-slate-950 font-mono text-slate-600">${formatVal(extractCalculations.prevPaidTotal)}</td>
-                          <td class="border border-slate-950 font-mono text-[11px] bg-slate-300 text-indigo-950 underline">${formatVal(extractCalculations.finalItemTotal)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
+                  <table class="print-table">
+                    <thead>
+                      <tr>
+                        <th rowspan="2" style="width: 4%;">رقم</th>
+                        <th rowspan="2" style="width: 21%; padding: 6px;">بيان الأعمال بالتفصيل ومواصفة البند</th>
+                        <th rowspan="2" style="width: 3%;">الوحدة</th>
+                        <th rowspan="2" style="width: 5%;">الكمية بالمناقصة</th>
+                        <th colspan="2" style="width: 8%; border-bottom-width: 0.5px;">سعر الوحدة</th>
+                        <th colspan="2" style="width: 8%; border-bottom-width: 0.5px;">دفتر الحصر</th>
+                        <th colspan="3" style="width: 18%;">كميات الأعمال المنجزة</th>
+                        <th rowspan="2" style="width: 8%; background-color: #f8fafc;">قيمة الاعمال الحالية</th>
+                        <th rowspan="2" style="width: 4%; color: #e11d48;">الخصم</th>
+                        <th rowspan="2" style="width: 6%; color: #e11d48;">قيمة الخصم</th>
+                        <th rowspan="2" style="width: 8%; background-color: #f1f5f9;">صافى المستحق صرفه</th>
+                        <th rowspan="2" style="width: 8%;">السابق صرفه</th>
+                        <th rowspan="2" style="width: 8%; background-color: #e0e7ff;">الإجمالى</th>
+                      </tr>
+                      <tr>
+                        <td style="width: 4%; font-weight: 600;">قرش</td>
+                        <td style="width: 4%; font-weight: 600;">جنيه</td>
+                        <td style="width: 4%;">رقم الدفتر</td>
+                        <td style="width: 4%;">رقم الصفحة</td>
+                        <td style="width: 6%;">السابق</td>
+                        <td style="width: 6%; background-color: #f5f3ff;">الحالي</td>
+                        <td style="width: 6%;">الإجمالي</td>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${rows}
+                      <!-- Totals Row -->
+                      <tr class="print-totals-row" style="page-break-inside: avoid; break-inside: avoid;">
+                        <td colspan="11" style="text-align: center;">الاجمالى العام</td>
+                        <td style="font-family: monospace;">${formatVal(extractCalculations.grossValue)}</td>
+                        <td></td>
+                        <td style="font-family: monospace; color: #be123c;">${formatVal(extractCalculations.totalDiscount)}</td>
+                        <td style="font-family: monospace; background-color: #e2e8f0;">${formatVal(extractCalculations.netValue)}</td>
+                        <td style="font-family: monospace; color: #4b5563;">${formatVal(extractCalculations.prevPaidTotal)}</td>
+                        <td style="font-family: monospace; font-size: 11px; background-color: #cbd5e1; color: #1e1b4b; text-decoration: underline;">${formatVal(extractCalculations.finalItemTotal)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </td>
               </tr>
             </tbody>
 
             <tfoot>
               <tr>
-                <td class="border-none">
+                <td style="border: none;">
                   <!-- Signature block -->
-                  <div class="mt-8 pt-4 border-t border-slate-300">
-                    <div class="grid grid-cols-4 gap-4">
+                  <div style="margin-top: 16px; padding-top: 8px; border-top: 1px solid #cbd5e1;">
+                    <div class="print-sig-row">
                       ${sigsHtmlRow1}
                     </div>
-                    <div class="grid grid-cols-4 gap-4 mt-4">
+                    <div class="print-sig-row" style="margin-top: 12px;">
                       ${sigsHtmlRow2}
                     </div>
                   </div>
