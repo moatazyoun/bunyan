@@ -1248,7 +1248,7 @@ app.get("/api/db-status", async (req, res) => {
 
 // Helper for Gemini content generation with retry and model fallback using streaming to eliminate Vercel 504 timeouts
 async function generateStreamWithRetryAndFallback(ai: any, contents: any, config: any, res: express.Response) {
-  const modelsToTry = ["gemini-2.5-flash", "gemini-1.5-flash"];
+  const modelsToTry = ["gemini-3.5-flash", "gemini-3.1-flash-lite"];
   let lastError: any = null;
 
   for (const model of modelsToTry) {
@@ -1734,7 +1734,7 @@ app.post("/api/gemini/analyze-boq", async (req, res) => {
   }
 });
 
-// Serve AI-powered Schedule Generation from BOQ Items
+// Serve AI-powered Schedule Generation from BOQ
 app.post("/api/gemini/generate-schedule", async (req, res) => {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -1823,6 +1823,146 @@ ${JSON.stringify(boqItems, null, 2)}
           errorMessage = "تم رفض الوصول لخدمات الذكاء الاصطناعي (403). يرجى التأكد من صلاحية مفتاح الـ API الخاص بك.";
       }
       res.status(500).json({ error: errorMessage });
+    } else {
+      res.end();
+    }
+  }
+});
+
+// Serve AI Supplies Analyzer and Supplier/Item extractor
+app.post("/api/gemini/analyze-supplies", async (req, res) => {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(400).json({
+        error: "مفتاح API الخاص بـ Gemini غير متوفر. يرجى إضافته في إعدادات التطبيق (Settings > Secrets) باسم 'GEMINI_API_KEY' لتفعيل موديول تحليل التوريدات المتقدم بالذكاء الاصطناعي."
+      });
+    }
+
+    const { textContent, fileBase64, mimeType } = req.body;
+
+    const ai = new GoogleGenAI({
+      apiKey: apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+
+    const parts: any[] = [];
+
+    const prompt = `أنت مهندس تكاليف مالي متخصص ومراجع دقيق جداً للمشاريع الهندسية وأعمال رصف الطرق والمقاولات العامة في مصر.
+مهمتك هي تحليل وقراءة بيان أو كشف توريدات سابق (سواء كان مرفوعاً كصورة أو ملف PDF أو نص أو مستند إكسيل).
+
+★ قاعدة ذهبية صارمة جداً (الأهمية القصوى للاكتمال والدقة):
+- يجب عليك استخراج *كل بون أو إيصال أو حركة توريد فردية* مذكورة في المستند بالكامل دون استثناء أو إغفال أو تجميع أو تلخيص لأي صفوف أو بونات مهما كثر عددها (حتى لو كان هناك 50 أو 100 أو أكثر من البونات).
+- يمنع تماماً دمج الحركات المتشابهة في حركة واحدة؛ كل بون/إيصال مستقل يجب أن يظهر كعنصر مستقل في مصفوفة 'supplyRecords' ليكون البيان دقيقاً ومطابقاً للواقع بنسبة 100%.
+- إذا كان المستند طويلاً جداً، استمر في سرد كافة السجلات الفردية حتى آخر بون في الملف بالتفصيل الممل.
+
+استخرج التفاصيل التالية بدقة متناهية:
+1. سجلات التوريد الفردية الكاملة (Supply Records) التي تم توريدها للموقع (مثل بونات الرمل، السن، الإسمنت، الخرسانة، إلخ).
+2. قائمة بجميع الموردين أو المقاولين المذكورين في المستند (Suppliers) لكي نتمكن من تسجيلهم تلقائياً في قاعدة البيانات إذا لم يكونوا موجودين.
+3. قائمة بجميع المواد والخامات والمعدات والمخزونات المذكورة في المستند (Items/Materials) لكي نتمكن من إضافتها تلقائياً.
+
+يرجى مراعاة القواعد الهندسية والمالية التالية:
+- قم بتحويل التواريخ الواردة في المستند إلى الصيغة القياسية YYYY-MM-DD. إذا ذكرت تواريخ جزئية أو غير واضحة، حاول استنباطها أو توحيدها حسب سياق التقرير.
+- رقم البون (ticketNo) يجب استخراجه بدقة، وإذا لم يوجد رقم بون صريح، قم بتوليد رقم تسلسلي فريد متتابع يبدأ بـ 'AUTO-' متبوعاً برقم فريد (مثلاً AUTO-1001, AUTO-1002...).
+- الكمية الواردة بالبون (rawQuantity) يجب استخراجها بدقة عالية كرقم عشري أو صحيح.
+- سعر الوحدة (unitPrice) يجب استخراجه كرقم بالجنيه المصري (EGP).
+- التكلفة الإجمالية (totalCost) يجب أن تساوي الكمية مضروبة في سعر الوحدة بدقة حسابية كاملة.
+- استخرج اسم المورد (supplierName) بدقة كما هو وارد في التقرير.
+- حدد اسم المادة (itemName) بدقة، واقترح كوداً مميزاً للمادة (itemCode) باللغة العربية (مثلاً: رمل-حرش، سن-١، إسمنت-بورتلاند).
+- إذا كان هناك لوحة سيارة أو قلاب، استخرجها في حقل truckPlate. إذا لم تكن موجودة، اتركها كـ "عامة" أو "لوحة غير معروفة".
+- بالنسبة للموردين المستخرجين (extractedSuppliers)، يجب أن تحدد اسم المورد (name) وكود الخامة المرتبط بها (materialCode) الذي يتطابق مع كود الخامة المستخرجة.
+- بالنسبة للخامات المستخرجة (extractedItems)، حدد كود مقترح للخامة (code)، اسم الخامة (name)، الوحدة (unit - مثلاً م٣ أو طن أو قطعة)، والسعر الافتراضي للوحدة (defaultPrice).
+
+يرجى صياغة وتنسيق المخرجات ككائن JSON متوافق مع المخطط (Schema) التالي تماماً لضمان المعالجة الدقيقة والأداء العالي.`;
+
+    parts.push({ text: prompt });
+
+    if (textContent) {
+      parts.push({ text: `النص المكتوب أو المدخل لبيان التوريدات:\n${textContent}` });
+    }
+
+    if (fileBase64 && mimeType) {
+      if (isExcelMimeType(mimeType)) {
+        const xlText = parseExcelBase64(fileBase64);
+        if (xlText) {
+          parts.push({ text: `محتوى جدول إكسيل المرفوع:\n${xlText}` });
+        }
+      } else {
+        parts.push({
+          inlineData: {
+            mimeType: mimeType,
+            data: fileBase64
+          }
+        });
+      }
+    }
+
+    await generateStreamWithRetryAndFallback(ai, { parts }, {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            supplyRecords: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  date: { type: Type.STRING, description: "تاريخ التوريد بصيغة YYYY-MM-DD" },
+                  ticketNo: { type: Type.STRING, description: "رقم البون أو الإيصال الورقي" },
+                  truckPlate: { type: Type.STRING, description: "رقم لوحة القلاب/السيارة" },
+                  supplierName: { type: Type.STRING, description: "اسم مورد المادة" },
+                  itemName: { type: Type.STRING, description: "اسم المادة الموردة (رمل، سن، إسمنت، إلخ)" },
+                  itemCode: { type: Type.STRING, description: "كود مقترح للمادة باللغة العربية (مثلاً: رمل-حرش، سن-١)" },
+                  rawQuantity: { type: Type.NUMBER, description: "الكمية الواردة بالبون" },
+                  unitPrice: { type: Type.NUMBER, description: "سعر الوحدة ج.م" },
+                  totalCost: { type: Type.NUMBER, description: "الإجمالي ج.م" },
+                  unit: { type: Type.STRING, description: "الوحدة (م٣، طن، إلخ)" },
+                  driverName: { type: Type.STRING, description: "اسم السائق إن وجد" },
+                  supplyLocation: { type: Type.STRING, description: "مكان التوريد أو قطاع الطرق إن وجد" },
+                  notes: { type: Type.STRING, description: "ملاحظات إضافية" }
+                },
+                required: ["date", "ticketNo", "truckPlate", "supplierName", "itemName", "itemCode", "rawQuantity", "unitPrice", "totalCost"]
+              }
+            },
+            extractedSuppliers: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING, description: "اسم المورد" },
+                  materialCode: { type: Type.STRING, description: "كود الخامة الموردة المرتبط بها" },
+                  phone: { type: Type.STRING, description: "رقم الهاتف إن وجد" },
+                  notes: { type: Type.STRING, description: "ملاحظات عن المورد" }
+                },
+                required: ["name", "materialCode"]
+              }
+            },
+            extractedItems: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  code: { type: Type.STRING, description: "كود الخامة المقترح" },
+                  name: { type: Type.STRING, description: "اسم الخامة باللغة العربية" },
+                  unit: { type: Type.STRING, description: "الوحدة (م٣، طن، إلخ)" },
+                  defaultPrice: { type: Type.NUMBER, description: "السعر الافتراضي للوحدة إن وجد" }
+                },
+                required: ["code", "name", "unit", "defaultPrice"]
+              }
+            }
+          },
+          required: ["supplyRecords", "extractedSuppliers", "extractedItems"]
+        }
+    }, res);
+
+  } catch (error: any) {
+    console.error("Supplies analysis error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message || "حدث خطأ غير متوقع أثناء تحليل بيان التوريدات بالذكاء الاصطناعي." });
     } else {
       res.end();
     }

@@ -105,11 +105,10 @@ export default function SuppliesDashboard({
         });
 
         if (matchingCert) {
-          const qualityD = rec.qualityDiscount || 0;
-          const loadD = rec.loadDiscount || 0;
+          const discount = rec.discount || 0;
           const certCapacity = matchingCert.netCubic ?? matchingCert.totalCubic ?? dumper.cubicCapacity;
           const rawQuantity = typeof certCapacity === 'number' ? certCapacity : (parseFloat(certCapacity) || rec.rawQuantity);
-          const netQuantity = Math.max(0, rawQuantity - qualityD - loadD);
+          const netQuantity = Math.max(0, rawQuantity - discount);
           const totalCost = netQuantity * rec.unitPrice;
 
           return {
@@ -121,11 +120,10 @@ export default function SuppliesDashboard({
           };
         } else {
           // Fallback to default vehicle capacity if no certificate covers this date
-          const qualityD = rec.qualityDiscount || 0;
-          const loadD = rec.loadDiscount || 0;
+          const discount = rec.discount || 0;
           const capacity = dumper.cubicCapacity;
           const rawQuantity = typeof capacity === 'number' ? capacity : (parseFloat(capacity) || rec.rawQuantity);
-          const netQuantity = Math.max(0, rawQuantity - qualityD - loadD);
+          const netQuantity = Math.max(0, rawQuantity - discount);
           const totalCost = netQuantity * rec.unitPrice;
 
           return {
@@ -161,8 +159,9 @@ export default function SuppliesDashboard({
   }, [cubicCertificates, contractorsReport, reconcileAllSupplyRecords, supplyRecords, setSupplyRecords]);
 
   // Operations handlers
-  const handleAddRecord = (rec: SupplyRecord) => {
-    const updated = [rec, ...supplyRecords];
+  const handleAddRecord = (rec: SupplyRecord | SupplyRecord[]) => {
+    const recs = Array.isArray(rec) ? rec : [rec];
+    const updated = [...recs, ...supplyRecords];
     const reconciled = reconcileAllSupplyRecords(updated, cubicCertificates);
     setSupplyRecords(reconciled);
   };
@@ -369,6 +368,9 @@ export default function SuppliesDashboard({
             suppliers={suppliers}
             userRole={userRole}
             addAuditLog={addAuditLog}
+            setSupplyItems={setSupplyItems}
+            setContractorsReport={setContractorsReport}
+            setSupplyRecords={setSupplyRecords}
           />
         )}
 

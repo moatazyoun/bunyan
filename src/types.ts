@@ -511,10 +511,8 @@ export interface SupplyRecord {
   truckPlate: string;    // رقم القلاب
   trailerPlate?: string; // رقم المقطورة (اختياري)
   driverName: string;    // اسم السائق
-  rawQuantity: number;   // الكمية الاوراقة (الواردة بالبون)
-  qualityDiscount: number; // خصم نوعية (متر مكعب أو طن أو خصم مباشر)
-  loadDiscount: number;    // خصم حمولة أو عجز
-  totalDiscount: number;   // إجمالي الخصم
+  rawQuantity: number;   // الكمية الواردة بالبون
+  discount: number;      // مقدار الخصم
   netQuantity: number;     // صافي الكمية بعد الخصومات
   unitPrice: number;       // سعر الوحدة المعتمد
   totalCost: number;       // التكلفة الإجمالية (صافي الكمية * سعر الوحدة)
