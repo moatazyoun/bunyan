@@ -540,6 +540,9 @@ export default function ExtractsTab({
     );
     const updatedExt = { ...selectedExtract, items: updatedItems };
     setSelectedExtract(updatedExt);
+    setExtracts(
+      extracts.map((e) => (e.id === selectedExtract.id ? updatedExt : e)),
+    );
   };
 
   const handleUpdateItemRetention = (
@@ -552,6 +555,9 @@ export default function ExtractsTab({
     );
     const updatedExt = { ...selectedExtract, items: updatedItems };
     setSelectedExtract(updatedExt);
+    setExtracts(
+      extracts.map((e) => (e.id === selectedExtract.id ? updatedExt : e)),
+    );
   };
 
   const handleUpdateItemBookNumber = (
@@ -564,6 +570,9 @@ export default function ExtractsTab({
     );
     const updatedExt = { ...selectedExtract, items: updatedItems };
     setSelectedExtract(updatedExt);
+    setExtracts(
+      extracts.map((e) => (e.id === selectedExtract.id ? updatedExt : e)),
+    );
   };
 
   const handleUpdateItemPageNumber = (
@@ -576,12 +585,18 @@ export default function ExtractsTab({
     );
     const updatedExt = { ...selectedExtract, items: updatedItems };
     setSelectedExtract(updatedExt);
+    setExtracts(
+      extracts.map((e) => (e.id === selectedExtract.id ? updatedExt : e)),
+    );
   };
 
   const handleUpdateExtractParams = (params: Partial<CustomExtract>) => {
     if (!selectedExtract) return;
     const updatedExt = { ...selectedExtract, ...params };
     setSelectedExtract(updatedExt);
+    setExtracts(
+      extracts.map((e) => (e.id === selectedExtract.id ? updatedExt : e)),
+    );
   };
 
   const handleDeleteExtract = (id: string) => {
